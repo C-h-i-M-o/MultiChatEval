@@ -11,7 +11,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 ## 当前技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts
+- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts、Markdown-it、DOMPurify
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -56,7 +56,8 @@ MultiChatEval/
 - 模型适配器接口：`backend/app/adapters/base.py`
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
-- 当前评测服务仍使用模拟回答，尚未接入真实模型 API。
+- 当前评测服务已接入真实模型 API，默认调用 DeepSeek、MiniMax、Zhipu 三个模型。
+- Zhipu/GLM 请求默认关闭 thinking，避免简单问题产生过长 reasoning 内容和超时。
 
 ### 前端
 
@@ -64,11 +65,16 @@ MultiChatEval/
 - 主页面：`frontend/src/views/EvaluationWorkspace.vue`
 - 功能骨架：
   - 输入问题
-  - 选择模型
+  - 按具体模型名选择模型
   - 切换快速/标准/深度评测模式
   - 启用或关闭 LLM 评审开关
   - 展示多模型回答卡片
   - 展示耗时、输出长度、成本和评分条
+- 前端展示增强：
+  - 请求期间显示等待卡片和耗时计数
+  - 结果卡片根据模型数量自适应布局
+  - `MarkdownRenderer` 支持 Markdown 回答渲染
+  - `<think>...</think>` 内容折叠为“思考过程”
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
@@ -136,9 +142,10 @@ http://localhost:5173
 ```text
 DATABASE_URL=mysql+aiomysql://multichateval:multichateval@localhost:3306/multichateval
 BACKEND_CORS_ORIGINS=http://localhost:5173
-OPENAI_COMPATIBLE_API_KEY=
-OPENAI_COMPATIBLE_BASE_URL=
-OPENAI_COMPATIBLE_MODEL=
+DEEPSEEK_MODEL=deepseek-v4-flash
+MINIMAX_MODEL=MiniMax-M2.5
+ZHIPU_MODEL=glm-4.7
+MODEL_REQUEST_TIMEOUT=90
 ```
 
 真实模型 API Key 不应提交到 Git。
@@ -250,7 +257,7 @@ FinalScore =
 优先推进的任务是：
 
 1. 安装依赖并启动前后端。
-2. 确认前端能调用后端模拟接口。
-3. 接入第一个真实模型供应商。
-4. 将评测任务和模型回答持久化到 MySQL。
-5. 完善规则评分与评分详情页面。
+2. 确认前端能调用后端真实模型接口。
+3. 将评测任务和模型回答持久化到 MySQL。
+4. 完善规则评分与评分详情页面。
+5. 实现用户反馈、历史任务和模型推荐。

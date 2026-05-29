@@ -7,7 +7,7 @@
 ## 技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts
+- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts、Markdown-it、DOMPurify
 - 数据库：MySQL 8
 - 本地环境：Docker Compose
 
@@ -80,6 +80,17 @@ http://localhost:5173
 
 第一版暂不做流式输出，等核心流程稳定后再加入 SSE 或 WebSocket。
 
+## 前端展示能力
+
+当前前端已经支持：
+
+- 按实际模型名称展示模型选择项和结果卡片，例如 `deepseek-v4-flash`、`MiniMax-M2.5`、`glm-4.7`。
+- 根据模型数量自适应卡片布局：单模型占满整行，双模型并排，三模型三列展示。
+- 模型请求期间展示等待卡片、等待秒数和占位动画，避免用户误以为页面卡住。
+- 回答内容使用 Markdown 渲染，支持标题、列表、代码块、表格、引用和链接。
+- 使用 DOMPurify 清洗渲染后的 HTML，降低 Markdown 内容带来的 XSS 风险。
+- 自动识别 `<think>...</think>` 内容，并折叠到“思考过程”面板中，正式回答单独展示。
+
 ## 真实模型配置
 
 后端当前已支持 OpenAI-compatible 的 `/chat/completions` 调用。当前默认展示并调用 DeepSeek、MiniMax、Zhipu 三个模型。
@@ -107,3 +118,15 @@ MODEL_REQUEST_TIMEOUT=90
 ```
 
 前端请求超时时间已设置为 120 秒，避免后端仍在等待模型返回时前端过早中断。
+
+GLM-4.7 默认会启用思考模式，可能导致简单问题也响应很慢。项目里已对 Zhipu/GLM 请求默认传入：
+
+```json
+{
+  "thinking": {
+    "type": "disabled"
+  }
+}
+```
+
+这样可以减少 reasoning token 和等待时间，更适合当前课程项目的多模型快速对比场景。

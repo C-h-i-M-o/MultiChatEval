@@ -125,6 +125,7 @@ class EvaluationService:
                     input_price=Decimal("0"),
                     output_price=Decimal("0"),
                     timeout=timeout,
+                    extra_body={"thinking": {"type": "disabled"}},
                 ),
             },
         }

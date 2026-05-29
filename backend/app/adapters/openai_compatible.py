@@ -15,6 +15,7 @@ class OpenAICompatibleClient(ModelClient):
         input_price: Decimal = Decimal("0"),
         output_price: Decimal = Decimal("0"),
         timeout: float = 60,
+        extra_body: dict[str, object] | None = None,
     ) -> None:
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
@@ -22,6 +23,7 @@ class OpenAICompatibleClient(ModelClient):
         self.input_price = input_price
         self.output_price = output_price
         self.timeout = timeout
+        self.extra_body = extra_body or {}
 
     async def chat(self, request: ModelRequest) -> ModelReply:
         if not self.api_key:
@@ -37,6 +39,7 @@ class OpenAICompatibleClient(ModelClient):
             "temperature": 0.7,
             "stream": False,
         }
+        payload.update(self.extra_body)
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
