@@ -1,0 +1,289 @@
+:root {
+  color: #1b2430;
+  background: #f4f6f1;
+  font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(22, 86, 90, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(22, 86, 90, 0.08) 1px, transparent 1px),
+    #f4f6f1;
+  background-size: 24px 24px;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.workspace-shell {
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px;
+  background: #17232a;
+  color: #f7f4e8;
+}
+
+.brand-block {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.brand-mark {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(247, 244, 232, 0.35);
+  border-radius: 8px;
+  background: #e5b85d;
+  color: #17232a;
+  font-weight: 800;
+}
+
+.eyebrow,
+.panel-label {
+  margin: 0 0 6px;
+  color: #6d7c80;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.sidebar .eyebrow,
+.sidebar .panel-label {
+  color: rgba(247, 244, 232, 0.62);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 28px;
+}
+
+h3 {
+  margin-bottom: 0;
+  font-size: 18px;
+}
+
+.nav-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-item {
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(247, 244, 232, 0.72);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item.active,
+.nav-item:hover {
+  background: rgba(247, 244, 232, 0.1);
+  color: #fff;
+}
+
+.panel,
+.query-panel,
+.response-card {
+  border: 1px solid rgba(23, 35, 42, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 40px rgba(23, 35, 42, 0.08);
+}
+
+.panel.compact {
+  margin-top: auto;
+  padding: 18px;
+  border-color: rgba(247, 244, 232, 0.14);
+  background: rgba(247, 244, 232, 0.08);
+}
+
+.step-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(247, 244, 232, 0.82);
+}
+
+.main-stage {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 28px;
+}
+
+.topbar,
+.query-header,
+.model-row,
+.response-head,
+.card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.query-panel {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.response-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.response-head strong {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 50%;
+  background: #16565a;
+  color: #fff;
+  font-size: 18px;
+}
+
+.answer-text {
+  min-height: 84px;
+  margin-bottom: 0;
+  color: #34434a;
+  line-height: 1.7;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0;
+}
+
+.metric-row div {
+  padding: 12px;
+  border-radius: 8px;
+  background: #eef2ea;
+}
+
+.metric-row dt {
+  color: #6d7c80;
+  font-size: 12px;
+}
+
+.metric-row dd {
+  margin: 4px 0 0;
+  font-weight: 800;
+}
+
+.score-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.score-bar {
+  display: grid;
+  grid-template-columns: 54px 1fr 40px;
+  align-items: center;
+  gap: 10px;
+  color: #46575d;
+  font-size: 13px;
+}
+
+.bar-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dde4dd;
+}
+
+.bar-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #e5b85d;
+}
+
+.card-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 980px) {
+  .workspace-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    min-height: auto;
+  }
+
+  .panel.compact {
+    margin-top: 0;
+  }
+
+  .result-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .main-stage,
+  .sidebar {
+    padding: 18px;
+  }
+
+  .topbar,
+  .query-header,
+  .model-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .metric-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,29 @@
+# 系统文件
+.DS_Store
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/.venv/
+backend/dist/
+backend/*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# 数据与日志
+*.log
+data/
+
+# 工具输出
+.playwright-mcp/
