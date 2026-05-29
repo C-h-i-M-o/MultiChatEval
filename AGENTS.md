@@ -54,7 +54,7 @@ MultiChatEval/
   - `GET /api/evaluation/tasks/{taskId}`
   - `POST /api/evaluation/responses/{responseId}/feedback`
 - 模型适配器接口：`backend/app/adapters/base.py`
-- OpenAI-compatible 模拟适配器：`backend/app/adapters/openai_compatible.py`
+- OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
 - 当前评测服务仍使用模拟回答，尚未接入真实模型 API。
 
@@ -129,7 +129,7 @@ http://localhost:5173
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env` 后再按本地环境修改。
+复制 `.env.example` 为 `.env` 后再按本地环境修改。后端配置固定读取项目根目录的 `.env`，从根目录或 `backend/` 目录启动都可以读取同一份配置。
 
 重点变量：
 

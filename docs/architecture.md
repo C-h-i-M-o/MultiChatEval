@@ -21,7 +21,7 @@ MySQL
 
 1. 用户输入问题，选择多个模型。
 2. 后端创建评测任务。
-3. 模型适配层并发请求 DeepSeek、Qwen、Zhipu 或 OpenAI-compatible API。
+3. 模型适配层并发请求 DeepSeek、MiniMax、Zhipu。
 4. 系统记录回答内容、响应时间、token 数、成本估算和错误状态。
 5. 规则评分器计算相关性、完整性、清晰度、语言一致性和格式符合度。
 6. 可选启用 LLM Judge，让评审模型输出结构化评分。

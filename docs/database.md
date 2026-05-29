@@ -20,11 +20,11 @@
 
 ## model_providers
 
-模型供应商表，例如 DeepSeek、Qwen、Zhipu。
+模型供应商表，例如 DeepSeek、MiniMax、Zhipu。
 
 ## model_configs
 
-具体模型配置表，例如 `deepseek-chat`、`qwen-plus`。
+具体模型配置表，例如 `deepseek-v4-flash`、`MiniMax-M2.5`、`glm-4.7`。
 
 ## model_responses
 

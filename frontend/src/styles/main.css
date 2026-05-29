@@ -169,8 +169,20 @@ h3 {
 
 .result-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+  justify-content: center;
+}
+
+.result-grid.one-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.result-grid.two-cards {
+  grid-template-columns: repeat(2, minmax(220px, 20%));
+}
+
+.result-grid.three-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .response-card {
@@ -181,13 +193,19 @@ h3 {
 
 .response-head strong {
   display: grid;
-  width: 54px;
+  width: 58px;
   height: 54px;
   place-items: center;
   border-radius: 50%;
   background: #16565a;
   color: #fff;
   font-size: 18px;
+}
+
+.response-head strong.failed {
+  border-radius: 8px;
+  background: #9f3a38;
+  font-size: 14px;
 }
 
 .answer-text {

@@ -56,10 +56,9 @@
 
         <div class="model-row">
           <el-checkbox-group v-model="selectedModels">
-            <el-checkbox-button :label="1">DeepSeek</el-checkbox-button>
-            <el-checkbox-button :label="2">Qwen</el-checkbox-button>
-            <el-checkbox-button :label="3">Zhipu</el-checkbox-button>
-            <el-checkbox-button :label="4">OpenAI-compatible</el-checkbox-button>
+            <el-checkbox-button :value="1">deepseek-v4-flash</el-checkbox-button>
+            <el-checkbox-button :value="2">MiniMax-M2.5</el-checkbox-button>
+            <el-checkbox-button :value="3">glm-4.7</el-checkbox-button>
           </el-checkbox-group>
           <el-button type="primary" :loading="store.loading" @click="submitTask">开始评测</el-button>
         </div>
@@ -67,15 +66,21 @@
 
       <el-alert v-if="store.errorMessage" :title="store.errorMessage" type="error" show-icon />
 
-      <section class="result-grid">
+      <section class="result-grid" :class="resultGridClass">
         <article v-for="response in responses" :key="response.id" class="response-card">
           <div class="response-head">
             <div>
-              <p class="panel-label">{{ response.provider }}</p>
+              <p class="panel-label">模型名称</p>
               <h3>{{ response.modelName }}</h3>
             </div>
-            <strong>{{ response.score.final }}</strong>
+            <strong :class="{ failed: response.status !== 'success' }">
+              {{ response.status === "success" ? response.score.final : "失败" }}
+            </strong>
           </div>
+
+          <el-tag :type="response.status === 'success' ? 'success' : 'danger'" effect="plain">
+            {{ response.status === "success" ? "调用成功" : "调用失败" }}
+          </el-tag>
 
           <p class="answer-text">{{ response.answer }}</p>
 
@@ -126,6 +131,16 @@ const mode = ref("标准评测");
 const modeOptions = ["快速评测", "标准评测", "深度评测"];
 
 const responses = computed(() => store.task?.responses || []);
+const resultGridClass = computed(() => {
+  const count = responses.value.length;
+  if (count === 1) {
+    return "one-card";
+  }
+  if (count === 2) {
+    return "two-cards";
+  }
+  return "three-cards";
+});
 
 async function submitTask() {
   await store.submitEvaluation({

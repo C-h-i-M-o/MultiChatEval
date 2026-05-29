@@ -25,6 +25,12 @@ MultiChatEval/
 
 ## 快速开始
 
+首次运行前可以复制环境变量模板：
+
+```bash
+cp .env.example .env
+```
+
 ### 1. 启动数据库
 
 ```bash
@@ -73,3 +79,31 @@ http://localhost:5173
 6. 前端展示回答对比、评分明细和用户反馈入口。
 
 第一版暂不做流式输出，等核心流程稳定后再加入 SSE 或 WebSocket。
+
+## 真实模型配置
+
+后端当前已支持 OpenAI-compatible 的 `/chat/completions` 调用。当前默认展示并调用 DeepSeek、MiniMax、Zhipu 三个模型。
+
+```text
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+
+MINIMAX_API_KEY=
+MINIMAX_BASE_URL=https://api.minimaxi.com/v1
+MINIMAX_MODEL=MiniMax-M2.5
+
+ZHIPU_API_KEY=
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+ZHIPU_MODEL=glm-4.7
+```
+
+如果没有配置对应 API Key，前端会展示“调用失败”卡片，并显示缺少配置的原因。
+
+如果评测问题较长或模型响应较慢，可以在 `.env` 中调大：
+
+```text
+MODEL_REQUEST_TIMEOUT=90
+```
+
+前端请求超时时间已设置为 120 秒，避免后端仍在等待模型返回时前端过早中断。
