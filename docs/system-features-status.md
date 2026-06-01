@@ -1,6 +1,6 @@
 # 系统功能与实现状态
 
-最后更新：2026-06-01
+最后更新：2026-06-02
 
 本文档根据当前代码实现梳理 MultiChatEval 的系统功能、模块边界和完成情况。状态说明：
 
@@ -12,7 +12,7 @@
 
 MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户输入同一个问题后，可以选择多个模型并发回答，系统展示每个模型的回答内容、耗时、输出长度、成本估算和规则评分，帮助用户横向比较不同模型的回答质量。
 
-当前版本优先保证非流式、多模型、规则评分的完整展示链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口，但评测数据暂未写入 MySQL。
+当前版本优先保证非流式、多模型、规则评分的完整展示链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口，但评测任务、回答和评分数据暂未完整持久化。
 
 ## 2. 前端功能
 
@@ -26,23 +26,35 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 - 展示“多模型评测工作台”主界面。
 - 支持输入用户问题。
-- 支持通过复选按钮选择模型：
-  - `deepseek-v4-flash`
-  - `MiniMax-M2.5`
-  - `glm-4.7`
+- 支持通过复选按钮选择已启用且已配置 API Key 的模型配置。
 - 支持快速评测、标准评测、深度评测三个模式的界面切换。
 - 支持 LLM 评审开关的界面交互。
 - 点击“开始评测”后调用后端创建评测任务接口。
 - 提交按钮会在请求期间进入 loading 状态。
-- 输入为空或未选择模型时禁止提交。
+- 输入为空、未选择模型或系统内没有可评测模型时禁止提交。
+- 当系统内没有任何已配置 API Key 的模型时，首页会提醒用户进入“模型配置”页面填写自己的 API Key。
 
 当前限制：
 
 - 评测模式只停留在前端状态，暂未参与后端评分或模型调用策略。
 - LLM 评审开关会随请求发送给后端，但后端暂未实际执行 LLM Judge。
-- 侧边栏中的“模型配置”“历史任务”“反馈统计”目前只是静态导航按钮。
+- “历史任务”“反馈统计”目前只是静态导航按钮。
 
-### 2.2 请求等待态
+### 2.2 模型配置页面
+
+状态：已实现
+
+已实现能力：
+
+- 侧边栏“模型配置”可切换到模型配置管理界面。
+- 系统内置 DeepSeek、MiniMax、GLM 三家供应商模型。
+- 内置配置可编辑 Base URL、API Key、模型名、展示名和启用状态，但不可删除。
+- 用户可新增、编辑、启用/禁用、删除自定义 OpenAI-compatible 模型配置。
+- 支持测试已保存配置或未保存草稿配置的连接。
+- API Key 输入框留空时保留原密钥。
+- 列表只展示密钥状态和掩码，不展示原始 API Key。
+
+### 2.3 请求等待态
 
 状态：已实现
 
@@ -54,7 +66,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 - 为每个待返回模型展示等待卡片和占位动画。
 - 等待态中显示临时耗时、输出等待中、成本待估算。
 
-### 2.3 结果对比展示
+### 2.4 结果对比展示
 
 状态：已实现
 
@@ -78,7 +90,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 - “采纳”“点赞”“详情”按钮已有界面，但暂未绑定反馈提交或详情弹窗逻辑。
 - 前端当前只调用创建评测任务接口，尚未调用查询任务接口或反馈接口。
 
-### 2.4 Markdown 与思考过程渲染
+### 2.5 Markdown 与思考过程渲染
 
 状态：已实现
 
@@ -112,7 +124,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 - 创建 FastAPI 应用。
 - 根据环境变量配置 CORS 允许来源。
 - 所有业务接口统一挂载在 `/api` 前缀下。
-- 已注册健康检查路由和评测路由。
+- 已注册健康检查、评测和模型配置路由。
 
 ### 3.2 健康检查
 
@@ -162,9 +174,9 @@ POST /api/evaluation/tasks
 已实现能力：
 
 - 接收前端提交的问题、模型列表和 LLM 评审开关。
-- 根据 `modelIds` 解析要调用的模型。
-- 未传模型时默认调用模型 1 和模型 2。
-- 如果传入的模型 ID 全部无效，也回退到模型 1 和模型 2。
+- 根据 `modelIds` 从 `model_configs.id` 动态解析要调用的模型。
+- 未传模型时默认选择已启用的 DeepSeek 和 MiniMax；不可用时回退到前两个已启用模型。
+- 如果传入的模型 ID 全部无效，也按同样规则回退。
 - 使用 `asyncio.gather` 并发调用多个模型。
 - 只要至少一个模型调用成功，任务状态返回 `completed`。
 - 所有模型均失败时，任务状态返回 `failed`。
@@ -227,6 +239,28 @@ POST /api/evaluation/responses/{response_id}/feedback
 - 暂未校验 `feedbackType` 的合法取值。
 - 暂未将反馈影响纳入评分或推荐逻辑。
 
+### 3.6 模型配置接口
+
+状态：已实现
+
+接口：
+
+- `GET /api/model-configs`
+- `POST /api/model-configs`
+- `PUT /api/model-configs/{model_config_id}`
+- `DELETE /api/model-configs/{model_config_id}`
+- `POST /api/model-configs/test`
+
+已实现能力：
+
+- 查询模型配置时自动补齐 DeepSeek、MiniMax、GLM 三个内置模型。
+- 内置模型不会从 `.env` 读取 API Key，用户需要在前端模型配置页填写自己的 Key。
+- 支持新增自定义 OpenAI-compatible 模型配置。
+- 支持编辑内置和自定义配置。
+- 支持删除自定义配置，内置配置只能禁用。
+- 支持测试模型连接。
+- API Key 当前以 `plain:<api_key>` 格式明文落库，业务代码通过统一 helper 保存、读取和掩码展示，保留未来升级为 `enc:v1:<ciphertext>` 的空间。
+
 ## 4. 模型调用功能
 
 ### 4.1 模型适配器接口
@@ -280,20 +314,23 @@ POST /api/evaluation/responses/{response_id}/feedback
 
 状态：已实现
 
-入口文件：`backend/app/services/evaluation_service.py`
+入口文件：`backend/app/services/model_config_service.py`
 
-当前模型 ID 映射：
+当前内置模型：
 
-| 模型 ID | 供应商 | 默认模型名 |
-| --- | --- | --- |
-| 1 | deepseek | `deepseek-v4-flash` |
-| 2 | minimax | `MiniMax-M2.5` |
-| 3 | zhipu | `glm-4.7` |
+| 供应商 | 默认模型名 |
+| --- | --- |
+| deepseek | `deepseek-v4-flash` |
+| minimax | `MiniMax-M2.5` |
+| glm | `glm-4.7` |
 
 已实现能力：
 
-- 从 `.env` 读取三个供应商的 API Key、Base URL 和模型名。
-- 每个模型调用共享 `MODEL_REQUEST_TIMEOUT`。
+- 从 `.env` 读取三个内置供应商的默认 Base URL 和模型名，不读取 API Key。
+- 查询模型配置时自动写入缺失的内置配置。
+- 当前首页会在系统内没有任何 API Key 时提醒用户先进入模型配置页。
+- 每个模型调用共享 `MODEL_REQUEST_TIMEOUT`，并使用对应模型配置的 `max_tokens`。
+- 用户自定义供应商按 OpenAI-compatible 协议调用。
 - Zhipu/GLM 请求默认追加：
 
 ```json
@@ -380,12 +417,11 @@ final =
 
 当前限制：
 
-- 当前评测服务没有注入数据库 Session。
 - 创建评测任务时未写入 `evaluation_tasks`。
 - 模型回答未写入 `model_responses`。
 - 规则评分结果未写入 `evaluation_results`。
 - 用户反馈未写入 `user_feedback`。
-- 初始化 SQL 中的默认供应商包含 `qwen` 和 `openai-compatible`，但当前后端默认调用映射是 DeepSeek、MiniMax、Zhipu，二者尚未完全统一。
+- 评测服务已经从数据库读取模型配置，但任务、回答、评分仍以接口响应形式返回，未持久化。
 
 ## 7. 配置与运行
 
@@ -404,7 +440,8 @@ final =
   - 数据库连接。
   - CORS 来源。
   - 模型请求超时时间。
-  - DeepSeek、MiniMax、Zhipu 的 API Key、Base URL 和模型名。
+  - DeepSeek、MiniMax、GLM 的 Base URL 和模型名。
+- `scripts/clear-builtin-api-keys.py` 用于一次性清空历史数据库中内置 DeepSeek、MiniMax、GLM 的 API Key，避免继续沿用旧的 `.env` 自动导入密钥。
 
 ### 7.2 本地运行
 
@@ -413,6 +450,7 @@ final =
 已有能力：
 
 - `docker-compose.yml` 提供 MySQL 服务。
+- `scripts/start-local.sh` 可自动准备 `.env`、启动 MySQL、后端和前端开发服务。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
 - 前端可通过 `pnpm dev` 启动。
 - 前端通过 Vite 代理或同源 `/api` 访问后端接口。
@@ -442,11 +480,13 @@ final =
 ```text
 用户输入问题
   ↓
+前端从 GET /api/model-configs 加载可选模型
+  ↓
 前端选择模型并提交 POST /api/evaluation/tasks
   ↓
-后端解析模型 ID
+后端按 model_configs.id 读取模型配置
   ↓
-并发调用 DeepSeek / MiniMax / Zhipu 中被选中的模型
+并发调用 DeepSeek / MiniMax / GLM 或自定义 OpenAI-compatible 模型
   ↓
 记录本次内存中的耗时、输出 token、成本估算和调用状态
   ↓
@@ -480,8 +520,8 @@ final =
 1. 接入数据库持久化：创建任务、保存回答、保存评分。
 2. 将 `GET /api/evaluation/tasks/{task_id}` 改为真实查询。
 3. 将反馈接口写入 `user_feedback`，并绑定前端按钮。
-4. 为评测创建、规则评分和失败模型调用补充测试。
-5. 统一数据库默认模型配置与后端 `_provider_map`。
+4. 为评测创建、规则评分和失败模型调用补充更多测试。
+5. 将 `plain:` 密钥存储升级为 `enc:v1:` 加密存储。
 6. 实现 LLM Judge，并明确 `enableJudge` 对接口返回的影响。
-7. 增加历史任务、模型配置和反馈统计页面。
+7. 增加历史任务和反馈统计页面。
 8. 在核心流程稳定后再考虑流式输出。

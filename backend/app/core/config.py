@@ -14,15 +14,12 @@ class Settings(BaseSettings):
     backend_cors_origins: str = "http://localhost:5173"
     model_request_timeout: float = 60
 
-    deepseek_api_key: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"
 
-    minimax_api_key: str = ""
     minimax_base_url: str = "https://api.minimaxi.com/v1"
     minimax_model: str = "MiniMax-M2.5"
 
-    zhipu_api_key: str = ""
     zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
     zhipu_model: str = "glm-4.7"
 

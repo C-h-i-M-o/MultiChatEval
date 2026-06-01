@@ -97,7 +97,6 @@ CREATE TABLE IF NOT EXISTS user_feedback (
 INSERT INTO model_providers (name, base_url, enabled)
 VALUES
   ('deepseek', 'https://api.deepseek.com', TRUE),
-  ('qwen', 'https://dashscope.aliyuncs.com/compatible-mode/v1', TRUE),
-  ('zhipu', 'https://open.bigmodel.cn/api/paas/v4', TRUE),
-  ('openai-compatible', NULL, TRUE)
+  ('minimax', 'https://api.minimaxi.com/v1', TRUE),
+  ('glm', 'https://open.bigmodel.cn/api/paas/v4', TRUE)
 ON DUPLICATE KEY UPDATE enabled = VALUES(enabled);

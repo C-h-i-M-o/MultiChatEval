@@ -50,13 +50,19 @@ MultiChatEval/
   - 用户反馈
 - API 路由：
   - `GET /api/health`
+  - `GET /api/model-configs`
+  - `POST /api/model-configs`
+  - `PUT /api/model-configs/{modelConfigId}`
+  - `DELETE /api/model-configs/{modelConfigId}`
+  - `POST /api/model-configs/test`
   - `POST /api/evaluation/tasks`
   - `GET /api/evaluation/tasks/{taskId}`
   - `POST /api/evaluation/responses/{responseId}/feedback`
 - 模型适配器接口：`backend/app/adapters/base.py`
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
-- 当前评测服务已接入真实模型 API，默认调用 DeepSeek、MiniMax、Zhipu 三个模型。
+- 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
+- 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。
 - Zhipu/GLM 请求默认关闭 thinking，避免简单问题产生过长 reasoning 内容和超时。
 
 ### 前端
@@ -65,11 +71,12 @@ MultiChatEval/
 - 主页面：`frontend/src/views/EvaluationWorkspace.vue`
 - 功能骨架：
   - 输入问题
-  - 按具体模型名选择模型
+  - 按已启用且已配置 API Key 的模型配置选择模型
   - 切换快速/标准/深度评测模式
   - 启用或关闭 LLM 评审开关
   - 展示多模型回答卡片
   - 展示耗时、输出长度、成本和评分条
+  - 当系统内没有任何已配置 API Key 的模型时，提醒用户先进入“模型配置”页面
 - 前端展示增强：
   - 请求期间显示等待卡片和耗时计数
   - 结果卡片根据模型数量自适应布局

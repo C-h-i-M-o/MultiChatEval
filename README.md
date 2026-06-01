@@ -32,6 +32,14 @@ MultiChatEval/
 
 ## 快速开始
 
+推荐直接使用本地启动脚本：
+
+```bash
+./scripts/start-local.sh
+```
+
+脚本会自动检查 `.env`、启动 MySQL、准备后端虚拟环境和前端依赖，并同时启动后端与前端开发服务。按 `Ctrl+C` 可以停止本次启动的后端和前端进程。
+
 首次运行前可以复制环境变量模板：
 
 ```bash
@@ -100,23 +108,20 @@ http://localhost:5173
 
 ## 真实模型配置
 
-后端当前已支持 OpenAI-compatible 的 `/chat/completions` 调用。当前默认展示并调用 DeepSeek、MiniMax、Zhipu 三个模型。
+后端当前已支持 OpenAI-compatible 的 `/chat/completions` 调用。系统会内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key。新用户需要在前端“模型配置”页面填写自己的 API Key 后再使用。
 
 ```text
-DEEPSEEK_API_KEY=
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
 
-MINIMAX_API_KEY=
 MINIMAX_BASE_URL=https://api.minimaxi.com/v1
 MINIMAX_MODEL=MiniMax-M2.5
 
-ZHIPU_API_KEY=
 ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 ZHIPU_MODEL=glm-4.7
 ```
 
-如果没有配置对应 API Key，前端会展示“调用失败”卡片，并显示缺少配置的原因。
+如果系统内没有任何已配置 API Key 的模型，前端首页会提醒先进入“模型配置”页面填写 API Key。
 
 如果评测问题较长或模型响应较慢，可以在 `.env` 中调大：
 

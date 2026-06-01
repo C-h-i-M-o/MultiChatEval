@@ -22,9 +22,29 @@
 
 模型供应商表，例如 DeepSeek、MiniMax、Zhipu。
 
+字段重点：
+
+- `name`：供应商唯一名称。内置供应商固定为 `deepseek`、`minimax`、`glm`。
+- `base_url`：OpenAI-compatible 接口基础地址，例如 `https://api.deepseek.com`。
+- `api_key_encrypted`：MVP 阶段复用为版本化密钥字段。当前使用 `plain:<api_key>` 明文格式保存，未来可升级为 `enc:v1:<ciphertext>` 加密格式。
+- `enabled`：供应商是否启用。
+
+业务代码不得直接读写原始 API Key 字段，需要通过统一密钥 helper 保存、读取和掩码展示。列表接口只返回 `hasApiKey` 和 `maskedApiKey`，不返回原文。
+
 ## model_configs
 
 具体模型配置表，例如 `deepseek-v4-flash`、`MiniMax-M2.5`、`glm-4.7`。
+
+字段重点：
+
+- `provider_id`：关联模型供应商。
+- `model_name`：发送给模型接口的真实模型名。
+- `display_name`：前端展示名。
+- `price_input` / `price_output`：输入和输出 token 单价，当前默认 0。
+- `max_tokens`：单次回答最大输出 token。
+- `enabled`：该模型配置是否可在评测页选择。
+
+系统启动或查询模型配置时会补齐 DeepSeek、MiniMax、GLM 三个内置配置。内置配置只包含供应商名、Base URL、模型名和展示名，不会从 `.env` 读取 API Key。内置配置可编辑、可禁用，但不可删除。用户新增的自定义配置统一按 OpenAI-compatible 协议调用。
 
 ## model_responses
 

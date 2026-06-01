@@ -10,8 +10,12 @@
       </div>
 
       <nav class="nav-list" aria-label="主导航">
-        <button class="nav-item active">对比评测</button>
-        <button class="nav-item">模型配置</button>
+        <button class="nav-item" :class="{ active: activeView === 'evaluation' }" @click="activeView = 'evaluation'">
+          对比评测
+        </button>
+        <button class="nav-item" :class="{ active: activeView === 'configs' }" @click="activeView = 'configs'">
+          模型配置
+        </button>
         <button class="nav-item">历史任务</button>
         <button class="nav-item">反馈统计</button>
       </nav>
@@ -28,7 +32,7 @@
       </section>
     </aside>
 
-    <section class="main-stage">
+    <section v-if="activeView === 'evaluation'" class="main-stage">
       <header class="topbar">
         <div>
           <p class="eyebrow">Evaluation Task</p>
@@ -36,6 +40,15 @@
         </div>
         <el-segmented v-model="mode" :options="modeOptions" :disabled="store.loading" />
       </header>
+
+      <section v-if="showApiKeyNotice" class="api-key-notice">
+        <div>
+          <p class="panel-label">模型密钥</p>
+          <h3>请先配置模型 API Key</h3>
+          <p>系统内置模型不会读取 .env 中的密钥。请进入模型配置，为 DeepSeek、MiniMax、GLM 或自定义模型填写自己的 API Key。</p>
+        </div>
+        <el-button type="primary" @click="activeView = 'configs'">去配置</el-button>
+      </section>
 
       <section class="query-panel">
         <div class="query-header">
@@ -56,15 +69,33 @@
 
         <div class="model-row">
           <el-checkbox-group v-model="selectedModels" :disabled="store.loading">
-            <el-checkbox-button :value="1">deepseek-v4-flash</el-checkbox-button>
-            <el-checkbox-button :value="2">MiniMax-M2.5</el-checkbox-button>
-            <el-checkbox-button :value="3">glm-4.7</el-checkbox-button>
+            <el-checkbox-button
+              v-for="modelConfig in configuredModelConfigs"
+              :key="modelConfig.id"
+              :value="modelConfig.id"
+            >
+              {{ modelConfig.displayName }}
+            </el-checkbox-button>
           </el-checkbox-group>
           <el-button type="primary" :loading="store.loading" :disabled="!canSubmit" @click="submitTask">
             {{ store.loading ? "等待模型响应" : "开始评测" }}
           </el-button>
         </div>
       </section>
+
+      <el-alert
+        v-if="modelConfigErrorMessage"
+        :title="modelConfigErrorMessage"
+        type="warning"
+        show-icon
+      />
+
+      <el-alert
+        v-if="!modelConfigLoading && configuredModelConfigs.length === 0"
+        title="暂无可评测模型，请先在模型配置中填写 API Key 并启用至少一个模型"
+        type="warning"
+        show-icon
+      />
 
       <section v-if="store.loading" class="waiting-banner" aria-live="polite">
         <div>
@@ -155,40 +186,60 @@
         </article>
       </section>
     </section>
+
+    <ModelConfigPanel
+      v-else
+      class="main-stage"
+      :configs="modelConfigs"
+      :loading="modelConfigLoading"
+      @refresh="loadModelConfigs"
+    />
   </main>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
+import ModelConfigPanel from "../components/ModelConfigPanel.vue";
 import ScoreBar from "../components/ScoreBar.vue";
 import { useEvaluationStore } from "../stores/evaluation";
+import { listModelConfigs } from "../utils/api";
 
 const store = useEvaluationStore();
+const activeView = ref("evaluation");
 const prompt = ref("");
-const selectedModels = ref([1, 2]);
+const selectedModels = ref([]);
 const enableJudge = ref(false);
 const mode = ref("标准评测");
 const modeOptions = ["快速评测", "标准评测", "深度评测"];
 const elapsedSeconds = ref(0);
 const pendingModelIds = ref([]);
+const modelConfigs = ref([]);
+const modelConfigLoading = ref(false);
+const modelConfigErrorMessage = ref("");
 let waitingTimerId = null;
 
-const modelNameMap = {
-  1: "deepseek-v4-flash",
-  2: "MiniMax-M2.5",
-  3: "glm-4.7"
-};
-
 const responses = computed(() => store.task?.responses || []);
+const configuredModelConfigs = computed(() => {
+  return modelConfigs.value.filter((modelConfig) => modelConfig.enabled && modelConfig.hasApiKey);
+});
+const showApiKeyNotice = computed(() => {
+  return !modelConfigLoading.value && modelConfigs.value.length > 0 && modelConfigs.value.every((modelConfig) => !modelConfig.hasApiKey);
+});
+const modelNameMap = computed(() => {
+  return modelConfigs.value.reduce((names, modelConfig) => {
+    names[modelConfig.id] = modelConfig.displayName;
+    return names;
+  }, {});
+});
 const canSubmit = computed(() => {
   return !store.loading && Boolean(prompt.value.trim()) && selectedModels.value.length > 0;
 });
 const pendingModelCards = computed(() => {
   return pendingModelIds.value.map((modelId) => ({
     id: `pending-${modelId}`,
-    modelName: modelNameMap[modelId] || `模型 ${modelId}`,
+    modelName: modelNameMap.value[modelId] || `模型 ${modelId}`,
     pending: true
   }));
 });
@@ -224,6 +275,35 @@ function stopWaitingTimer() {
   }
 }
 
+function selectDefaultModels() {
+  const selectedSet = new Set(selectedModels.value);
+  const availableIds = configuredModelConfigs.value.map((modelConfig) => modelConfig.id);
+  selectedModels.value = availableIds.filter((modelId) => selectedSet.has(modelId));
+
+  if (selectedModels.value.length > 0) {
+    return;
+  }
+
+  const defaultModelIds = configuredModelConfigs.value
+    .filter((modelConfig) => ["deepseek", "minimax"].includes(modelConfig.providerName))
+    .map((modelConfig) => modelConfig.id);
+  selectedModels.value = (defaultModelIds.length > 0 ? defaultModelIds : availableIds).slice(0, 2);
+}
+
+async function loadModelConfigs() {
+  modelConfigLoading.value = true;
+  modelConfigErrorMessage.value = "";
+
+  try {
+    modelConfigs.value = await listModelConfigs();
+    selectDefaultModels();
+  } catch (error) {
+    modelConfigErrorMessage.value = error?.message || "模型配置加载失败";
+  } finally {
+    modelConfigLoading.value = false;
+  }
+}
+
 async function submitTask() {
   if (!canSubmit.value) {
     return;
@@ -239,5 +319,6 @@ async function submitTask() {
   stopWaitingTimer();
 }
 
+onMounted(loadModelConfigs);
 onBeforeUnmount(stopWaitingTimer);
 </script>
