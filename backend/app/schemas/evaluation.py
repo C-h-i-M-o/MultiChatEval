@@ -6,6 +6,7 @@ class EvaluationTaskCreate(BaseModel):
     prompt: str
     model_ids: list[int] = Field(default_factory=list, alias="modelIds")
     enable_judge: bool = Field(default=False, alias="enableJudge")
+    enable_thinking: bool = Field(default=False, alias="enableThinking")
 
 
 class EvaluationScoreRead(BaseModel):

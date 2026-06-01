@@ -56,7 +56,10 @@
             <p class="panel-label">用户问题</p>
             <h3>创建一次多模型评测</h3>
           </div>
-          <el-switch v-model="enableJudge" :disabled="store.loading" active-text="LLM 评审" />
+          <div class="query-switches">
+            <el-switch v-model="enableThinking" :disabled="store.loading" active-text="思考模式" />
+            <el-switch v-model="enableJudge" :disabled="store.loading" active-text="LLM 评审" />
+          </div>
         </div>
 
         <el-input
@@ -100,7 +103,7 @@
       <section v-if="store.loading" class="waiting-banner" aria-live="polite">
         <div>
           <p class="panel-label">模型调用中</p>
-          <strong>正在调用 {{ pendingModelCards.length }} 个模型，已等待 {{ elapsedSeconds }}s</strong>
+          <strong>已完成 {{ responses.length }} / {{ pendingModelIds.length }}，已等待 {{ elapsedSeconds }}s</strong>
         </div>
         <span class="waiting-pulse" aria-hidden="true"></span>
       </section>
@@ -211,6 +214,7 @@ const activeView = ref("evaluation");
 const prompt = ref("");
 const selectedModels = ref([]);
 const enableJudge = ref(false);
+const enableThinking = ref(false);
 const mode = ref("标准评测");
 const modeOptions = ["快速评测", "标准评测", "深度评测"];
 const elapsedSeconds = ref(0);
@@ -233,19 +237,32 @@ const modelNameMap = computed(() => {
     return names;
   }, {});
 });
+const responseMap = computed(() => {
+  return responses.value.reduce((items, response) => {
+    items[response.id] = response;
+    return items;
+  }, {});
+});
 const canSubmit = computed(() => {
   return !store.loading && Boolean(prompt.value.trim()) && selectedModels.value.length > 0;
 });
-const pendingModelCards = computed(() => {
-  return pendingModelIds.value.map((modelId) => ({
-    id: `pending-${modelId}`,
-    modelName: modelNameMap.value[modelId] || `模型 ${modelId}`,
-    pending: true
-  }));
-});
 const displayResponses = computed(() => {
   if (store.loading) {
-    return pendingModelCards.value;
+    return pendingModelIds.value.map((modelId) => {
+      return responseMap.value[modelId] || {
+        id: `pending-${modelId}`,
+        modelName: modelNameMap.value[modelId] || `模型 ${modelId}`,
+        pending: true
+      };
+    });
+  }
+  if (pendingModelIds.value.length > 0) {
+    const orderedResponses = pendingModelIds.value
+      .map((modelId) => responseMap.value[modelId])
+      .filter(Boolean);
+    if (orderedResponses.length > 0) {
+      return orderedResponses;
+    }
   }
   return responses.value;
 });
@@ -314,7 +331,8 @@ async function submitTask() {
   await store.submitEvaluation({
     prompt: prompt.value,
     modelIds: selectedModels.value,
-    enableJudge: enableJudge.value
+    enableJudge: enableJudge.value,
+    enableThinking: enableThinking.value
   });
   stopWaitingTimer();
 }

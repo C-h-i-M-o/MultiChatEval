@@ -10,6 +10,52 @@ export async function createEvaluationTask(payload) {
   return response.data;
 }
 
+export async function streamEvaluationTask(payload, onEvent) {
+  const response = await fetch("/api/evaluation/tasks/stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "评测任务创建失败");
+  }
+
+  if (!response.body) {
+    throw new Error("当前浏览器不支持渐进式读取模型结果");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine) {
+        onEvent(JSON.parse(trimmedLine));
+      }
+    }
+  }
+
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    onEvent(JSON.parse(buffer.trim()));
+  }
+}
+
 export async function listModelConfigs() {
   const response = await api.get("/model-configs");
   return response.data;

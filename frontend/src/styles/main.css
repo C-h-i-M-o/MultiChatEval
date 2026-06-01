@@ -162,6 +162,13 @@ h3 {
   gap: 16px;
 }
 
+.query-switches {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .query-panel {
   display: grid;
   gap: 18px;
@@ -599,6 +606,7 @@ h3 {
   .topbar,
   .query-header,
   .model-row,
+  .query-switches,
   .api-key-notice,
   .config-topbar,
   .config-actions {

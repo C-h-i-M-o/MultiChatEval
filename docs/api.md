@@ -27,11 +27,34 @@ POST /api/evaluation/tasks
   "conversationId": 1,
   "prompt": "帮我解释什么是设计模式",
   "modelIds": [1, 2, 3],
-  "enableJudge": false
+  "enableJudge": false,
+  "enableThinking": false
 }
 ```
 
 `modelIds` 使用 `model_configs.id`。如果不传，后端默认选择已启用的 DeepSeek 和 MiniMax；如果这两个模型不可用，则选择前两个已启用模型。
+
+`enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
+
+```json
+{
+  "thinking": {
+    "type": "disabled"
+  }
+}
+```
+
+开启时，后端会对所有模型请求统一追加：
+
+```json
+{
+  "thinking": {
+    "type": "enabled"
+  }
+}
+```
+
+第一版不提供思考程度选项，也不会发送 `thinkingEffort` 或 `reasoning_effort`。
 
 响应：
 
@@ -43,6 +66,70 @@ POST /api/evaluation/tasks
   "responses": []
 }
 ```
+
+该接口会等待所有模型调用完成后一次性返回完整结果，保留用于兼容旧前端或调试场景。
+
+## 创建评测任务并渐进返回模型结果
+
+```http
+POST /api/evaluation/tasks/stream
+```
+
+请求字段与 `POST /api/evaluation/tasks` 一致。响应内容类型为 `application/x-ndjson`，每一行都是一个独立 JSON 事件。
+
+任务开始事件：
+
+```json
+{
+  "type": "task_started",
+  "taskId": 1,
+  "prompt": "帮我解释什么是设计模式",
+  "modelIds": [1, 2, 3],
+  "total": 3
+}
+```
+
+单个模型完成事件：
+
+```json
+{
+  "type": "model_response",
+  "response": {
+    "id": 1,
+    "modelName": "deepseek-v4-flash",
+    "provider": "deepseek",
+    "answer": "回答内容",
+    "latencyMs": 856,
+    "outputTokens": 120,
+    "estimatedCost": 0,
+    "status": "success",
+    "score": {
+      "relevance": 8,
+      "completeness": 8,
+      "clarity": 8,
+      "format": 8,
+      "safety": 10,
+      "final": 8.4
+    }
+  }
+}
+```
+
+任务完成事件：
+
+```json
+{
+  "type": "task_completed",
+  "task": {
+    "taskId": 1,
+    "status": "completed",
+    "prompt": "帮我解释什么是设计模式",
+    "responses": []
+  }
+}
+```
+
+如果某个模型调用失败，会以 `model_response` 事件返回该模型的失败状态，不会中断其他模型。
 
 ## 查询模型配置
 

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 
@@ -8,6 +8,7 @@ class ModelRequest:
     prompt: str
     model_name: str
     max_tokens: int = 1024
+    extra_body: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
