@@ -242,6 +242,17 @@ FinalScore =
 - 不要将 `.env`、`node_modules`、虚拟环境、构建产物提交到 Git。
 - 第一版不要做流式输出，先保证完整主流程稳定。
 
+## 文档先行约定
+
+- 每次做功能更新前，先确认会影响哪些文档；如果需求、接口、数据结构或交互行为不清楚，先补充或更新设计/说明文档，再改代码。
+- 每次完成后端接口、前端功能、数据库结构、配置项、评分规则或模型调用逻辑变更时，必须同步更新对应文档。
+- 功能实现状态统一维护在 `docs/system-features-status.md`；当功能从“未实现”变为“部分实现”或“已实现”时，需要同步更新该文档。
+- API 请求/响应变化需要同步更新 `docs/api.md`。
+- 数据表、字段、关系或持久化流程变化需要同步更新 `docs/database.md`。
+- 架构、模块边界、主流程或模型调用链路变化需要同步更新 `docs/architecture.md`。
+- README 只保留项目概览、运行方式和重要入口；详细实现状态优先写入 `docs/` 下的专题文档。
+- 交付前需要检查本次代码变更和文档是否一致；如果暂时无法更新文档，必须在回复中说明原因和后续补文档位置。
+
 ## 后续 AI 接手建议
 
 新的 AI 或开发者接手时，建议按以下顺序阅读：
@@ -251,8 +262,9 @@ FinalScore =
 3. `docs/architecture.md`
 4. `docs/database.md`
 5. `docs/api.md`
-6. `backend/app/services/evaluation_service.py`
-7. `frontend/src/views/EvaluationWorkspace.vue`
+6. `docs/system-features-status.md`
+7. `backend/app/services/evaluation_service.py`
+8. `frontend/src/views/EvaluationWorkspace.vue`
 
 优先推进的任务是：
 

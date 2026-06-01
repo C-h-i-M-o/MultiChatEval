@@ -52,7 +52,6 @@
           :rows="5"
           :disabled="store.loading"
           resize="none"
-          placeholder="例如：请解释什么是软件工程中的适配器模式，并给出一个简单例子。"
         />
 
         <div class="model-row">
@@ -167,7 +166,7 @@ import ScoreBar from "../components/ScoreBar.vue";
 import { useEvaluationStore } from "../stores/evaluation";
 
 const store = useEvaluationStore();
-const prompt = ref("请解释什么是软件工程中的适配器模式，并给出一个简单例子。");
+const prompt = ref("");
 const selectedModels = ref([1, 2]);
 const enableJudge = ref(false);
 const mode = ref("标准评测");

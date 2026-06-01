@@ -23,6 +23,13 @@ MultiChatEval/
   .env.example
 ```
 
+## 文档入口
+
+- `docs/system-features-status.md`：系统功能、实现状态和后续优先级。
+- `docs/architecture.md`：系统架构和核心流程。
+- `docs/api.md`：后端接口草案。
+- `docs/database.md`：数据库表结构说明。
+
 ## 快速开始
 
 首次运行前可以复制环境变量模板：
