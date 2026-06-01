@@ -170,6 +170,7 @@ POST /api/evaluation/tasks
 - `prompt`：用户问题。
 - `modelIds`：模型 ID 列表。
 - `enableJudge`：是否启用 LLM 评审。
+- `enableThinking`：是否启用全局思考模式。
 
 已实现能力：
 
@@ -178,6 +179,7 @@ POST /api/evaluation/tasks
 - 未传模型时默认选择已启用的 DeepSeek 和 MiniMax；不可用时回退到前两个已启用模型。
 - 如果传入的模型 ID 全部无效，也按同样规则回退。
 - 使用 `asyncio.gather` 并发调用多个模型。
+- 根据 `enableThinking` 对所有模型统一发送 `thinking.type=enabled` 或 `thinking.type=disabled`。
 - 只要至少一个模型调用成功，任务状态返回 `completed`。
 - 所有模型均失败时，任务状态返回 `failed`。
 - 返回每个模型的回答、耗时、输出 token、成本估算、状态和规则评分。
@@ -188,7 +190,38 @@ POST /api/evaluation/tasks
 - `conversationId` 已在请求模型中定义，但当前服务层未使用。
 - `enableJudge` 已接收，但当前服务层未使用。
 - 任务、模型回答、评分结果尚未写入 MySQL。
-- 当前接口为同步等待所有模型完成后一次性返回，暂不支持 SSE、WebSocket 或流式输出。
+- `POST /api/evaluation/tasks` 仍为同步等待所有模型完成后一次性返回。
+- 思考模式不提供思考程度选择。
+
+### 3.3.1 创建评测任务并渐进返回模型结果
+
+状态：已实现
+
+接口：
+
+```http
+POST /api/evaluation/tasks/stream
+```
+
+相关文件：
+
+- `backend/app/api/v1/evaluation.py`
+- `backend/app/schemas/evaluation.py`
+- `backend/app/services/evaluation_service.py`
+
+已实现能力：
+
+- 请求字段与 `POST /api/evaluation/tasks` 一致。
+- 响应类型为 `application/x-ndjson`。
+- 先返回 `task_started` 事件。
+- 每个模型完整回答完成后立即返回 `model_response` 事件。
+- 所有模型结束后返回 `task_completed` 事件。
+- 单个模型失败只影响该模型事件，不中断其他模型调用。
+
+当前限制：
+
+- 该接口是模型级渐进返回，不是逐字 token 流式输出。
+- 当前 `taskId` 仍固定返回 `1`，尚未绑定真实数据库任务。
 
 ### 3.4 查询评测任务
 
@@ -331,7 +364,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 - 当前首页会在系统内没有任何 API Key 时提醒用户先进入模型配置页。
 - 每个模型调用共享 `MODEL_REQUEST_TIMEOUT`，并使用对应模型配置的 `max_tokens`。
 - 用户自定义供应商按 OpenAI-compatible 协议调用。
-- Zhipu/GLM 请求默认追加：
+- 每次评测请求都会根据全局思考模式追加：
 
 ```json
 {
@@ -341,7 +374,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 }
 ```
 
-这样可以减少简单问题的 reasoning 内容和等待时间。
+关闭思考模式时，`type` 为 `disabled`；开启思考模式时，`type` 为 `enabled`。第一版不发送思考程度参数。如果某个供应商不支持该字段并返回错误，该错误会作为对应模型的失败结果展示。
 
 ## 5. 评分功能
 

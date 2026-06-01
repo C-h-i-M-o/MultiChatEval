@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { createEvaluationTask } from "../utils/api";
+import { streamEvaluationTask } from "../utils/api";
 
 export const useEvaluationStore = defineStore("evaluation", {
   state: () => ({
@@ -12,9 +12,40 @@ export const useEvaluationStore = defineStore("evaluation", {
     async submitEvaluation(payload) {
       this.loading = true;
       this.errorMessage = "";
+      this.task = {
+        taskId: null,
+        status: "running",
+        prompt: payload.prompt,
+        responses: []
+      };
 
       try {
-        this.task = await createEvaluationTask(payload);
+        await streamEvaluationTask(payload, (event) => {
+          if (event.type === "task_started") {
+            this.task = {
+              taskId: event.taskId,
+              status: "running",
+              prompt: event.prompt,
+              responses: []
+            };
+            return;
+          }
+
+          if (event.type === "model_response") {
+            const currentResponses = this.task?.responses || [];
+            const nextResponses = currentResponses.filter((response) => response.id !== event.response.id);
+            nextResponses.push(event.response);
+            this.task = {
+              ...(this.task || {}),
+              responses: nextResponses
+            };
+            return;
+          }
+
+          if (event.type === "task_completed") {
+            this.task = event.task;
+          }
+        });
       } catch (error) {
         this.errorMessage = error?.message || "评测任务创建失败";
       } finally {

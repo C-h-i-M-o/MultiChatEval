@@ -40,24 +40,24 @@ MultiChatEval/
 - 配置管理：`backend/app/core/config.py`
 - 数据库连接：`backend/app/db/session.py`
 - SQLAlchemy 基础模型：
-  - 用户
-  - 会话
-  - 模型供应商
-  - 模型配置
-  - 评测任务
-  - 模型回答
-  - 评分结果
-  - 用户反馈
+    - 用户
+    - 会话
+    - 模型供应商
+    - 模型配置
+    - 评测任务
+    - 模型回答
+    - 评分结果
+    - 用户反馈
 - API 路由：
-  - `GET /api/health`
-  - `GET /api/model-configs`
-  - `POST /api/model-configs`
-  - `PUT /api/model-configs/{modelConfigId}`
-  - `DELETE /api/model-configs/{modelConfigId}`
-  - `POST /api/model-configs/test`
-  - `POST /api/evaluation/tasks`
-  - `GET /api/evaluation/tasks/{taskId}`
-  - `POST /api/evaluation/responses/{responseId}/feedback`
+    - `GET /api/health`
+    - `GET /api/model-configs`
+    - `POST /api/model-configs`
+    - `PUT /api/model-configs/{modelConfigId}`
+    - `DELETE /api/model-configs/{modelConfigId}`
+    - `POST /api/model-configs/test`
+    - `POST /api/evaluation/tasks`
+    - `GET /api/evaluation/tasks/{taskId}`
+    - `POST /api/evaluation/responses/{responseId}/feedback`
 - 模型适配器接口：`backend/app/adapters/base.py`
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
@@ -70,18 +70,18 @@ MultiChatEval/
 - Vue 3 + JavaScript + Vite 基础项目
 - 主页面：`frontend/src/views/EvaluationWorkspace.vue`
 - 功能骨架：
-  - 输入问题
-  - 按已启用且已配置 API Key 的模型配置选择模型
-  - 切换快速/标准/深度评测模式
-  - 启用或关闭 LLM 评审开关
-  - 展示多模型回答卡片
-  - 展示耗时、输出长度、成本和评分条
-  - 当系统内没有任何已配置 API Key 的模型时，提醒用户先进入“模型配置”页面
+    - 输入问题
+    - 按已启用且已配置 API Key 的模型配置选择模型
+    - 切换快速/标准/深度评测模式
+    - 启用或关闭 LLM 评审开关
+    - 展示多模型回答卡片
+    - 展示耗时、输出长度、成本和评分条
+    - 当系统内没有任何已配置 API Key 的模型时，提醒用户先进入“模型配置”页面
 - 前端展示增强：
-  - 请求期间显示等待卡片和耗时计数
-  - 结果卡片根据模型数量自适应布局
-  - `MarkdownRenderer` 支持 Markdown 回答渲染
-  - `<think>...</think>` 内容折叠为“思考过程”
+    - 请求期间显示等待卡片和耗时计数
+    - 结果卡片根据模型数量自适应布局
+    - `MarkdownRenderer` 支持 Markdown 回答渲染
+    - `<think>...</think>` 内容折叠为“思考过程”
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
@@ -91,10 +91,10 @@ MultiChatEval/
 - 初始化 SQL：`docker/mysql/init/001_schema.sql`
 - Alembic 基础配置：`backend/alembic.ini`
 - 文档：
-  - `docs/architecture.md`
-  - `docs/database.md`
-  - `docs/api.md`
-  - `docs/open-source-reuse.md`
+    - `docs/architecture.md`
+    - `docs/database.md`
+    - `docs/api.md`
+    - `docs/open-source-reuse.md`
 
 ## 本地运行方式
 
@@ -265,13 +265,12 @@ FinalScore =
 新的 AI 或开发者接手时，建议按以下顺序阅读：
 
 1. `README.md`
-2. `chat.md`
-3. `docs/architecture.md`
-4. `docs/database.md`
-5. `docs/api.md`
-6. `docs/system-features-status.md`
-7. `backend/app/services/evaluation_service.py`
-8. `frontend/src/views/EvaluationWorkspace.vue`
+2. `docs/architecture.md`
+3. `docs/database.md`
+4. `docs/api.md`
+5. `docs/system-features-status.md`
+6. `backend/app/services/evaluation_service.py`
+7. `frontend/src/views/EvaluationWorkspace.vue`
 
 优先推进的任务是：
 

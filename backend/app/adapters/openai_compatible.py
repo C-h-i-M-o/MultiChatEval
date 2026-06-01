@@ -40,6 +40,7 @@ class OpenAICompatibleClient(ModelClient):
             "stream": False,
         }
         payload.update(self.extra_body)
+        payload.update(request.extra_body)
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -47,7 +48,11 @@ class OpenAICompatibleClient(ModelClient):
             response.raise_for_status()
             data = response.json()
 
-        answer = data["choices"][0]["message"]["content"]
+        message = data["choices"][0]["message"]
+        answer = message.get("content") or ""
+        reasoning_content = (message.get("reasoning_content") or "").strip()
+        if reasoning_content:
+            answer = f"<think>\n{reasoning_content}\n</think>\n\n{answer}".strip()
         usage_data = data.get("usage", {})
         usage = ModelUsage(
             input_tokens=int(usage_data.get("prompt_tokens") or len(request.prompt)),

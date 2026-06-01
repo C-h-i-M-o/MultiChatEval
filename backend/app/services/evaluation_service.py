@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,16 +15,66 @@ from app.services.rule_evaluator import rule_evaluator
 class EvaluationService:
     async def create_task(self, payload: EvaluationTaskCreate, db: AsyncSession) -> EvaluationTaskRead:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
-        tasks = [self._call_model(prompt=payload.prompt, model=model) for model in selected_models]
-        responses = await asyncio.gather(*tasks)
+        responses = await self._collect_model_responses(
+            prompt=payload.prompt,
+            models=selected_models,
+            extra_body=self._thinking_extra_body(payload),
+        )
         task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
 
         return EvaluationTaskRead(taskId=1, status=task_status, prompt=payload.prompt, responses=responses)
 
+    async def stream_task_events(
+        self,
+        payload: EvaluationTaskCreate,
+        db: AsyncSession,
+    ) -> AsyncIterator[dict[str, object]]:
+        selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
+        model_ids = [model.id for model in selected_models]
+        extra_body = self._thinking_extra_body(payload)
+        responses: list[ModelResponseRead] = []
+
+        yield {
+            "type": "task_started",
+            "taskId": 1,
+            "prompt": payload.prompt,
+            "modelIds": model_ids,
+            "total": len(selected_models),
+        }
+
+        tasks = [
+            asyncio.create_task(self._call_model(prompt=payload.prompt, model=model, extra_body=extra_body))
+            for model in selected_models
+        ]
+        for completed_task in asyncio.as_completed(tasks):
+            response = await completed_task
+            responses.append(response)
+            yield {"type": "model_response", "response": response}
+
+        task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
+        yield {
+            "type": "task_completed",
+            "task": EvaluationTaskRead(taskId=1, status=task_status, prompt=payload.prompt, responses=responses),
+        }
+
     async def get_task(self, task_id: int) -> EvaluationTaskRead:
         return EvaluationTaskRead(taskId=task_id, status="completed", prompt="示例问题", responses=[])
 
-    async def _call_model(self, prompt: str, model: RuntimeModelConfig) -> ModelResponseRead:
+    async def _collect_model_responses(
+        self,
+        prompt: str,
+        models: list[RuntimeModelConfig],
+        extra_body: dict[str, object],
+    ) -> list[ModelResponseRead]:
+        tasks = [self._call_model(prompt=prompt, model=model, extra_body=extra_body) for model in models]
+        return await asyncio.gather(*tasks)
+
+    async def _call_model(
+        self,
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> ModelResponseRead:
         client = OpenAICompatibleClient(
             model_name=model.model_name,
             base_url=model.base_url,
@@ -36,7 +87,14 @@ class EvaluationService:
 
         try:
             reply = await asyncio.wait_for(
-                client.chat(ModelRequest(prompt=prompt, model_name=model.model_name, max_tokens=model.max_tokens)),
+                client.chat(
+                    ModelRequest(
+                        prompt=prompt,
+                        model_name=model.model_name,
+                        max_tokens=model.max_tokens,
+                        extra_body=extra_body,
+                    )
+                ),
                 timeout=settings.model_request_timeout + 5,
             )
             estimated_cost = float(client.estimate_cost(reply.usage))
@@ -81,6 +139,10 @@ class EvaluationService:
                 status="failed",
                 score=EvaluationScoreRead(**score),
             )
+
+    def _thinking_extra_body(self, payload: EvaluationTaskCreate) -> dict[str, object]:
+        thinking_type = "enabled" if payload.enable_thinking else "disabled"
+        return {"thinking": {"type": thinking_type}}
 
 
 evaluation_service = EvaluationService()
