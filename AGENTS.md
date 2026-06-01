@@ -26,7 +26,7 @@ MultiChatEval/
   frontend/       Vue 3 + JavaScript 前端应用
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
-  chat.md         项目早期设想对话
+  scripts/        本地启动与维护脚本
   docker-compose.yml
   README.md
   .env.example
@@ -56,6 +56,7 @@ MultiChatEval/
     - `DELETE /api/model-configs/{modelConfigId}`
     - `POST /api/model-configs/test`
     - `POST /api/evaluation/tasks`
+    - `POST /api/evaluation/tasks/stream`
     - `GET /api/evaluation/tasks/{taskId}`
     - `POST /api/evaluation/responses/{responseId}/feedback`
 - 模型适配器接口：`backend/app/adapters/base.py`
@@ -63,7 +64,9 @@ MultiChatEval/
 - 规则评分器：`backend/app/services/rule_evaluator.py`
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
 - 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。
-- Zhipu/GLM 请求默认关闭 thinking，避免简单问题产生过长 reasoning 内容和超时。
+- 评测请求支持全局“思考模式”开关。关闭时所有模型统一发送 `thinking.type=disabled`；开启时统一发送 `thinking.type=enabled`；不传递思考程度参数。
+- `POST /api/evaluation/tasks` 保留一次性返回完整结果。
+- `POST /api/evaluation/tasks/stream` 支持模型级渐进返回：哪个模型完整回答先完成，哪个模型结果先展示。
 
 ### 前端
 
@@ -78,8 +81,10 @@ MultiChatEval/
     - 展示耗时、输出长度、成本和评分条
     - 当系统内没有任何已配置 API Key 的模型时，提醒用户先进入“模型配置”页面
 - 前端展示增强：
-    - 请求期间显示等待卡片和耗时计数
+    - 请求期间显示等待卡片、耗时计数和完成进度
+    - 模型完成即展示，避免等待最慢模型后才统一呈现
     - 结果卡片根据模型数量自适应布局
+    - 支持全局“思考模式”开关
     - `MarkdownRenderer` 支持 Markdown 回答渲染
     - `<think>...</think>` 内容折叠为“思考过程”
 - 状态管理：`frontend/src/stores/evaluation.js`
@@ -97,6 +102,14 @@ MultiChatEval/
     - `docs/open-source-reuse.md`
 
 ## 本地运行方式
+
+推荐使用一键启动脚本：
+
+```bash
+./scripts/start-local.sh
+```
+
+脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和前端依赖，并同时启动后端与前端开发服务。按 `Ctrl+C` 可停止本次启动的服务。
 
 ### 1. 启动 MySQL
 
@@ -157,32 +170,27 @@ MODEL_REQUEST_TIMEOUT=90
 
 真实模型 API Key 不应提交到 Git。
 
-## MVP 开发路线
+## 当前实现状态与后续路线
 
-### 第一阶段：跑通主流程
+### 已跑通主流程
 
-目标：
+当前已实现：
 
-```text
-用户提问 → 创建评测任务 → 多模型回答 → 规则评分 → 前端展示
-```
+- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 模型级渐进展示 → 规则评分 → 前端对比展示。
+- 模型配置从数据库动态读取。
+- 模型耗时、输出 token、成本估算、错误状态和规则评分会返回给前端。
+- `<think>...</think>` 和 `reasoning_content` 会折叠展示为“思考过程”。
 
-待做：
-
-- 将当前模拟回答替换为真实模型适配器调用。
-- 将任务、回答、评分写入 MySQL。
-- 前端从真实任务接口读取结果。
-
-### 第二阶段：客观指标
+### 下一阶段：持久化与历史任务
 
 待做：
 
-- 记录每个模型响应时间。
-- 统计输入和输出 token。
-- 按模型价格估算成本。
-- 保存错误状态和错误信息。
+- 将评测任务写入 `evaluation_tasks`。
+- 将模型回答写入 `model_responses`。
+- 将规则评分写入 `evaluation_results`。
+- 将 `GET /api/evaluation/tasks/{taskId}` 改为真实查询。
 
-### 第三阶段：规则评分
+### 评分增强
 
 待做：
 
@@ -192,7 +200,7 @@ MODEL_REQUEST_TIMEOUT=90
 - 增加语言一致性评分。
 - 增加格式符合度评分。
 
-### 第四阶段：LLM Judge
+### LLM Judge
 
 待做：
 
@@ -201,13 +209,14 @@ MODEL_REQUEST_TIMEOUT=90
 - 解析评分、优点、缺点和推荐理由。
 - 将 LLM 评审分纳入综合评分。
 
-### 第五阶段：用户反馈
+### 用户反馈与推荐
 
 待做：
 
 - 点赞、点踩、采纳、收藏。
 - 保存用户反馈。
 - 在评分详情中展示用户反馈影响。
+- 增加历史任务、反馈统计和模型推荐。
 
 ## 推荐的评分思路
 
@@ -247,7 +256,7 @@ FinalScore =
 - 文件修改前需要确认用户授权。
 - 不要随意删除用户已有文件。
 - 不要将 `.env`、`node_modules`、虚拟环境、构建产物提交到 Git。
-- 第一版不要做流式输出，先保证完整主流程稳定。
+- 当前只做模型级渐进返回，不做逐字 token 流式输出。
 
 ## 文档先行约定
 
@@ -276,6 +285,7 @@ FinalScore =
 
 1. 安装依赖并启动前后端。
 2. 确认前端能调用后端真实模型接口。
-3. 将评测任务和模型回答持久化到 MySQL。
-4. 完善规则评分与评分详情页面。
-5. 实现用户反馈、历史任务和模型推荐。
+3. 确认模型级渐进展示和全局思考模式行为正常。
+4. 将评测任务、模型回答和评分结果持久化到 MySQL。
+5. 完善规则评分与评分详情页面。
+6. 实现用户反馈、历史任务和模型推荐。
