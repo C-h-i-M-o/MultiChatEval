@@ -8,7 +8,7 @@ from app.db.base import Base
 from app.models import Conversation, EvaluationResult, EvaluationTask, ModelConfig, ModelProvider, ModelResponse, User, UserFeedback
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("mysql+aiomysql://", "mysql+pymysql://"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

@@ -103,6 +103,11 @@ prepare_frontend() {
   fi
 }
 
+run_migrations() {
+  log "执行数据库迁移..."
+  (cd "${BACKEND_DIR}" && .venv/bin/alembic upgrade head)
+}
+
 start_backend() {
   log "启动后端：http://127.0.0.1:8000"
   (
@@ -156,6 +161,7 @@ main() {
 
   prepare_backend
   prepare_frontend
+  run_migrations
   start_backend
   start_frontend
   watch_processes

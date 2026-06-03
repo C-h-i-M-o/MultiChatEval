@@ -1,12 +1,20 @@
 import { defineStore } from "pinia";
 
-import { streamEvaluationTask } from "../utils/api";
+import { getEvaluationTask, listEvaluationTasks, streamEvaluationTask } from "../utils/api";
 
 export const useEvaluationStore = defineStore("evaluation", {
   state: () => ({
     task: null,
     loading: false,
-    errorMessage: ""
+    errorMessage: "",
+    historyItems: [],
+    historyTotal: 0,
+    historyPage: 1,
+    historyPageSize: 10,
+    historyLoading: false,
+    historyErrorMessage: "",
+    selectedHistoryTask: null,
+    historyDetailLoading: false
   }),
   actions: {
     async submitEvaluation(payload) {
@@ -33,7 +41,9 @@ export const useEvaluationStore = defineStore("evaluation", {
 
           if (event.type === "model_response") {
             const currentResponses = this.task?.responses || [];
-            const nextResponses = currentResponses.filter((response) => response.id !== event.response.id);
+            const nextResponses = currentResponses.filter((response) => {
+              return response.modelConfigId !== event.response.modelConfigId;
+            });
             nextResponses.push(event.response);
             this.task = {
               ...(this.task || {}),
@@ -50,6 +60,34 @@ export const useEvaluationStore = defineStore("evaluation", {
         this.errorMessage = error?.message || "评测任务创建失败";
       } finally {
         this.loading = false;
+      }
+    },
+    async loadHistory(page = this.historyPage, pageSize = this.historyPageSize) {
+      this.historyLoading = true;
+      this.historyErrorMessage = "";
+
+      try {
+        const result = await listEvaluationTasks({ page, pageSize });
+        this.historyItems = result.items;
+        this.historyTotal = result.total;
+        this.historyPage = result.page;
+        this.historyPageSize = result.pageSize;
+      } catch (error) {
+        this.historyErrorMessage = error?.message || "历史任务加载失败";
+      } finally {
+        this.historyLoading = false;
+      }
+    },
+    async loadHistoryTask(taskId) {
+      this.historyDetailLoading = true;
+      this.historyErrorMessage = "";
+
+      try {
+        this.selectedHistoryTask = await getEvaluationTask(taskId);
+      } catch (error) {
+        this.historyErrorMessage = error?.message || "历史任务详情加载失败";
+      } finally {
+        this.historyDetailLoading = false;
       }
     }
   }

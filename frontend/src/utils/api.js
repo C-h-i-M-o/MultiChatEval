@@ -10,6 +10,21 @@ export async function createEvaluationTask(payload) {
   return response.data;
 }
 
+export async function listEvaluationTasks({ page, pageSize }) {
+  const response = await api.get("/evaluation/tasks", {
+    params: {
+      page,
+      pageSize
+    }
+  });
+  return response.data;
+}
+
+export async function getEvaluationTask(taskId) {
+  const response = await api.get(`/evaluation/tasks/${taskId}`);
+  return response.data;
+}
+
 export async function streamEvaluationTask(payload, onEvent) {
   const response = await fetch("/api/evaluation/tasks/stream", {
     method: "POST",

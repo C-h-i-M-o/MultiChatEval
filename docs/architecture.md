@@ -20,10 +20,10 @@ MySQL
 ## 核心流程
 
 1. 用户输入问题，选择多个模型。
-2. 后端创建评测任务。
+2. 后端创建评测任务，并写入 `evaluation_tasks`。
 3. 后端从数据库读取已启用的模型配置，并发请求 DeepSeek、MiniMax、GLM 或用户自定义 OpenAI-compatible 模型。
-4. 系统记录回答内容、响应时间、token 数、成本估算和错误状态。
-5. 规则评分器计算相关性、完整性、清晰度、语言一致性和格式符合度。
+4. 系统将每个模型的回答内容、响应时间、token 数、成本估算和错误状态写入 `model_responses`。
+5. 规则评分器计算相关性、完整性、清晰度、格式符合度和安全性，并写入 `evaluation_results`。
 6. 可选启用 LLM Judge，让评审模型输出结构化评分。
 7. 前端以自适应卡片、Markdown 回答内容和评分条展示对比结果。
 8. 用户提交点赞、点踩、采纳或评论反馈。
@@ -45,6 +45,7 @@ MySQL
 - 评测表单提供全局“思考模式”开关，所有已选模型使用相同开关状态，不提供思考程度选择。
 - `MarkdownRenderer` 负责将模型输出渲染为安全的 HTML。
 - `MarkdownRenderer` 会把 `<think>...</think>` 中的内容折叠为“思考过程”，让最终回答更清晰。
+- 侧边栏“历史任务”用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
 
 ## 模型调用层
 
@@ -58,6 +59,8 @@ MySQL
 
 用户需要在模型配置页为内置模型填写自己的 API Key，也可以新增其他 OpenAI-compatible 供应商模型。系统不会从 `.env` 读取内置模型 API Key。API Key 当前以 `plain:` 版本化明文格式保存，所有业务逻辑通过密钥 helper 读取，未来可以升级为 `enc:v1:` 加密格式而不改变接口。
 
-后端在每次评测请求中统一追加思考模式参数。关闭思考模式时，所有模型请求都会发送 `thinking.type=disabled`；开启思考模式时，所有模型请求都会发送 `thinking.type=enabled`。第一版不传递思考程度参数。如果某个 OpenAI-compatible 供应商不支持 `thinking` 字段并返回错误，该失败只展示在对应模型卡片中，不影响其他模型继续返回。
+后端在每次评测请求中统一追加思考模式参数。关闭思考模式时，所有模型请求都会发送 `thinking.type=disabled`；开启思考模式时，所有模型请求都会发送 `thinking.type=enabled`。这里发送的是嵌套 JSON 字段 `thinking.type`，不是 `thinkingmode`。第一版不传递思考程度参数。如果某个 OpenAI-compatible 供应商不支持 `thinking` 字段并返回错误，该失败只展示在对应模型卡片中，不影响其他模型继续返回。MiniMax 等供应商即使收到 `thinking.type=disabled`，也可能仍在返回内容中包含 `<think>` 或 reasoning 字段，前端会按当前渲染规则折叠展示。
 
 为了让前端尽早展示已完成模型，后端提供 `POST /api/evaluation/tasks/stream`。该接口使用 NDJSON 返回模型级事件，不做 token 级流式输出；旧的 `POST /api/evaluation/tasks` 仍保留一次性返回完整任务结果。
+
+两个创建接口都会写入真实任务、模型回答和规则评分。`GET /api/evaluation/tasks` 提供分页历史列表，`GET /api/evaluation/tasks/{taskId}` 从数据库返回完整任务详情。
