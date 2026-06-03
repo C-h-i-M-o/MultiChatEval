@@ -12,10 +12,13 @@ from app.adapters.base import ModelRequest
 from app.adapters.openai_compatible import OpenAICompatibleClient
 from app.core.config import settings
 from app.models.evaluation import EvaluationResult, EvaluationTask
+from app.models.feedback import UserFeedback
 from app.models.model_config import ModelConfig
 from app.models.response import ModelResponse
 from app.schemas.evaluation import (
+    EvaluationFeedbackRead,
     EvaluationScoreRead,
+    FeedbackToggleRead,
     EvaluationTaskCreate,
     EvaluationTaskListItemRead,
     EvaluationTaskListRead,
@@ -24,6 +27,21 @@ from app.schemas.evaluation import (
 )
 from app.services.model_config_service import RuntimeModelConfig, model_config_service
 from app.services.rule_evaluator import rule_evaluator
+
+
+BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手。请基于用户问题直接作答，并遵守以下要求：
+
+1. 优先回答用户真正的问题，不要回避核心诉求。
+2. 保持中文表达清晰、自然、结构化；如果用户明确要求其他语言，则按用户要求回复。
+3. 如果问题适合分步骤、分点或对比说明，请使用清晰的段落、列表或表格组织答案。
+4. 如果用户要求代码、JSON、表格、步骤、方案或对比，请严格遵守对应格式。
+5. 不要编造不确定的信息。遇到无法确认的事实、数据、时间、版本或来源时，请明确说明不确定性。
+6. 对涉及医疗、法律、金融、安全等高风险内容的问题，请给出谨慎、一般性的信息，并提醒用户寻求专业意见。
+7. 避免输出违法、有害、危险操作指导、隐私泄露、凭据泄露或恶意攻击相关内容。
+8. 回答应兼顾完整性和简洁性：必要时解释原因、给出示例或注意事项，但不要无意义冗长。
+9. 如果用户问题本身含糊，请先基于最合理的理解回答，并指出关键假设；不要反复追问导致无法推进。
+
+用户问题如下："""
 
 
 class EvaluationTaskNotFoundError(Exception):
@@ -125,6 +143,50 @@ class EvaluationService:
             pageSize=normalized_page_size,
         )
 
+    async def toggle_feedback(
+        self,
+        response_id: int,
+        feedback_type: str,
+        comment: str | None,
+        db: AsyncSession,
+    ) -> FeedbackToggleRead:
+        result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
+        if result.scalar_one_or_none() is None:
+            raise EvaluationTaskNotFoundError("模型回答不存在")
+
+        existing_result = await db.execute(
+            select(UserFeedback).where(
+                UserFeedback.response_id == response_id,
+                UserFeedback.feedback_type == feedback_type,
+                UserFeedback.user_id.is_(None),
+            )
+        )
+        existing_feedback = existing_result.scalar_one_or_none()
+
+        if existing_feedback is None:
+            db.add(
+                UserFeedback(
+                    user_id=None,
+                    response_id=response_id,
+                    feedback_type=feedback_type,
+                    comment=comment,
+                )
+            )
+            active = True
+        else:
+            await db.delete(existing_feedback)
+            active = False
+
+        await db.commit()
+        feedback = await self._feedback_summary(db, response_id)
+
+        return FeedbackToggleRead(
+            responseId=response_id,
+            feedbackType=feedback_type,
+            active=active,
+            feedback=feedback,
+        )
+
     async def _collect_model_responses(
         self,
         db: AsyncSession,
@@ -160,7 +222,7 @@ class EvaluationService:
             reply = await asyncio.wait_for(
                 client.chat(
                     ModelRequest(
-                        prompt=prompt,
+                        prompt=self._model_prompt(prompt),
                         model_name=model.model_name,
                         max_tokens=model.max_tokens,
                         extra_body=extra_body,
@@ -217,6 +279,9 @@ class EvaluationService:
     def _thinking_extra_body(self, payload: EvaluationTaskCreate) -> dict[str, object]:
         thinking_type = "enabled" if payload.enable_thinking else "disabled"
         return {"thinking": {"type": thinking_type}}
+
+    def _model_prompt(self, prompt: str) -> str:
+        return f"{BUILTIN_SYSTEM_PROMPT}\n\n{prompt.strip()}"
 
     async def _create_task_record(self, db: AsyncSession, payload: EvaluationTaskCreate) -> int:
         task = EvaluationTask(
@@ -276,6 +341,7 @@ class EvaluationService:
             estimatedCost=response.estimated_cost,
             status=response.status,
             score=response.score,
+            feedback=EvaluationFeedbackRead(),
         )
 
     async def _finish_task_record(self, db: AsyncSession, task_id: int, status: str) -> None:
@@ -294,6 +360,7 @@ class EvaluationService:
             .selectinload(ModelResponse.model_config)
             .selectinload(ModelConfig.provider),
             selectinload(EvaluationTask.responses).selectinload(ModelResponse.evaluation_result),
+            selectinload(EvaluationTask.responses).selectinload(ModelResponse.feedback),
         )
 
     def _serialize_task(self, task: EvaluationTask) -> EvaluationTaskRead:
@@ -302,14 +369,14 @@ class EvaluationService:
             taskId=task.id,
             status=task.status,
             prompt=task.prompt,
-            responses=[self._serialize_response(response) for response in responses],
+            responses=[self._serialize_response(task.prompt, response) for response in responses],
         )
 
-    def _serialize_response(self, response: ModelResponse) -> ModelResponseRead:
+    def _serialize_response(self, prompt: str, response: ModelResponse) -> ModelResponseRead:
         model_config = response.model_config
         provider = model_config.provider if model_config is not None else None
-        score = self._serialize_score(response.evaluation_result)
         answer = response.answer_text if response.status == "success" else response.error_message or response.answer_text
+        score = self._serialize_score(response.evaluation_result, prompt, response.answer_text)
 
         return ModelResponseRead(
             id=response.id,
@@ -322,11 +389,13 @@ class EvaluationService:
             estimatedCost=float(response.estimated_cost),
             status=response.status,
             score=score,
+            feedback=self._serialize_feedback(response.feedback),
         )
 
-    def _serialize_score(self, result: EvaluationResult | None) -> EvaluationScoreRead:
+    def _serialize_score(self, result: EvaluationResult | None, prompt: str = "", answer: str = "") -> EvaluationScoreRead:
+        details = rule_evaluator.evaluate(prompt=prompt, answer=answer).get("details", {})
         if result is None:
-            return EvaluationScoreRead(relevance=0, completeness=0, clarity=0, format=0, safety=0, final=0)
+            return EvaluationScoreRead(relevance=0, completeness=0, clarity=0, format=0, safety=0, final=0, details=details)
 
         return EvaluationScoreRead(
             relevance=float(result.relevance_score),
@@ -335,6 +404,33 @@ class EvaluationService:
             format=float(result.format_score),
             safety=float(result.safety_score),
             final=float(result.final_score),
+            details=details,
+        )
+
+    def _serialize_feedback(self, feedback_rows: list[UserFeedback]) -> EvaluationFeedbackRead:
+        like_count = sum(1 for feedback in feedback_rows if feedback.feedback_type == "like")
+        accepted_count = sum(1 for feedback in feedback_rows if feedback.feedback_type == "accepted")
+        return EvaluationFeedbackRead(
+            liked=like_count > 0,
+            accepted=accepted_count > 0,
+            likeCount=like_count,
+            acceptedCount=accepted_count,
+        )
+
+    async def _feedback_summary(self, db: AsyncSession, response_id: int) -> EvaluationFeedbackRead:
+        result = await db.execute(
+            select(UserFeedback.feedback_type, func.count(UserFeedback.id))
+            .where(UserFeedback.response_id == response_id)
+            .group_by(UserFeedback.feedback_type)
+        )
+        counts = {feedback_type: int(count) for feedback_type, count in result.all()}
+        like_count = counts.get("like", 0)
+        accepted_count = counts.get("accepted", 0)
+        return EvaluationFeedbackRead(
+            liked=like_count > 0,
+            accepted=accepted_count > 0,
+            likeCount=like_count,
+            acceptedCount=accepted_count,
         )
 
 

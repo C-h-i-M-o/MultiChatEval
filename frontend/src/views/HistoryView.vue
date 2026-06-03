@@ -75,6 +75,7 @@
               v-for="response in store.selectedHistoryTask.responses"
               :key="response.id"
               :response="response"
+              show-actions
             />
           </div>
         </div>

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,14 @@ class EvaluationScoreRead(BaseModel):
     format: float
     safety: float
     final: float
+    details: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class EvaluationFeedbackRead(BaseModel):
+    liked: bool = False
+    accepted: bool = False
+    like_count: int = Field(default=0, alias="likeCount")
+    accepted_count: int = Field(default=0, alias="acceptedCount")
 
 
 class ModelResponseRead(BaseModel):
@@ -31,6 +40,7 @@ class ModelResponseRead(BaseModel):
     estimated_cost: float = Field(alias="estimatedCost")
     status: str
     score: EvaluationScoreRead
+    feedback: EvaluationFeedbackRead = Field(default_factory=EvaluationFeedbackRead)
 
 
 class EvaluationTaskRead(BaseModel):
@@ -57,5 +67,12 @@ class EvaluationTaskListRead(BaseModel):
 
 
 class FeedbackCreate(BaseModel):
-    feedback_type: str = Field(alias="feedbackType")
+    feedback_type: Literal["like", "accepted"] = Field(alias="feedbackType")
     comment: str | None = None
+
+
+class FeedbackToggleRead(BaseModel):
+    response_id: int = Field(alias="responseId")
+    feedback_type: Literal["like", "accepted"] = Field(alias="feedbackType")
+    active: bool
+    feedback: EvaluationFeedbackRead

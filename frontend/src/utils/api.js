@@ -25,6 +25,11 @@ export async function getEvaluationTask(taskId) {
   return response.data;
 }
 
+export async function submitResponseFeedback(responseId, payload) {
+  const response = await api.post(`/evaluation/responses/${responseId}/feedback`, payload);
+  return response.data;
+}
+
 export async function streamEvaluationTask(payload, onEvent) {
   const response = await fetch("/api/evaluation/tasks/stream", {
     method: "POST",
