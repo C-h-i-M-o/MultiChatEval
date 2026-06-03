@@ -38,7 +38,6 @@
           <p class="eyebrow">Evaluation Task</p>
           <h2>回答质量对比</h2>
         </div>
-        <el-segmented v-model="mode" :options="modeOptions" :disabled="store.loading" />
       </header>
 
       <section v-if="showApiKeyNotice" class="api-key-notice">
@@ -215,8 +214,6 @@ const prompt = ref("");
 const selectedModels = ref([]);
 const enableJudge = ref(false);
 const enableThinking = ref(false);
-const mode = ref("标准评测");
-const modeOptions = ["快速评测", "标准评测", "深度评测"];
 const elapsedSeconds = ref(0);
 const pendingModelIds = ref([]);
 const modelConfigs = ref([]);
