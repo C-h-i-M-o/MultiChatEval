@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS evaluation_results (
   relevance_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
   completeness_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
   clarity_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
+  format_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
+  safety_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
   accuracy_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
   usefulness_score DECIMAL(4, 2) NOT NULL DEFAULT 0,
   objective_score DECIMAL(4, 2) NOT NULL DEFAULT 0,

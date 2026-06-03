@@ -1,0 +1,227 @@
+<template>
+  <section class="main-stage">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Evaluation Task</p>
+        <h2>回答质量对比</h2>
+      </div>
+    </header>
+
+    <section v-if="showApiKeyNotice" class="api-key-notice">
+      <div>
+        <p class="panel-label">模型密钥</p>
+        <h3>请先配置模型 API Key</h3>
+        <p>系统内置模型不会读取 .env 中的密钥。请进入模型配置，为 DeepSeek、MiniMax、GLM 或自定义模型填写自己的 API Key。</p>
+      </div>
+      <el-button type="primary" @click="router.push('/models')">去配置</el-button>
+    </section>
+
+    <section class="query-panel">
+      <div class="query-header">
+        <div>
+          <p class="panel-label">用户问题</p>
+          <h3>创建一次多模型评测</h3>
+        </div>
+        <div class="query-switches">
+          <el-switch v-model="enableThinking" :disabled="store.loading" active-text="思考模式" />
+          <el-switch v-model="enableJudge" :disabled="store.loading" active-text="LLM 评审" />
+        </div>
+      </div>
+
+      <el-input
+        v-model="prompt"
+        type="textarea"
+        :rows="5"
+        :disabled="store.loading"
+        resize="none"
+      />
+
+      <div class="model-row">
+        <el-checkbox-group v-model="selectedModels" :disabled="store.loading">
+          <el-checkbox-button
+            v-for="modelConfig in configuredModelConfigs"
+            :key="modelConfig.id"
+            :value="modelConfig.id"
+          >
+            {{ modelConfig.displayName }}
+          </el-checkbox-button>
+        </el-checkbox-group>
+        <el-button type="primary" :loading="store.loading" :disabled="!canSubmit" @click="submitTask">
+          {{ store.loading ? "等待模型响应" : "开始评测" }}
+        </el-button>
+      </div>
+    </section>
+
+    <el-alert
+      v-if="modelConfigErrorMessage"
+      :title="modelConfigErrorMessage"
+      type="warning"
+      show-icon
+    />
+
+    <el-alert
+      v-if="!modelConfigLoading && configuredModelConfigs.length === 0"
+      title="暂无可评测模型，请先在模型配置中填写 API Key 并启用至少一个模型"
+      type="warning"
+      show-icon
+    />
+
+    <section v-if="store.loading" class="waiting-banner" aria-live="polite">
+      <div>
+        <p class="panel-label">模型调用中</p>
+        <strong>已完成 {{ responses.length }} / {{ pendingModelIds.length }}，已等待 {{ elapsedSeconds }}s</strong>
+      </div>
+      <span class="waiting-pulse" aria-hidden="true"></span>
+    </section>
+
+    <el-alert v-if="store.errorMessage" :title="store.errorMessage" type="error" show-icon />
+
+    <section class="result-grid" :class="resultGridClass">
+      <ModelResponseCard
+        v-for="response in displayResponses"
+        :key="response.id"
+        :response="response"
+        :elapsed-seconds="elapsedSeconds"
+        show-actions
+      />
+    </section>
+  </section>
+</template>
+
+<script setup>
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+
+import ModelResponseCard from "../components/ModelResponseCard.vue";
+import { useEvaluationStore } from "../stores/evaluation";
+import { listModelConfigs } from "../utils/api";
+
+const router = useRouter();
+const store = useEvaluationStore();
+const prompt = ref("");
+const selectedModels = ref([]);
+const enableJudge = ref(false);
+const enableThinking = ref(false);
+const elapsedSeconds = ref(0);
+const pendingModelIds = ref([]);
+const modelConfigs = ref([]);
+const modelConfigLoading = ref(false);
+const modelConfigErrorMessage = ref("");
+let waitingTimerId = null;
+
+const responses = computed(() => store.task?.responses || []);
+const configuredModelConfigs = computed(() => {
+  return modelConfigs.value.filter((modelConfig) => modelConfig.enabled && modelConfig.hasApiKey);
+});
+const showApiKeyNotice = computed(() => {
+  return !modelConfigLoading.value && modelConfigs.value.length > 0 && modelConfigs.value.every((modelConfig) => !modelConfig.hasApiKey);
+});
+const modelNameMap = computed(() => {
+  return modelConfigs.value.reduce((names, modelConfig) => {
+    names[modelConfig.id] = modelConfig.displayName;
+    return names;
+  }, {});
+});
+const responseMap = computed(() => {
+  return responses.value.reduce((items, response) => {
+    items[response.modelConfigId] = response;
+    return items;
+  }, {});
+});
+const canSubmit = computed(() => {
+  return !store.loading && Boolean(prompt.value.trim()) && selectedModels.value.length > 0;
+});
+const displayResponses = computed(() => {
+  if (store.loading) {
+    return pendingModelIds.value.map((modelId) => {
+      return responseMap.value[modelId] || {
+        id: `pending-${modelId}`,
+        modelName: modelNameMap.value[modelId] || `模型 ${modelId}`,
+        pending: true
+      };
+    });
+  }
+  if (pendingModelIds.value.length > 0) {
+    const orderedResponses = pendingModelIds.value
+      .map((modelId) => responseMap.value[modelId])
+      .filter(Boolean);
+    if (orderedResponses.length > 0) {
+      return orderedResponses;
+    }
+  }
+  return responses.value;
+});
+const resultGridClass = computed(() => {
+  const count = displayResponses.value.length;
+  if (count === 1) {
+    return "one-card";
+  }
+  if (count === 2) {
+    return "two-cards";
+  }
+  return "three-cards";
+});
+
+function startWaitingTimer() {
+  stopWaitingTimer();
+  elapsedSeconds.value = 0;
+  waitingTimerId = window.setInterval(() => {
+    elapsedSeconds.value += 1;
+  }, 1000);
+}
+
+function stopWaitingTimer() {
+  if (waitingTimerId) {
+    window.clearInterval(waitingTimerId);
+    waitingTimerId = null;
+  }
+}
+
+function selectDefaultModels() {
+  const selectedSet = new Set(selectedModels.value);
+  const availableIds = configuredModelConfigs.value.map((modelConfig) => modelConfig.id);
+  selectedModels.value = availableIds.filter((modelId) => selectedSet.has(modelId));
+
+  if (selectedModels.value.length > 0) {
+    return;
+  }
+
+  const defaultModelIds = configuredModelConfigs.value
+    .filter((modelConfig) => ["deepseek", "minimax"].includes(modelConfig.providerName))
+    .map((modelConfig) => modelConfig.id);
+  selectedModels.value = (defaultModelIds.length > 0 ? defaultModelIds : availableIds).slice(0, 2);
+}
+
+async function loadModelConfigs() {
+  modelConfigLoading.value = true;
+  modelConfigErrorMessage.value = "";
+
+  try {
+    modelConfigs.value = await listModelConfigs();
+    selectDefaultModels();
+  } catch (error) {
+    modelConfigErrorMessage.value = error?.message || "模型配置加载失败";
+  } finally {
+    modelConfigLoading.value = false;
+  }
+}
+
+async function submitTask() {
+  if (!canSubmit.value) {
+    return;
+  }
+
+  pendingModelIds.value = [...selectedModels.value];
+  startWaitingTimer();
+  await store.submitEvaluation({
+    prompt: prompt.value,
+    modelIds: selectedModels.value,
+    enableJudge: enableJudge.value,
+    enableThinking: enableThinking.value
+  });
+  stopWaitingTimer();
+}
+
+onMounted(loadModelConfigs);
+onBeforeUnmount(stopWaitingTimer);
+</script>

@@ -18,6 +18,8 @@
 - `status`：任务状态
 - `completed_at`：完成时间
 
+创建评测时会先写入任务记录。同步接口和模型级渐进接口都会使用真实任务 ID 返回给前端。
+
 ## model_providers
 
 模型供应商表，例如 DeepSeek、MiniMax、Zhipu。
@@ -58,9 +60,22 @@
 - `estimated_cost`：费用估算
 - `status` / `error_message`：调用状态
 
+每个模型调用结束后写入一条回答记录。接口响应中的 `responses[].id` 对应本表主键，`responses[].modelConfigId` 对应 `model_configs.id`。
+
 ## evaluation_results
 
 评分结果表。每条模型回答对应一组评分。
+
+当前规则评分会写入：
+
+- `relevance_score`：相关性
+- `completeness_score`：完整性
+- `clarity_score`：清晰度
+- `format_score`：格式符合度
+- `safety_score`：安全性
+- `rule_score` / `final_score`：规则综合分
+
+`judge_score` 和 `judge_comment` 保留给后续 LLM Judge 使用。
 
 ## user_feedback
 

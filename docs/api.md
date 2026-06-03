@@ -56,6 +56,8 @@ POST /api/evaluation/tasks
 
 第一版不提供思考程度选项，也不会发送 `thinkingEffort` 或 `reasoning_effort`。
 
+注意：关闭思考模式时后端确认传输的是 `thinking.type=disabled`，不是 `thinkingmode:disabled`。MiniMax 等部分 OpenAI-compatible 供应商即使收到该参数，也可能仍在 `content`、`reasoning_content` 或 `<think>...</think>` 中返回思考内容；这属于供应商接口行为，不代表前端开关未传递。
+
 响应：
 
 ```json
@@ -63,11 +65,31 @@ POST /api/evaluation/tasks
   "taskId": 1001,
   "status": "completed",
   "prompt": "帮我解释什么是设计模式",
-  "responses": []
+  "responses": [
+    {
+      "id": 5001,
+      "modelConfigId": 1,
+      "modelName": "deepseek-v4-flash",
+      "provider": "deepseek",
+      "answer": "回答内容",
+      "latencyMs": 856,
+      "outputTokens": 120,
+      "estimatedCost": 0,
+      "status": "success",
+      "score": {
+        "relevance": 8,
+        "completeness": 8,
+        "clarity": 8,
+        "format": 8,
+        "safety": 10,
+        "final": 8.4
+      }
+    }
+  ]
 }
 ```
 
-该接口会等待所有模型调用完成后一次性返回完整结果，保留用于兼容旧前端或调试场景。
+该接口会先写入 `evaluation_tasks`，等待所有模型调用完成后写入 `model_responses` 和 `evaluation_results`，再一次性返回完整结果。`responses[].id` 是 `model_responses.id`，`responses[].modelConfigId` 是 `model_configs.id`。
 
 ## 创建评测任务并渐进返回模型结果
 
@@ -95,7 +117,8 @@ POST /api/evaluation/tasks/stream
 {
   "type": "model_response",
   "response": {
-    "id": 1,
+    "id": 5001,
+    "modelConfigId": 1,
     "modelName": "deepseek-v4-flash",
     "provider": "deepseek",
     "answer": "回答内容",
@@ -130,6 +153,34 @@ POST /api/evaluation/tasks/stream
 ```
 
 如果某个模型调用失败，会以 `model_response` 事件返回该模型的失败状态，不会中断其他模型。
+
+## 分页查询历史评测任务
+
+```http
+GET /api/evaluation/tasks?page=1&pageSize=10
+```
+
+响应：
+
+```json
+{
+  "items": [
+    {
+      "taskId": 1001,
+      "status": "completed",
+      "prompt": "帮我解释什么是设计模式",
+      "createdAt": "2026-06-03T12:00:00",
+      "completedAt": "2026-06-03T12:00:12",
+      "responseCount": 3
+    }
+  ],
+  "total": 42,
+  "page": 1,
+  "pageSize": 10
+}
+```
+
+`page` 从 1 开始，`pageSize` 默认 10，最大 100。列表按 `created_at desc, id desc` 排序。
 
 ## 查询模型配置
 
@@ -243,6 +294,8 @@ POST /api/model-configs/test
 ```http
 GET /api/evaluation/tasks/{taskId}
 ```
+
+响应字段与创建评测任务一致，会从数据库读取任务、模型回答和规则评分。任务不存在时返回 404。
 
 ## 提交用户反馈
 

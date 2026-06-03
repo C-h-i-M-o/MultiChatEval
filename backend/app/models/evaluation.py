@@ -30,6 +30,8 @@ class EvaluationResult(Base):
     relevance_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     completeness_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     clarity_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
+    format_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
+    safety_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     accuracy_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     usefulness_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     objective_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)

@@ -57,6 +57,7 @@ MultiChatEval/
     - `POST /api/model-configs/test`
     - `POST /api/evaluation/tasks`
     - `POST /api/evaluation/tasks/stream`
+    - `GET /api/evaluation/tasks`
     - `GET /api/evaluation/tasks/{taskId}`
     - `POST /api/evaluation/responses/{responseId}/feedback`
 - 模型适配器接口：`backend/app/adapters/base.py`
@@ -65,8 +66,12 @@ MultiChatEval/
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
 - 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。
 - 评测请求支持全局“思考模式”开关。关闭时所有模型统一发送 `thinking.type=disabled`；开启时统一发送 `thinking.type=enabled`；不传递思考程度参数。
+- 思考模式字段以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。MiniMax 等 OpenAI-compatible 供应商即使收到 `thinking.type=disabled`，也可能仍返回 `<think>` 或 reasoning 内容。
 - `POST /api/evaluation/tasks` 保留一次性返回完整结果。
 - `POST /api/evaluation/tasks/stream` 支持模型级渐进返回：哪个模型完整回答先完成，哪个模型结果先展示。
+- 评测任务、模型回答和规则评分会真实写入 MySQL。
+- `GET /api/evaluation/tasks` 支持分页查询历史任务。
+- `GET /api/evaluation/tasks/{taskId}` 支持从数据库查询任务详情。
 
 ### 前端
 
@@ -75,7 +80,6 @@ MultiChatEval/
 - 功能骨架：
     - 输入问题
     - 按已启用且已配置 API Key 的模型配置选择模型
-    - 切换快速/标准/深度评测模式
     - 启用或关闭 LLM 评审开关
     - 展示多模型回答卡片
     - 展示耗时、输出长度、成本和评分条
@@ -87,6 +91,7 @@ MultiChatEval/
     - 支持全局“思考模式”开关
     - `MarkdownRenderer` 支持 Markdown 回答渲染
     - `<think>...</think>` 内容折叠为“思考过程”
+    - 侧边栏“历史任务”入口支持分页查看历史评测并加载详情
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
@@ -109,7 +114,7 @@ MultiChatEval/
 ./scripts/start-local.sh
 ```
 
-脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和前端依赖，并同时启动后端与前端开发服务。按 `Ctrl+C` 可停止本次启动的服务。
+脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和前端依赖、执行 Alembic 数据库迁移，并同时启动后端与前端开发服务。按 `Ctrl+C` 可停止本次启动的服务。
 
 ### 1. 启动 MySQL
 
@@ -181,14 +186,13 @@ MODEL_REQUEST_TIMEOUT=90
 - 模型耗时、输出 token、成本估算、错误状态和规则评分会返回给前端。
 - `<think>...</think>` 和 `reasoning_content` 会折叠展示为“思考过程”。
 
-### 下一阶段：持久化与历史任务
-
-待做：
+### 已实现：持久化与历史任务
 
 - 将评测任务写入 `evaluation_tasks`。
 - 将模型回答写入 `model_responses`。
 - 将规则评分写入 `evaluation_results`。
 - 将 `GET /api/evaluation/tasks/{taskId}` 改为真实查询。
+- 前端“历史任务”入口支持分页查看和详情加载。
 
 ### 评分增强
 
@@ -216,7 +220,7 @@ MODEL_REQUEST_TIMEOUT=90
 - 点赞、点踩、采纳、收藏。
 - 保存用户反馈。
 - 在评分详情中展示用户反馈影响。
-- 增加历史任务、反馈统计和模型推荐。
+- 增加反馈统计和模型推荐。
 
 ## 推荐的评分思路
 
@@ -267,7 +271,7 @@ FinalScore =
 - 数据表、字段、关系或持久化流程变化需要同步更新 `docs/database.md`。
 - 架构、模块边界、主流程或模型调用链路变化需要同步更新 `docs/architecture.md`。
 - README 只保留项目概览、运行方式和重要入口；详细实现状态优先写入 `docs/` 下的专题文档。
-- 交付前需要检查本次代码变更和文档是否一致；如果暂时无法更新文档，必须在回复中说明原因和后续补文档位置。
+- 交付前需要检查本次代码变更和文档是否一致（包含`README.md`和`AGENTS.md`两个核心文档）；如果暂时无法更新文档，必须在回复中说明原因和后续补文档位置。
 
 ## 后续 AI 接手建议
 

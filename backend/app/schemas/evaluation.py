@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -20,6 +22,7 @@ class EvaluationScoreRead(BaseModel):
 
 class ModelResponseRead(BaseModel):
     id: int
+    model_config_id: int | None = Field(default=None, alias="modelConfigId")
     model_name: str = Field(alias="modelName")
     provider: str
     answer: str
@@ -35,6 +38,22 @@ class EvaluationTaskRead(BaseModel):
     status: str
     prompt: str
     responses: list[ModelResponseRead]
+
+
+class EvaluationTaskListItemRead(BaseModel):
+    task_id: int = Field(alias="taskId")
+    status: str
+    prompt: str
+    created_at: datetime = Field(alias="createdAt")
+    completed_at: datetime | None = Field(default=None, alias="completedAt")
+    response_count: int = Field(alias="responseCount")
+
+
+class EvaluationTaskListRead(BaseModel):
+    items: list[EvaluationTaskListItemRead]
+    total: int
+    page: int
+    page_size: int = Field(alias="pageSize")
 
 
 class FeedbackCreate(BaseModel):
