@@ -20,7 +20,9 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 状态：已实现
 
-入口文件：`frontend/src/views/EvaluationWorkspace.vue`
+入口路径：`/`
+
+入口文件：`frontend/src/views/EvaluationView.vue`
 
 已实现能力：
 
@@ -37,15 +39,19 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 当前限制：
 
 - LLM 评审开关会随请求发送给后端，但后端暂未实际执行 LLM Judge。
-- “反馈统计”目前只是静态导航按钮。
+- “采纳”“点赞”“详情”按钮已有界面，但暂未绑定反馈提交或详情弹窗逻辑。
 
 ### 2.2 模型配置页面
 
 状态：已实现
 
+入口路径：`/models`
+
+入口文件：`frontend/src/views/ModelConfigsView.vue`
+
 已实现能力：
 
-- 侧边栏“模型配置”可切换到模型配置管理界面。
+- 侧边栏“模型配置”可进入模型配置管理页面。
 - 系统内置 DeepSeek、MiniMax、GLM 三家供应商模型。
 - 内置配置可编辑 Base URL、API Key、模型名、展示名和启用状态，但不可删除。
 - 用户可新增、编辑、启用/禁用、删除自定义 OpenAI-compatible 模型配置。
@@ -94,15 +100,37 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 状态：已实现
 
+入口路径：`/history`
+
+入口文件：`frontend/src/views/HistoryView.vue`
+
 已实现能力：
 
-- 侧边栏“历史任务”可切换到历史任务页。
+- 侧边栏“历史任务”可进入历史任务页。
 - 进入历史页时分页加载最近评测任务。
 - 支持切换页码和每页 10/20/50 条。
 - 点击历史任务后加载完整回答和评分详情。
 - 历史任务时间固定按北京时间展示。
 - `pending` 历史任务默认展示为“进行中”，超过前端请求超时时间后仍未完成才展示为“超时未完成”。
 - 分页或详情加载失败时展示错误提示。
+
+### 2.4.2 反馈统计页面
+
+状态：部分实现
+
+入口路径：`/feedback`
+
+入口文件：`frontend/src/views/FeedbackStatsView.vue`
+
+已实现能力：
+
+- 侧边栏“反馈统计”可进入独立页面。
+- 页面明确展示反馈统计暂未实现，避免导航入口无响应。
+
+当前限制：
+
+- 用户反馈尚未持久化，暂不能展示真实统计图表。
+- 模型推荐逻辑尚未实现。
 
 ### 2.5 Markdown 与思考过程渲染
 
@@ -119,6 +147,23 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 - 自动解析 `<think>...</think>` 内容，并折叠到“思考过程”面板。
 - 未闭合的 `<think>` 内容也会被识别为思考过程。
 - 没有正式回答内容时展示“暂无回答内容”。
+
+### 2.6 前端路由与布局
+
+状态：已实现
+
+相关文件：
+
+- `frontend/src/components/AppLayout.vue`
+- `frontend/src/components/ModelResponseCard.vue`
+- `frontend/src/router/index.js`
+
+已实现能力：
+
+- 前端采用统一侧边栏布局。
+- 已配置 `/`、`/models`、`/history`、`/feedback` 四个公开路径。
+- 未匹配路径会重定向到 `/`。
+- 模型回答卡片抽为复用组件，供评测结果和历史任务详情共同使用。
 
 ## 3. 后端 API 功能
 

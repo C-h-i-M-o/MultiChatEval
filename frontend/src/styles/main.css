@@ -103,6 +103,7 @@ h3 {
 }
 
 .nav-item {
+  display: block;
   width: 100%;
   padding: 12px 14px;
   border: 0;
@@ -110,6 +111,7 @@ h3 {
   background: transparent;
   color: rgba(247, 244, 232, 0.72);
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -642,6 +644,21 @@ h3 {
   min-width: 0;
   overflow: hidden;
   padding: 14px;
+}
+
+.feedback-placeholder {
+  max-width: 720px;
+  padding: 22px;
+  border: 1px solid rgba(23, 35, 42, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 16px 40px rgba(23, 35, 42, 0.08);
+}
+
+.feedback-placeholder p:last-child {
+  margin-bottom: 0;
+  color: #46575d;
+  line-height: 1.7;
 }
 
 .config-form {

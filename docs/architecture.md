@@ -34,18 +34,21 @@ MySQL
 
 ## 前端展示层
 
-前端主界面位于 `frontend/src/views/EvaluationWorkspace.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
+前端展示层采用 Vue Router 多路由结构，统一布局位于 `frontend/src/components/AppLayout.vue`。侧边栏导航负责在对比评测、模型配置、历史任务和反馈统计之间切换，各页面只承担单一业务职责。
 
 当前展示层包含：
 
+- `/` 对应 `frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
+- `/models` 对应 `frontend/src/views/ModelConfigsView.vue`，用于维护内置模型和自定义 OpenAI-compatible 模型。
+- `/history` 对应 `frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
+- `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，当前为反馈统计占位页。
 - 模型选择项从后端模型配置接口动态加载，直接显示具体模型名。
-- 侧边栏“模型配置”用于维护内置模型和自定义 OpenAI-compatible 模型。
 - 结果卡片根据返回模型数量自适应布局。
+- `ModelResponseCard` 复用展示评测结果和历史任务详情中的模型回答、指标和评分条。
 - 模型调用期间展示等待卡片、耗时计数和占位动画；单个模型完成后立即替换为真实回答卡片。
 - 评测表单提供全局“思考模式”开关，所有已选模型使用相同开关状态，不提供思考程度选择。
 - `MarkdownRenderer` 负责将模型输出渲染为安全的 HTML。
 - `MarkdownRenderer` 会把 `<think>...</think>` 中的内容折叠为“思考过程”，让最终回答更清晰。
-- 侧边栏“历史任务”用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
 
 ## 模型调用层
 

@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router";
 
-import EvaluationWorkspace from "../views/EvaluationWorkspace.vue";
+import EvaluationView from "../views/EvaluationView.vue";
+import FeedbackStatsView from "../views/FeedbackStatsView.vue";
+import HistoryView from "../views/HistoryView.vue";
+import ModelConfigsView from "../views/ModelConfigsView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -8,7 +11,26 @@ export const router = createRouter({
     {
       path: "/",
       name: "workspace",
-      component: EvaluationWorkspace
+      component: EvaluationView
+    },
+    {
+      path: "/models",
+      name: "model-configs",
+      component: ModelConfigsView
+    },
+    {
+      path: "/history",
+      name: "history",
+      component: HistoryView
+    },
+    {
+      path: "/feedback",
+      name: "feedback-stats",
+      component: FeedbackStatsView
+    },
+    {
+      path: "/:pathMatch(.*)*",
+      redirect: "/"
     }
   ]
 });
