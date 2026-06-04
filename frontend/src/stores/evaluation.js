@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { getEvaluationTask, listEvaluationTasks, streamEvaluationTask } from "../utils/api";
+import { getEvaluationTask, listEvaluationTasks, streamEvaluationTask, submitResponseFeedback } from "../utils/api";
 
 export const useEvaluationStore = defineStore("evaluation", {
   state: () => ({
@@ -89,6 +89,37 @@ export const useEvaluationStore = defineStore("evaluation", {
       } finally {
         this.historyDetailLoading = false;
       }
+    },
+    async toggleResponseFeedback(responseId, feedbackType) {
+      const result = await submitResponseFeedback(responseId, {
+        feedbackType
+      });
+
+      this.applyResponseFeedback(responseId, result.feedback);
+      return result;
+    },
+    applyResponseFeedback(responseId, feedback) {
+      this.task = updateTaskResponseFeedback(this.task, responseId, feedback);
+      this.selectedHistoryTask = updateTaskResponseFeedback(this.selectedHistoryTask, responseId, feedback);
     }
   }
 });
+
+function updateTaskResponseFeedback(task, responseId, feedback) {
+  if (!task?.responses) {
+    return task;
+  }
+
+  return {
+    ...task,
+    responses: task.responses.map((response) => {
+      if (response.id !== responseId) {
+        return response;
+      }
+      return {
+        ...response,
+        feedback
+      };
+    })
+  };
+}

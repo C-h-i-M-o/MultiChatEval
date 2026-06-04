@@ -8,7 +8,13 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.schemas.evaluation import EvaluationTaskCreate, EvaluationTaskListRead, EvaluationTaskRead, FeedbackCreate
+from app.schemas.evaluation import (
+    EvaluationTaskCreate,
+    EvaluationTaskListRead,
+    EvaluationTaskRead,
+    FeedbackCreate,
+    FeedbackToggleRead,
+)
 from app.services.evaluation_service import EvaluationTaskNotFoundError, evaluation_service
 
 router = APIRouter()
@@ -54,6 +60,13 @@ async def get_evaluation_task(
         raise HTTPException(status_code=404, detail=str(error)) from error
 
 
-@router.post("/responses/{response_id}/feedback")
-async def create_feedback(response_id: int, payload: FeedbackCreate) -> dict[str, int | str]:
-    return {"responseId": response_id, "feedbackType": payload.feedback_type, "status": "received"}
+@router.post("/responses/{response_id}/feedback", response_model=FeedbackToggleRead)
+async def create_feedback(
+    response_id: int,
+    payload: FeedbackCreate,
+    db: AsyncSession = Depends(get_db),
+) -> FeedbackToggleRead:
+    try:
+        return await evaluation_service.toggle_feedback(response_id, payload.feedback_type, payload.comment, db)
+    except EvaluationTaskNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error

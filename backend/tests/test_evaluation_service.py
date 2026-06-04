@@ -13,6 +13,38 @@ class FakeDb:
     pass
 
 
+class FakeScalarResult:
+    def __init__(self, scalar_value: object = None, rows: list[tuple[str, int]] | None = None) -> None:
+        self.scalar_value = scalar_value
+        self.rows = rows or []
+
+    def scalar_one_or_none(self) -> object:
+        return self.scalar_value
+
+    def all(self) -> list[tuple[str, int]]:
+        return self.rows
+
+
+class FakeFeedbackDb:
+    def __init__(self, execute_results: list[FakeScalarResult]) -> None:
+        self.execute_results = execute_results
+        self.added_objects: list[object] = []
+        self.deleted_objects: list[object] = []
+        self.commit_count = 0
+
+    async def execute(self, _statement: object) -> FakeScalarResult:
+        return self.execute_results.pop(0)
+
+    def add(self, value: object) -> None:
+        self.added_objects.append(value)
+
+    async def delete(self, value: object) -> None:
+        self.deleted_objects.append(value)
+
+    async def commit(self) -> None:
+        self.commit_count += 1
+
+
 def make_runtime_model(model_id: int, display_name: str) -> RuntimeModelConfig:
     return RuntimeModelConfig(
         id=model_id,
@@ -77,6 +109,15 @@ def test_thinking_extra_body_enabled_without_effort() -> None:
 
     assert result == {"thinking": {"type": "enabled"}}
     assert "reasoning_effort" not in result
+
+
+def test_model_prompt_contains_builtin_instruction_before_user_prompt() -> None:
+    result = evaluation_service._model_prompt("请解释什么是设计模式")
+
+    assert result.startswith("你是一个严谨、清晰、负责任的 AI 助手。")
+    assert "10." not in result
+    assert result.endswith("请解释什么是设计模式")
+    assert "用户问题如下：" in result
     assert "thinkingEffort" not in result
 
 
@@ -222,3 +263,47 @@ async def test_create_task_persists_task_responses_and_scores(monkeypatch: pytes
     assert task.responses[0].id == 700
     assert task.responses[0].model_config_id == 3
     assert persisted_response_ids == [700]
+
+
+@pytest.mark.asyncio
+async def test_toggle_feedback_creates_feedback_when_inactive() -> None:
+    db = FakeFeedbackDb(
+        [
+            FakeScalarResult(scalar_value=5001),
+            FakeScalarResult(scalar_value=None),
+            FakeScalarResult(rows=[("like", 1)]),
+        ]
+    )
+
+    result = await evaluation_service.toggle_feedback(5001, "like", None, db)
+
+    assert result.response_id == 5001
+    assert result.feedback_type == "like"
+    assert result.active is True
+    assert result.feedback.liked is True
+    assert result.feedback.like_count == 1
+    assert len(db.added_objects) == 1
+    assert db.deleted_objects == []
+    assert db.commit_count == 1
+
+
+@pytest.mark.asyncio
+async def test_toggle_feedback_deletes_feedback_when_active() -> None:
+    existing_feedback = object()
+    db = FakeFeedbackDb(
+        [
+            FakeScalarResult(scalar_value=5001),
+            FakeScalarResult(scalar_value=existing_feedback),
+            FakeScalarResult(rows=[]),
+        ]
+    )
+
+    result = await evaluation_service.toggle_feedback(5001, "accepted", None, db)
+
+    assert result.response_id == 5001
+    assert result.feedback_type == "accepted"
+    assert result.active is False
+    assert result.feedback.accepted is False
+    assert db.added_objects == []
+    assert db.deleted_objects == [existing_feedback]
+    assert db.commit_count == 1

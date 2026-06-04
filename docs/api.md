@@ -58,6 +58,26 @@ POST /api/evaluation/tasks
 
 注意：关闭思考模式时后端确认传输的是 `thinking.type=disabled`，不是 `thinkingmode:disabled`。MiniMax 等部分 OpenAI-compatible 供应商即使收到该参数，也可能仍在 `content`、`reasoning_content` 或 `<think>...</think>` 中返回思考内容；这属于供应商接口行为，不代表前端开关未传递。
 
+发送给模型前，后端会在用户原始问题前追加系统内置提示词，用于统一回答质量、安全性和格式要求。接口响应和数据库中的 `prompt` 仍保留用户原始问题。
+
+当前内置提示词：
+
+```text
+你是一个严谨、清晰、负责任的 AI 助手。请基于用户问题直接作答，并遵守以下要求：
+
+1. 优先回答用户真正的问题，不要回避核心诉求。
+2. 保持中文表达清晰、自然、结构化；如果用户明确要求其他语言，则按用户要求回复。
+3. 如果问题适合分步骤、分点或对比说明，请使用清晰的段落、列表或表格组织答案。
+4. 如果用户要求代码、JSON、表格、步骤、方案或对比，请严格遵守对应格式。
+5. 不要编造不确定的信息。遇到无法确认的事实、数据、时间、版本或来源时，请明确说明不确定性。
+6. 对涉及医疗、法律、金融、安全等高风险内容的问题，请给出谨慎、一般性的信息，并提醒用户寻求专业意见。
+7. 避免输出违法、有害、危险操作指导、隐私泄露、凭据泄露或恶意攻击相关内容。
+8. 回答应兼顾完整性和简洁性：必要时解释原因、给出示例或注意事项，但不要无意义冗长。
+9. 如果用户问题本身含糊，请先基于最合理的理解回答，并指出关键假设；不要反复追问导致无法推进。
+
+用户问题如下：
+```
+
 响应：
 
 ```json
@@ -82,7 +102,20 @@ POST /api/evaluation/tasks
         "clarity": 8,
         "format": 8,
         "safety": 10,
-        "final": 8.4
+        "final": 8.4,
+        "details": {
+          "relevance": ["字符 n-gram 相似度 0.58", "覆盖解释意图", "回答聚焦于用户问题"],
+          "completeness": ["回答长度处于有效区间"],
+          "clarity": ["使用换行分隔内容"],
+          "format": ["未指定格式，回答使用了可读结构"],
+          "safety": ["未命中明显危险输出", "未发现拒答质量风险", "未涉及高风险专业建议"]
+        }
+      },
+      "feedback": {
+        "liked": false,
+        "accepted": false,
+        "likeCount": 0,
+        "acceptedCount": 0
       }
     }
   ]
@@ -126,16 +159,29 @@ POST /api/evaluation/tasks/stream
     "outputTokens": 120,
     "estimatedCost": 0,
     "status": "success",
-    "score": {
-      "relevance": 8,
-      "completeness": 8,
-      "clarity": 8,
-      "format": 8,
-      "safety": 10,
-      "final": 8.4
+      "score": {
+        "relevance": 8,
+        "completeness": 8,
+        "clarity": 8,
+        "format": 8,
+        "safety": 10,
+        "final": 8.4,
+        "details": {
+          "relevance": ["字符 n-gram 相似度 0.58", "覆盖解释意图", "回答聚焦于用户问题"],
+          "completeness": ["回答长度处于有效区间"],
+          "clarity": ["使用换行分隔内容"],
+          "format": ["未指定格式，回答使用了可读结构"],
+          "safety": ["未命中明显危险输出", "未发现拒答质量风险", "未涉及高风险专业建议"]
+        }
+      },
+      "feedback": {
+        "liked": false,
+        "accepted": false,
+        "likeCount": 0,
+        "acceptedCount": 0
+      }
     }
   }
-}
 ```
 
 任务完成事件：
@@ -311,3 +357,28 @@ POST /api/evaluation/responses/{responseId}/feedback
   "comment": "这个回答更清楚"
 }
 ```
+
+`feedbackType` 当前只支持：
+
+- `like`：点赞
+- `accepted`：采纳
+
+该接口采用状态式切换语义。同一匿名用户上下文下，同一 `responseId + feedbackType` 不存在时会新增一条 `user_feedback`；再次提交同类反馈会取消该反馈。当前未接入登录系统，`user_id` 写入 `NULL`。
+
+响应：
+
+```json
+{
+  "responseId": 5001,
+  "feedbackType": "like",
+  "active": true,
+  "feedback": {
+    "liked": true,
+    "accepted": false,
+    "likeCount": 1,
+    "acceptedCount": 0
+  }
+}
+```
+
+当 `responseId` 不存在时返回 404；当 `feedbackType` 不是 `like` 或 `accepted` 时返回 422。
