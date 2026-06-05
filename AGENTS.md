@@ -64,19 +64,20 @@ MultiChatEval/
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
+- 评测请求发送给模型前，会在用户原始问题前拼接系统内置提示词；除专业名词和特殊情况外，要求模型使用中文回答问题。
 - 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。
 - 评测请求支持全局“思考模式”开关。关闭时所有模型统一发送 `thinking.type=disabled`；开启时统一发送 `thinking.type=enabled`；不传递思考程度参数。
 - 思考模式字段以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。MiniMax 等 OpenAI-compatible 供应商即使收到 `thinking.type=disabled`，也可能仍返回 `<think>` 或 reasoning 内容。
 - `POST /api/evaluation/tasks` 保留一次性返回完整结果。
 - `POST /api/evaluation/tasks/stream` 支持模型级渐进返回：哪个模型完整回答先完成，哪个模型结果先展示。
-- 评测任务、模型回答和规则评分会真实写入 MySQL。
+- 评测任务、模型回答、规则评分和可选 LLM Judge 结果会真实写入 MySQL。
 - `GET /api/evaluation/tasks` 支持分页查询历史任务。
 - `GET /api/evaluation/tasks/{taskId}` 支持从数据库查询任务详情。
 
 ### 前端
 
 - Vue 3 + JavaScript + Vite 基础项目
-- 主页面：`frontend/src/views/EvaluationWorkspace.vue`
+- 主页面：`frontend/src/views/EvaluationView.vue`
 - 功能骨架：
     - 输入问题
     - 按已启用且已配置 API Key 的模型配置选择模型
@@ -89,6 +90,7 @@ MultiChatEval/
     - 模型完成即展示，避免等待最慢模型后才统一呈现
     - 结果卡片根据模型数量自适应布局
     - 支持全局“思考模式”开关
+    - 启用 LLM 评审后，可单独选择一个已配置 API Key 的模型作为评审模型
     - `MarkdownRenderer` 支持 Markdown 回答渲染
     - `<think>...</think>` 内容折叠为“思考过程”
     - 侧边栏“历史任务”入口支持分页查看历史评测并加载详情
@@ -181,9 +183,9 @@ MODEL_REQUEST_TIMEOUT=90
 
 当前已实现：
 
-- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 模型级渐进展示 → 规则评分 → 前端对比展示。
+- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 模型级渐进展示 → 规则评分 → 可选 LLM Judge → 前端对比展示。
 - 模型配置从数据库动态读取。
-- 模型耗时、输出 token、成本估算、错误状态和规则评分会返回给前端。
+- 模型耗时、输出 token、成本估算、错误状态、规则评分和可选 LLM Judge 评分会返回给前端。
 - `<think>...</think>` 和 `reasoning_content` 会折叠展示为“思考过程”。
 
 ### 已实现：持久化与历史任务
@@ -191,6 +193,7 @@ MODEL_REQUEST_TIMEOUT=90
 - 将评测任务写入 `evaluation_tasks`。
 - 将模型回答写入 `model_responses`。
 - 将规则评分写入 `evaluation_results`。
+- 将 LLM Judge 结果写入 `evaluation_results.judge_score` 和 `evaluation_results.judge_comment`。
 - 将 `GET /api/evaluation/tasks/{taskId}` 改为真实查询。
 - 前端“历史任务”入口支持分页查看和详情加载。
 
@@ -206,12 +209,14 @@ MODEL_REQUEST_TIMEOUT=90
 
 ### LLM Judge
 
-待做：
+已实现：
 
-- 设计评审 Prompt。
-- 要求评审模型输出 JSON。
-- 解析评分、优点、缺点和推荐理由。
-- 将 LLM 评审分纳入综合评分。
+- 前端开启 LLM 评审后，需要单独选择一个已配置 API Key 的评审模型。
+- 后端复用现有 OpenAI-compatible 模型配置，不新增独立 Judge API Key 管理。
+- 评审 Prompt 要求候选回答作为不可信输入处理，并要求评审模型只输出 JSON。
+- 已解析评分、优点、缺点、推荐理由和维度分。
+- 已将 LLM 评审分纳入综合评分：`final = 0.60 × ruleFinal + 0.40 × judgeFinal`。
+- Judge 失败不会导致模型回答失败，会保留规则分并在评分详情中展示失败原因。
 
 ### 用户反馈与推荐
 
@@ -224,7 +229,15 @@ MODEL_REQUEST_TIMEOUT=90
 
 ## 推荐的评分思路
 
-综合分建议：
+当前 LLM Judge 第一版综合分：
+
+```text
+FinalScore =
+  0.60 × 规则评分
++ 0.40 × LLM 评审分
+```
+
+后续加入客观性能分和用户反馈分时，可再调整为：
 
 ```text
 FinalScore =
@@ -234,7 +247,7 @@ FinalScore =
 + 0.10 × 用户反馈分
 ```
 
-第一版可以先只使用规则评分，等真实模型接入稳定后再加入 LLM Judge。
+当前第一版已加入 LLM Judge；用户反馈分暂未纳入综合评分。
 
 ## 开源项目参考
 

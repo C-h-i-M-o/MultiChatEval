@@ -28,11 +28,14 @@ POST /api/evaluation/tasks
   "prompt": "帮我解释什么是设计模式",
   "modelIds": [1, 2, 3],
   "enableJudge": false,
+  "judgeModelId": null,
   "enableThinking": false
 }
 ```
 
 `modelIds` 使用 `model_configs.id`。如果不传，后端默认选择已启用的 DeepSeek 和 MiniMax；如果这两个模型不可用，则选择前两个已启用模型。
+
+`enableJudge` 为 LLM 评审开关。关闭时后端只返回规则评分；开启时必须传入 `judgeModelId`，该字段同样使用 `model_configs.id`，并要求对应模型已启用且已配置 API Key。LLM Judge 会对每条成功模型回答做单回答 JSON 评分，失败回答不会触发 Judge。
 
 `enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
 
@@ -58,6 +61,8 @@ POST /api/evaluation/tasks
 
 注意：关闭思考模式时后端确认传输的是 `thinking.type=disabled`，不是 `thinkingmode:disabled`。MiniMax 等部分 OpenAI-compatible 供应商即使收到该参数，也可能仍在 `content`、`reasoning_content` 或 `<think>...</think>` 中返回思考内容；这属于供应商接口行为，不代表前端开关未传递。
 
+发送给模型前，后端会在用户原始问题前追加系统内置提示词。当前提示词要求模型直接作答，并明确要求：除专业名词和特殊情况外，使用中文回答问题。接口响应和数据库中的 `prompt` 仍保留用户原始问题。
+
 响应：
 
 ```json
@@ -82,7 +87,23 @@ POST /api/evaluation/tasks
         "clarity": 8,
         "format": 8,
         "safety": 10,
-        "final": 8.4
+        "final": 8.64,
+        "details": {
+          "relevance": ["覆盖解释意图"],
+          "completeness": ["回答长度处于有效区间"],
+          "clarity": ["使用换行分隔内容"],
+          "format": ["未指定格式，回答使用了可读结构"],
+          "safety": ["未命中明显危险输出"]
+        },
+        "ruleFinal": 8.4,
+        "judgeFinal": 9,
+        "judgeComment": "优点：覆盖充分；缺点：示例略少；建议：可以补充示例。",
+        "judgeDetails": {
+          "strengths": ["覆盖充分"],
+          "weaknesses": ["示例略少"],
+          "recommendation": ["可以补充示例"],
+          "dimensionScores": ["事实准确性：9", "问题覆盖度：9"]
+        }
       }
     }
   ]
@@ -90,6 +111,14 @@ POST /api/evaluation/tasks
 ```
 
 该接口会先写入 `evaluation_tasks`，等待所有模型调用完成后写入 `model_responses` 和 `evaluation_results`，再一次性返回完整结果。`responses[].id` 是 `model_responses.id`，`responses[].modelConfigId` 是 `model_configs.id`。
+
+启用 LLM Judge 时，最终分计算为：
+
+```text
+final = 0.60 × ruleFinal + 0.40 × judgeFinal
+```
+
+如果未启用 Judge，或 Judge 超时、调用失败、返回非法 JSON，则 `judgeFinal` 为 `null`，`final` 等于 `ruleFinal`，失败原因会放入 `judgeComment`。
 
 ## 创建评测任务并渐进返回模型结果
 
@@ -132,7 +161,16 @@ POST /api/evaluation/tasks/stream
       "clarity": 8,
       "format": 8,
       "safety": 10,
-      "final": 8.4
+      "final": 8.64,
+      "ruleFinal": 8.4,
+      "judgeFinal": 9,
+      "judgeComment": "优点：覆盖充分；缺点：示例略少；建议：可以补充示例。",
+      "judgeDetails": {
+        "strengths": ["覆盖充分"],
+        "weaknesses": ["示例略少"],
+        "recommendation": ["可以补充示例"],
+        "dimensionScores": ["事实准确性：9", "问题覆盖度：9"]
+      }
     }
   }
 }

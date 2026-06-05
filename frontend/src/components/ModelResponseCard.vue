@@ -62,18 +62,73 @@
       <ScoreBar label="完整性" :value="score.completeness" />
       <ScoreBar label="清晰度" :value="score.clarity" />
       <ScoreBar label="格式" :value="score.format" />
+      <ScoreBar label="安全性" :value="score.safety" />
     </div>
 
     <footer v-if="showActions && !response.pending" class="card-actions">
       <el-button>采纳</el-button>
       <el-button>点赞</el-button>
-      <el-button>详情</el-button>
+      <el-button @click="detailVisible = true">详情</el-button>
     </footer>
+
+    <el-dialog v-model="detailVisible" title="评分详情" width="680px" class="score-detail-dialog">
+      <section class="score-detail">
+        <div class="score-summary">
+          <div>
+            <p class="panel-label">最终分</p>
+            <strong>{{ score.final }}</strong>
+          </div>
+          <dl>
+            <div>
+              <dt>规则分</dt>
+              <dd>{{ score.ruleFinal ?? score.final }}</dd>
+            </div>
+            <div>
+              <dt>LLM 评审</dt>
+              <dd>{{ judgeScoreText }}</dd>
+            </div>
+            <div>
+              <dt>耗时</dt>
+              <dd>{{ response.latencyMs || 0 }}ms</dd>
+            </div>
+            <div>
+              <dt>输出</dt>
+              <dd>{{ response.outputTokens || 0 }}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <article v-if="score.judgeComment" class="score-detail-item judge-detail-item">
+          <header>
+            <span>LLM 评审理由</span>
+            <strong>{{ judgeScoreText }}</strong>
+            <em>权重 40%</em>
+          </header>
+          <p>{{ score.judgeComment }}</p>
+          <ul v-if="judgeDetailItems.length">
+            <li v-for="detail in judgeDetailItems" :key="detail">{{ detail }}</li>
+          </ul>
+        </article>
+
+        <div class="score-detail-list">
+          <article v-for="dimension in scoreDimensions" :key="dimension.key" class="score-detail-item">
+            <header>
+              <span>{{ dimension.label }}</span>
+              <strong>{{ dimension.value }} / 10</strong>
+              <em>权重 {{ dimension.weight }}</em>
+            </header>
+            <ul>
+              <li v-for="detail in dimension.details" :key="detail">{{ detail }}</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </el-dialog>
   </article>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import MarkdownRenderer from "./MarkdownRenderer.vue";
 import ScoreBar from "./ScoreBar.vue";
@@ -99,7 +154,61 @@ const score = computed(() => {
     completeness: 0,
     clarity: 0,
     format: 0,
-    final: 0
+    safety: 0,
+    final: 0,
+    ruleFinal: 0,
+    judgeFinal: null,
+    judgeComment: null,
+    judgeDetails: {}
   };
 });
+
+const detailVisible = ref(false);
+
+const scoreDimensions = computed(() => {
+  const details = score.value.details || {};
+  return [
+    makeScoreDimension("relevance", "相关性", score.value.relevance, "20%", details),
+    makeScoreDimension("completeness", "完整性", score.value.completeness, "30%", details),
+    makeScoreDimension("clarity", "清晰度", score.value.clarity, "20%", details),
+    makeScoreDimension("format", "格式", score.value.format, "15%", details),
+    makeScoreDimension("safety", "安全性", score.value.safety, "15%", details)
+  ];
+});
+
+const judgeScoreText = computed(() => {
+  return score.value.judgeFinal === null || score.value.judgeFinal === undefined
+    ? "未启用"
+    : `${score.value.judgeFinal} / 10`;
+});
+
+const judgeDetailItems = computed(() => {
+  const details = score.value.judgeDetails || {};
+  return Object.entries(details).flatMap(([label, items]) => {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+    return items.map((item) => `${judgeDetailLabel(label)}：${item}`);
+  });
+});
+
+function makeScoreDimension(key, label, value, weight, details) {
+  return {
+    key,
+    label,
+    value: value || 0,
+    weight,
+    details: details[key]?.length ? details[key] : ["暂无命中项明细"]
+  };
+}
+
+function judgeDetailLabel(key) {
+  const labels = {
+    strengths: "优点",
+    weaknesses: "缺点",
+    recommendation: "建议",
+    dimensionScores: "维度分"
+  };
+  return labels[key] || key;
+}
 </script>

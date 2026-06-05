@@ -8,6 +8,19 @@ from app.schemas.evaluation import EvaluationTaskListItemRead, EvaluationTaskLis
 from app.services.evaluation_service import EvaluationTaskNotFoundError, evaluation_service
 
 
+def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> None:
+    response = TestClient(app).post(
+        "/api/evaluation/tasks",
+        json={
+            "prompt": "测试问题",
+            "modelIds": [1],
+            "enableJudge": True,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_get_evaluation_task_returns_404_when_task_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_get_task(task_id: int, _db: object) -> None:
         assert task_id == 404

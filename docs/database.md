@@ -73,9 +73,14 @@
 - `clarity_score`：清晰度
 - `format_score`：格式符合度
 - `safety_score`：安全性
-- `rule_score` / `final_score`：规则综合分
+- `rule_score`：规则综合分
+- `final_score`：最终综合分
 
-`judge_score` 和 `judge_comment` 保留给后续 LLM Judge 使用。
+LLM Judge 第一版已复用现有字段，不新增表结构：
+
+- `judge_score`：评审模型返回的 0-10 分。未启用 Judge、模型回答失败或 Judge 失败时为空。
+- `judge_comment`：评审说明和明细，以 JSON 文本保存，包含 `comment` 和 `details`。
+- `final_score`：未启用 Judge 或 Judge 失败时等于 `rule_score`；Judge 成功时为 `0.60 × rule_score + 0.40 × judge_score`。
 
 ## user_feedback
 

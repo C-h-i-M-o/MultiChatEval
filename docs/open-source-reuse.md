@@ -17,9 +17,13 @@ OpenCompass 是通用大模型评测平台，适合参考其评测体系、模�
 
 promptfoo 是 LLM 输出测试与评测工具，适合参考规则评分、结构化评测和 LLM-as-a-Judge 的配置思路。
 
+本项目 LLM Judge 第一版借鉴其“规则检查 + LLM Judge 叠加”的思路：本地规则评分先给出稳定基础分，LLM Judge 再输出结构化 JSON 评审结果；同时把候选回答视为不可信输入，要求评审模型忽略回答内的反向指令。
+
 ## FastChat
 
 FastChat 提供多模型聊天和 Chatbot Arena 相关实践，适合参考多模型对比和人工偏好反馈思路。
+
+本项目当前采用类似 MT-Bench single-answer grading 的轻量方式：每个候选回答单独评分，不做 pairwise 对战，避免第一版引入过高成本和复杂排序逻辑。
 
 ## 本项目复用策略
 
