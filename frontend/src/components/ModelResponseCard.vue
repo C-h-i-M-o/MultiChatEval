@@ -87,7 +87,7 @@
       <section class="score-detail">
         <div class="score-summary">
           <div>
-            <p class="panel-label">最终分</p>
+            <p class="panel-label">综合分</p>
             <strong>{{ score.final }}</strong>
           </div>
           <dl>
@@ -226,11 +226,11 @@ const currentFeedbackText = computed(() => {
 const scoreDimensions = computed(() => {
   const details = score.value.details || {};
   return [
-    makeScoreDimension("relevance", "相关性", score.value.relevance, "20%", details),
-    makeScoreDimension("completeness", "完整性", score.value.completeness, "30%", details),
+    makeScoreDimension("relevance", "相关性", score.value.relevance, "30%", details),
+    makeScoreDimension("completeness", "完整性", score.value.completeness, "25%", details),
     makeScoreDimension("clarity", "清晰度", score.value.clarity, "20%", details),
     makeScoreDimension("format", "格式", score.value.format, "15%", details),
-    makeScoreDimension("safety", "安全性", score.value.safety, "15%", details)
+    makeScoreDimension("safety", "安全性", score.value.safety, "10%", details)
   ];
 });
 

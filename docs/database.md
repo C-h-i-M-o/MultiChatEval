@@ -73,21 +73,21 @@
 - `clarity_score`：清晰度
 - `format_score`：格式符合度
 - `safety_score`：安全性
-- `rule_score`：规则综合分
-- `final_score`：最终综合分
+- `rule_score` / `final_score`：规则综合分
 
-LLM Judge 第一版已复用现有字段，不新增表结构：
-
-- `judge_score`：评审模型返回的 0-10 分。未启用 Judge、模型回答失败或 Judge 失败时为空。
-- `judge_comment`：评审说明和明细，以 JSON 文本保存，包含 `comment` 和 `details`。
-- `final_score`：未启用 Judge 或 Judge 失败时等于 `rule_score`；Judge 成功时为 `0.60 × rule_score + 0.40 × judge_score`。
+`judge_score` 和 `judge_comment` 保留给后续 LLM Judge 使用。
 
 ## user_feedback
 
-用户反馈表。用于保存点赞和点踩。
+用户反馈表。当前用于保存匿名点赞和点踩状态。
 
 - 匿名用户固定使用 `users.id = 0`，用户名为 `anonymous`。
 - 后续登录用户从 `users.id = 1` 开始自增。
 - `user_feedback.user_id` 对匿名反馈写入 `0`，不使用 `NULL`。
 - `user_id + response_id` 具备唯一约束，保证同一用户对同一回答只有一个当前反馈。
-- `feedback_type` 当前仅支持 `like` 和 `dislike`。
+- 当前支持的 `feedback_type` 为：
+
+- `like`：点赞
+- `dislike`：点踩
+
+收藏、评论统计和登录用户维度暂未接入。

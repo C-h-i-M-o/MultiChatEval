@@ -28,14 +28,11 @@ POST /api/evaluation/tasks
   "prompt": "帮我解释什么是设计模式",
   "modelIds": [1, 2, 3],
   "enableJudge": false,
-  "judgeModelId": null,
   "enableThinking": false
 }
 ```
 
 `modelIds` 使用 `model_configs.id`。如果不传，后端默认选择已启用的 DeepSeek 和 MiniMax；如果这两个模型不可用，则选择前两个已启用模型。
-
-`enableJudge` 为 LLM 评审开关。关闭时后端只返回规则评分；开启时必须传入 `judgeModelId`，该字段同样使用 `model_configs.id`，并要求对应模型已启用且已配置 API Key。LLM Judge 会对每条成功模型回答做单回答 JSON 评分，失败回答不会触发 Judge。
 
 `enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
 
@@ -61,7 +58,25 @@ POST /api/evaluation/tasks
 
 注意：关闭思考模式时后端确认传输的是 `thinking.type=disabled`，不是 `thinkingmode:disabled`。MiniMax 等部分 OpenAI-compatible 供应商即使收到该参数，也可能仍在 `content`、`reasoning_content` 或 `<think>...</think>` 中返回思考内容；这属于供应商接口行为，不代表前端开关未传递。
 
-发送给模型前，后端会在用户原始问题前追加系统内置提示词。当前提示词要求模型直接作答，并明确要求：除专业名词和特殊情况外，使用中文回答问题。接口响应和数据库中的 `prompt` 仍保留用户原始问题。
+发送给模型前，后端会在用户原始问题前追加系统内置提示词，用于统一回答质量、安全性和格式要求。接口响应和数据库中的 `prompt` 仍保留用户原始问题。
+
+当前内置提示词：
+
+```text
+你是一个严谨、清晰、负责任的 AI 助手。请基于用户问题直接作答，并遵守以下要求：
+
+1. 优先回答用户真正的问题，不要回避核心诉求。
+2. 保持中文表达清晰、自然、结构化；如果用户明确要求其他语言，则按用户要求回复。
+3. 如果问题适合分步骤、分点或对比说明，请使用清晰的段落、列表或表格组织答案。
+4. 如果用户要求代码、JSON、表格、步骤、方案或对比，请严格遵守对应格式。
+5. 不要编造不确定的信息。遇到无法确认的事实、数据、时间、版本或来源时，请明确说明不确定性。
+6. 对涉及医疗、法律、金融、安全等高风险内容的问题，请给出谨慎、一般性的信息，并提醒用户寻求专业意见。
+7. 避免输出违法、有害、危险操作指导、隐私泄露、凭据泄露或恶意攻击相关内容。
+8. 回答应兼顾完整性和简洁性：必要时解释原因、给出示例或注意事项，但不要无意义冗长。
+9. 如果用户问题本身含糊，请先基于最合理的理解回答，并指出关键假设；不要反复追问导致无法推进。
+
+用户问题如下：
+```
 
 响应：
 
@@ -89,23 +104,20 @@ POST /api/evaluation/tasks
         "clarity": 8,
         "format": 8,
         "safety": 10,
-        "final": 8.64,
+        "final": 8.4,
         "details": {
-          "relevance": ["覆盖解释意图"],
+          "relevance": ["字符 n-gram 相似度 0.58", "覆盖解释意图", "回答聚焦于用户问题"],
           "completeness": ["回答长度处于有效区间"],
           "clarity": ["使用换行分隔内容"],
           "format": ["未指定格式，回答使用了可读结构"],
-          "safety": ["未命中明显危险输出"]
-        },
-        "ruleFinal": 8.4,
-        "judgeFinal": 9,
-        "judgeComment": "优点：覆盖充分；缺点：示例略少；建议：可以补充示例。",
-        "judgeDetails": {
-          "strengths": ["覆盖充分"],
-          "weaknesses": ["示例略少"],
-          "recommendation": ["可以补充示例"],
-          "dimensionScores": ["事实准确性：9", "问题覆盖度：9"]
+          "safety": ["未命中明显危险输出", "未发现拒答质量风险", "未涉及高风险专业建议"]
         }
+      },
+      "feedback": {
+        "liked": false,
+        "disliked": false,
+        "likeCount": 0,
+        "dislikeCount": 0
       }
     }
   ]
@@ -113,14 +125,6 @@ POST /api/evaluation/tasks
 ```
 
 该接口会先写入 `evaluation_tasks`，等待所有模型调用完成后写入 `model_responses` 和 `evaluation_results`，再一次性返回完整结果。`responses[].id` 是 `model_responses.id`，`responses[].modelConfigId` 是 `model_configs.id`。
-
-启用 LLM Judge 时，最终分计算为：
-
-```text
-final = 0.60 × ruleFinal + 0.40 × judgeFinal
-```
-
-如果未启用 Judge，或 Judge 超时、调用失败、返回非法 JSON，则 `judgeFinal` 为 `null`，`final` 等于 `ruleFinal`，失败原因会放入 `judgeComment`。
 
 ## 创建评测任务并渐进返回模型结果
 
@@ -157,25 +161,29 @@ POST /api/evaluation/tasks/stream
     "outputTokens": 120,
     "estimatedCost": 0,
     "status": "success",
-    "score": {
-      "relevance": 8,
-      "completeness": 8,
-      "clarity": 8,
-      "format": 8,
-      "safety": 10,
-      "final": 8.64,
-      "ruleFinal": 8.4,
-      "judgeFinal": 9,
-      "judgeComment": "优点：覆盖充分；缺点：示例略少；建议：可以补充示例。",
-      "judgeDetails": {
-        "strengths": ["覆盖充分"],
-        "weaknesses": ["示例略少"],
-        "recommendation": ["可以补充示例"],
-        "dimensionScores": ["事实准确性：9", "问题覆盖度：9"]
+      "score": {
+        "relevance": 8,
+        "completeness": 8,
+        "clarity": 8,
+        "format": 8,
+        "safety": 10,
+        "final": 8.4,
+        "details": {
+          "relevance": ["字符 n-gram 相似度 0.58", "覆盖解释意图", "回答聚焦于用户问题"],
+          "completeness": ["回答长度处于有效区间"],
+          "clarity": ["使用换行分隔内容"],
+          "format": ["未指定格式，回答使用了可读结构"],
+          "safety": ["未命中明显危险输出", "未发现拒答质量风险", "未涉及高风险专业建议"]
+        }
+      },
+      "feedback": {
+        "liked": false,
+        "disliked": false,
+        "likeCount": 0,
+        "dislikeCount": 0
       }
     }
   }
-}
 ```
 
 任务完成事件：
@@ -354,18 +362,18 @@ POST /api/evaluation/responses/{responseId}/feedback
 }
 ```
 
-`feedbackType` 仅支持：
+`feedbackType` 当前只支持：
 
-- `like`：点赞。
-- `dislike`：点踩。
+- `like`：点赞
+- `dislike`：点踩
 
-匿名用户统一使用 `user_id = 0`。同一用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。
+该接口采用互斥状态式切换语义。同一匿名用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。当前匿名用户固定写入 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
 
 响应：
 
 ```json
 {
-  "responseId": 12,
+  "responseId": 5001,
   "feedbackType": "like",
   "active": true,
   "feedback": {
@@ -377,4 +385,4 @@ POST /api/evaluation/responses/{responseId}/feedback
 }
 ```
 
-回答不存在时返回 404。
+当 `responseId` 不存在时返回 404；当 `feedbackType` 不是 `like` 或 `dislike` 时返回 422。

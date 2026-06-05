@@ -120,10 +120,12 @@ def test_thinking_extra_body_enabled_without_effort() -> None:
     assert "reasoning_effort" not in result
 
 
-def test_model_prompt_requires_chinese_except_terms_and_special_cases() -> None:
+def test_model_prompt_contains_builtin_instruction_before_user_prompt() -> None:
     result = evaluation_service._model_prompt("请解释什么是设计模式")
 
-    assert "除专业名词和特殊情况外，使用中文回答问题" in result
+    assert result.startswith("你是一个严谨、清晰、负责任的 AI 助手。")
+    assert "保持中文表达清晰、自然、结构化" in result
+    assert "thinkingEffort" not in result
     assert result.endswith("请解释什么是设计模式")
 
 
