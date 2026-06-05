@@ -10,7 +10,7 @@
     <section class="feedback-placeholder">
       <p class="panel-label">功能状态</p>
       <h3>反馈统计暂未实现</h3>
-      <p>当前版本已保留反馈统计入口，后续会在用户反馈持久化和模型推荐功能完成后展示统计结果。</p>
+      <p>当前版本已支持点赞和点踩持久化，后续会在反馈统计和模型推荐功能完成后展示统计结果。</p>
     </section>
   </section>
 </template>

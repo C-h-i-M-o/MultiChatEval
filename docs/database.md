@@ -79,11 +79,15 @@
 
 ## user_feedback
 
-用户反馈表。当前用于保存匿名点赞和采纳状态，`user_id` 暂时写入 `NULL`。
+用户反馈表。当前用于保存匿名点赞和点踩状态。
 
-最小反馈闭环采用状态式语义：同一 `response_id + feedback_type` 不存在时新增反馈，已存在时取消反馈。当前支持的 `feedback_type` 为：
+- 匿名用户固定使用 `users.id = 0`，用户名为 `anonymous`。
+- 后续登录用户从 `users.id = 1` 开始自增。
+- `user_feedback.user_id` 对匿名反馈写入 `0`，不使用 `NULL`。
+- `user_id + response_id` 具备唯一约束，保证同一用户对同一回答只有一个当前反馈。
+- 当前支持的 `feedback_type` 为：
 
 - `like`：点赞
-- `accepted`：采纳
+- `dislike`：点踩
 
-点踩、收藏、评论统计和登录用户维度暂未接入。
+收藏、评论统计和登录用户维度暂未接入。

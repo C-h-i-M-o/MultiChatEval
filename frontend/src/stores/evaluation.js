@@ -14,7 +14,8 @@ export const useEvaluationStore = defineStore("evaluation", {
     historyLoading: false,
     historyErrorMessage: "",
     selectedHistoryTask: null,
-    historyDetailLoading: false
+    historyDetailLoading: false,
+    feedbackSubmittingIds: []
   }),
   actions: {
     async submitEvaluation(payload) {
@@ -90,35 +91,41 @@ export const useEvaluationStore = defineStore("evaluation", {
         this.historyDetailLoading = false;
       }
     },
-    async toggleResponseFeedback(responseId, feedbackType) {
-      const result = await submitResponseFeedback(responseId, {
-        feedbackType
-      });
+    async submitFeedback(responseId, feedbackType) {
+      if (this.feedbackSubmittingIds.includes(responseId)) {
+        return null;
+      }
 
-      this.applyResponseFeedback(responseId, result.feedback);
-      return result;
+      this.feedbackSubmittingIds = [...this.feedbackSubmittingIds, responseId];
+      try {
+        const result = await submitResponseFeedback(responseId, { feedbackType });
+        this.applyFeedbackResult(result);
+        return result;
+      } finally {
+        this.feedbackSubmittingIds = this.feedbackSubmittingIds.filter((item) => item !== responseId);
+      }
     },
-    applyResponseFeedback(responseId, feedback) {
-      this.task = updateTaskResponseFeedback(this.task, responseId, feedback);
-      this.selectedHistoryTask = updateTaskResponseFeedback(this.selectedHistoryTask, responseId, feedback);
+    applyFeedbackResult(result) {
+      this.task = updateTaskResponseFeedback(this.task, result);
+      this.selectedHistoryTask = updateTaskResponseFeedback(this.selectedHistoryTask, result);
     }
   }
 });
 
-function updateTaskResponseFeedback(task, responseId, feedback) {
-  if (!task?.responses) {
+function updateTaskResponseFeedback(task, result) {
+  if (!task?.responses?.length) {
     return task;
   }
 
   return {
     ...task,
     responses: task.responses.map((response) => {
-      if (response.id !== responseId) {
+      if (response.id !== result.responseId) {
         return response;
       }
       return {
         ...response,
-        feedback
+        feedback: result.feedback
       };
     })
   };

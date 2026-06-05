@@ -65,17 +65,32 @@
               <p class="panel-label">任务详情</p>
               <h3>{{ store.selectedHistoryTask.prompt }}</h3>
             </div>
-            <el-tag :type="statusTagType(store.selectedHistoryTask.status)" effect="plain">
-              {{ statusText(store.selectedHistoryTask.status) }}
+            <el-tag :type="selectedHistoryStatusTagType" effect="plain">
+              {{ selectedHistoryStatusText }}
             </el-tag>
           </div>
 
-          <div class="history-response-list">
+          <div
+            v-if="store.selectedHistoryTask.responses.length === 0"
+            class="history-empty-detail"
+            :class="{ timeout: selectedHistoryTaskIsStale }"
+          >
+            <p class="panel-label">{{ selectedHistoryStatusText }}</p>
+            <h4>{{ emptyDetailTitle }}</h4>
+            <p>{{ emptyDetailDescription }}</p>
+            <el-button :loading="store.historyDetailLoading" @click="loadHistoryTask(store.selectedHistoryTask.taskId)">
+              重新加载
+            </el-button>
+          </div>
+
+          <div v-else class="history-response-list">
             <ModelResponseCard
               v-for="response in store.selectedHistoryTask.responses"
               :key="response.id"
               :response="response"
+              :feedback-submitting="store.feedbackSubmittingIds.includes(response.id)"
               show-actions
+              @feedback="handleFeedback"
             />
           </div>
         </div>
@@ -85,13 +100,47 @@
 </template>
 
 <script setup>
-import { onMounted } from "vue";
+import { computed, onMounted } from "vue";
+import { ElMessage } from "element-plus";
 
 import ModelResponseCard from "../components/ModelResponseCard.vue";
 import { useEvaluationStore } from "../stores/evaluation";
 
 const store = useEvaluationStore();
 const HISTORY_PENDING_TIMEOUT_MS = 120 * 1000;
+const selectedHistoryItem = computed(() => {
+  return store.historyItems.find((taskItem) => taskItem.taskId === store.selectedHistoryTask?.taskId) || null;
+});
+const selectedHistoryTaskStatusSource = computed(() => {
+  return selectedHistoryItem.value || store.selectedHistoryTask;
+});
+const selectedHistoryTaskIsStale = computed(() => {
+  return selectedHistoryTaskStatusSource.value ? isStalePendingTask(selectedHistoryTaskStatusSource.value) : false;
+});
+const selectedHistoryStatusText = computed(() => {
+  return selectedHistoryTaskStatusSource.value ? historyStatusText(selectedHistoryTaskStatusSource.value) : "未知状态";
+});
+const selectedHistoryStatusTagType = computed(() => {
+  return selectedHistoryTaskStatusSource.value ? historyStatusTagType(selectedHistoryTaskStatusSource.value) : "info";
+});
+const emptyDetailTitle = computed(() => {
+  if (selectedHistoryTaskIsStale.value) {
+    return "任务超时未完成";
+  }
+  if (store.selectedHistoryTask?.status === "pending" || store.selectedHistoryTask?.status === "running") {
+    return "模型回答仍在生成";
+  }
+  return "暂无模型回答";
+});
+const emptyDetailDescription = computed(() => {
+  if (selectedHistoryTaskIsStale.value) {
+    return "该任务超过等待时间后仍未产生模型回答，可以刷新历史任务或重新发起评测。";
+  }
+  if (store.selectedHistoryTask?.status === "pending" || store.selectedHistoryTask?.status === "running") {
+    return "模型请求尚未完成，可以稍后重新加载详情查看最新结果。";
+  }
+  return "该任务没有可展示的模型回答。";
+});
 
 async function refreshHistory() {
   await store.loadHistory(store.historyPage, store.historyPageSize);
@@ -107,6 +156,19 @@ async function changeHistoryPageSize(pageSize) {
 
 async function loadHistoryTask(taskId) {
   await store.loadHistoryTask(taskId);
+}
+
+async function handleFeedback({ responseId, feedbackType }) {
+  try {
+    const result = await store.submitFeedback(responseId, feedbackType);
+    if (result?.active) {
+      ElMessage.success(feedbackType === "like" ? "已点赞" : "已点踩");
+    } else {
+      ElMessage.success("已取消反馈");
+    }
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || "用户反馈提交失败");
+  }
 }
 
 function historyStatusText(taskItem) {

@@ -85,6 +85,8 @@ POST /api/evaluation/tasks
   "taskId": 1001,
   "status": "completed",
   "prompt": "帮我解释什么是设计模式",
+  "createdAt": null,
+  "completedAt": null,
   "responses": [
     {
       "id": 5001,
@@ -113,9 +115,9 @@ POST /api/evaluation/tasks
       },
       "feedback": {
         "liked": false,
-        "accepted": false,
+        "disliked": false,
         "likeCount": 0,
-        "acceptedCount": 0
+        "dislikeCount": 0
       }
     }
   ]
@@ -176,9 +178,9 @@ POST /api/evaluation/tasks/stream
       },
       "feedback": {
         "liked": false,
-        "accepted": false,
+        "disliked": false,
         "likeCount": 0,
-        "acceptedCount": 0
+        "dislikeCount": 0
       }
     }
   }
@@ -193,6 +195,8 @@ POST /api/evaluation/tasks/stream
     "taskId": 1,
     "status": "completed",
     "prompt": "帮我解释什么是设计模式",
+    "createdAt": null,
+    "completedAt": null,
     "responses": []
   }
 }
@@ -341,7 +345,7 @@ POST /api/model-configs/test
 GET /api/evaluation/tasks/{taskId}
 ```
 
-响应字段与创建评测任务一致，会从数据库读取任务、模型回答和规则评分。任务不存在时返回 404。
+响应字段与创建评测任务一致，会从数据库读取任务、模型回答和规则评分，并返回任务的 `createdAt` 与 `completedAt`。任务不存在时返回 404。
 
 ## 提交用户反馈
 
@@ -361,9 +365,9 @@ POST /api/evaluation/responses/{responseId}/feedback
 `feedbackType` 当前只支持：
 
 - `like`：点赞
-- `accepted`：采纳
+- `dislike`：点踩
 
-该接口采用状态式切换语义。同一匿名用户上下文下，同一 `responseId + feedbackType` 不存在时会新增一条 `user_feedback`；再次提交同类反馈会取消该反馈。当前未接入登录系统，`user_id` 写入 `NULL`。
+该接口采用互斥状态式切换语义。同一匿名用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。当前匿名用户固定写入 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
 
 响应：
 
@@ -374,11 +378,11 @@ POST /api/evaluation/responses/{responseId}/feedback
   "active": true,
   "feedback": {
     "liked": true,
-    "accepted": false,
+    "disliked": false,
     "likeCount": 1,
-    "acceptedCount": 0
+    "dislikeCount": 0
   }
 }
 ```
 
-当 `responseId` 不存在时返回 404；当 `feedbackType` 不是 `like` 或 `accepted` 时返回 422。
+当 `responseId` 不存在时返回 404；当 `feedbackType` 不是 `like` 或 `dislike` 时返回 422。

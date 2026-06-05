@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class EvaluationTaskCreate(BaseModel):
@@ -9,7 +9,14 @@ class EvaluationTaskCreate(BaseModel):
     prompt: str
     model_ids: list[int] = Field(default_factory=list, alias="modelIds")
     enable_judge: bool = Field(default=False, alias="enableJudge")
+    judge_model_id: int | None = Field(default=None, alias="judgeModelId")
     enable_thinking: bool = Field(default=False, alias="enableThinking")
+
+    @model_validator(mode="after")
+    def require_judge_model(self) -> "EvaluationTaskCreate":
+        if self.enable_judge and self.judge_model_id is None:
+            raise ValueError("启用 LLM 评审时必须选择评审模型")
+        return self
 
 
 class EvaluationScoreRead(BaseModel):
@@ -20,13 +27,23 @@ class EvaluationScoreRead(BaseModel):
     safety: float
     final: float
     details: dict[str, list[str]] = Field(default_factory=dict)
+    rule_final: float | None = Field(default=None, alias="ruleFinal")
+    judge_final: float | None = Field(default=None, alias="judgeFinal")
+    judge_comment: str | None = Field(default=None, alias="judgeComment")
+    judge_details: dict[str, list[str]] = Field(default_factory=dict, alias="judgeDetails")
+
+    @model_validator(mode="after")
+    def default_rule_final(self) -> "EvaluationScoreRead":
+        if self.rule_final is None:
+            self.rule_final = self.final
+        return self
 
 
 class EvaluationFeedbackRead(BaseModel):
     liked: bool = False
-    accepted: bool = False
     like_count: int = Field(default=0, alias="likeCount")
-    accepted_count: int = Field(default=0, alias="acceptedCount")
+    disliked: bool = False
+    dislike_count: int = Field(default=0, alias="dislikeCount")
 
 
 class ModelResponseRead(BaseModel):
@@ -47,6 +64,8 @@ class EvaluationTaskRead(BaseModel):
     task_id: int = Field(alias="taskId")
     status: str
     prompt: str
+    created_at: datetime | None = Field(default=None, alias="createdAt")
+    completed_at: datetime | None = Field(default=None, alias="completedAt")
     responses: list[ModelResponseRead]
 
 
@@ -67,12 +86,12 @@ class EvaluationTaskListRead(BaseModel):
 
 
 class FeedbackCreate(BaseModel):
-    feedback_type: Literal["like", "accepted"] = Field(alias="feedbackType")
+    feedback_type: Literal["like", "dislike"] = Field(alias="feedbackType")
     comment: str | None = None
 
 
 class FeedbackToggleRead(BaseModel):
     response_id: int = Field(alias="responseId")
-    feedback_type: Literal["like", "accepted"] = Field(alias="feedbackType")
+    feedback_type: Literal["like", "dislike"] = Field(alias="feedbackType")
     active: bool
     feedback: EvaluationFeedbackRead

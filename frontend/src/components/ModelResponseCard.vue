@@ -67,19 +67,18 @@
 
     <footer v-if="showActions && !response.pending" class="card-actions">
       <el-button
-        :type="feedback.accepted ? 'primary' : 'default'"
-        :loading="activeFeedbackType === 'accepted'"
-        :disabled="response.status !== 'success'"
-        @click="toggleFeedback('accepted')"
+        :type="feedback.liked ? 'primary' : 'default'"
+        :loading="feedbackSubmitting"
+        @click="emitFeedback('like')"
       >
-        {{ feedback.accepted ? "已采纳" : "采纳" }}
+        点赞 {{ feedback.likeCount }}
       </el-button>
       <el-button
-        :type="feedback.liked ? 'primary' : 'default'"
-        :loading="activeFeedbackType === 'like'"
-        @click="toggleFeedback('like')"
+        :type="feedback.disliked ? 'danger' : 'default'"
+        :loading="feedbackSubmitting"
+        @click="emitFeedback('dislike')"
       >
-        {{ feedback.liked ? "已点赞" : "点赞" }}
+        点踩 {{ feedback.dislikeCount }}
       </el-button>
       <el-button @click="detailVisible = true">详情</el-button>
     </footer>
@@ -93,6 +92,14 @@
           </div>
           <dl>
             <div>
+              <dt>规则分</dt>
+              <dd>{{ score.ruleFinal ?? score.final }}</dd>
+            </div>
+            <div>
+              <dt>LLM 评审</dt>
+              <dd>{{ judgeScoreText }}</dd>
+            </div>
+            <div>
               <dt>耗时</dt>
               <dd>{{ response.latencyMs || 0 }}ms</dd>
             </div>
@@ -100,12 +107,31 @@
               <dt>输出</dt>
               <dd>{{ response.outputTokens || 0 }}</dd>
             </div>
-            <div>
-              <dt>反馈</dt>
-              <dd>{{ feedbackText }}</dd>
-            </div>
           </dl>
         </div>
+
+        <article v-if="score.judgeComment" class="score-detail-item judge-detail-item">
+          <header>
+            <span>LLM 评审理由</span>
+            <strong>{{ judgeScoreText }}</strong>
+            <em>权重 40%</em>
+          </header>
+          <p>{{ score.judgeComment }}</p>
+          <ul v-if="judgeDetailItems.length">
+            <li v-for="detail in judgeDetailItems" :key="detail">{{ detail }}</li>
+          </ul>
+        </article>
+
+        <article class="score-detail-item feedback-detail-item">
+          <header>
+            <span>用户反馈</span>
+            <strong>{{ feedbackSummaryText }}</strong>
+            <em>不计入当前评分</em>
+          </header>
+          <p>
+            点赞 {{ feedback.likeCount }} 次，点踩 {{ feedback.dislikeCount }} 次；当前匿名用户反馈为{{ currentFeedbackText }}。
+          </p>
+        </article>
 
         <div class="score-detail-list">
           <article v-for="dimension in scoreDimensions" :key="dimension.key" class="score-detail-item">
@@ -126,13 +152,9 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import { ElMessage } from "element-plus";
 
 import MarkdownRenderer from "./MarkdownRenderer.vue";
 import ScoreBar from "./ScoreBar.vue";
-import { useEvaluationStore } from "../stores/evaluation";
-
-const store = useEvaluationStore();
 
 const props = defineProps({
   response: {
@@ -146,8 +168,14 @@ const props = defineProps({
   showActions: {
     type: Boolean,
     default: false
+  },
+  feedbackSubmitting: {
+    type: Boolean,
+    default: false
   }
 });
+
+const emit = defineEmits(["feedback"]);
 
 const score = computed(() => {
   return props.response.score || {
@@ -156,21 +184,44 @@ const score = computed(() => {
     clarity: 0,
     format: 0,
     safety: 0,
-    final: 0
-  };
-});
-
-const feedback = computed(() => {
-  return props.response.feedback || {
-    liked: false,
-    accepted: false,
-    likeCount: 0,
-    acceptedCount: 0
+    final: 0,
+    ruleFinal: 0,
+    judgeFinal: null,
+    judgeComment: null,
+    judgeDetails: {}
   };
 });
 
 const detailVisible = ref(false);
-const activeFeedbackType = ref("");
+
+const feedback = computed(() => {
+  return props.response.feedback || {
+    liked: false,
+    disliked: false,
+    likeCount: 0,
+    dislikeCount: 0
+  };
+});
+
+const feedbackSummaryText = computed(() => {
+  if (feedback.value.liked) {
+    return "已点赞";
+  }
+  if (feedback.value.disliked) {
+    return "已点踩";
+  }
+  return "未反馈";
+});
+
+const currentFeedbackText = computed(() => {
+  if (feedback.value.liked) {
+    return "点赞";
+  }
+  if (feedback.value.disliked) {
+    return "点踩";
+  }
+  return "未选择";
+});
 
 const scoreDimensions = computed(() => {
   const details = score.value.details || {};
@@ -183,27 +234,21 @@ const scoreDimensions = computed(() => {
   ];
 });
 
-const feedbackText = computed(() => {
-  const labels = [];
-  if (feedback.value.accepted) {
-    labels.push("已采纳");
-  }
-  if (feedback.value.liked) {
-    labels.push("已点赞");
-  }
-  return labels.length > 0 ? labels.join("、") : "暂无";
+const judgeScoreText = computed(() => {
+  return score.value.judgeFinal === null || score.value.judgeFinal === undefined
+    ? "未启用"
+    : `${score.value.judgeFinal} / 10`;
 });
 
-async function toggleFeedback(feedbackType) {
-  activeFeedbackType.value = feedbackType;
-  try {
-    await store.toggleResponseFeedback(props.response.id, feedbackType);
-  } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "反馈提交失败");
-  } finally {
-    activeFeedbackType.value = "";
-  }
-}
+const judgeDetailItems = computed(() => {
+  const details = score.value.judgeDetails || {};
+  return Object.entries(details).flatMap(([label, items]) => {
+    if (!Array.isArray(items)) {
+      return [];
+    }
+    return items.map((item) => `${judgeDetailLabel(label)}：${item}`);
+  });
+});
 
 function makeScoreDimension(key, label, value, weight, details) {
   return {
@@ -213,5 +258,22 @@ function makeScoreDimension(key, label, value, weight, details) {
     weight,
     details: details[key]?.length ? details[key] : ["暂无命中项明细"]
   };
+}
+
+function judgeDetailLabel(key) {
+  const labels = {
+    strengths: "优点",
+    weaknesses: "缺点",
+    recommendation: "建议",
+    dimensionScores: "维度分"
+  };
+  return labels[key] || key;
+}
+
+function emitFeedback(feedbackType) {
+  emit("feedback", {
+    responseId: props.response.id,
+    feedbackType
+  });
 }
 </script>

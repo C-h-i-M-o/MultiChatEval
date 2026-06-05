@@ -179,6 +179,16 @@ class ModelConfigService:
 
         return [self._to_runtime_config(config) for config in selected_configs]
 
+    async def resolve_runtime_model(self, db: AsyncSession, model_id: int) -> RuntimeModelConfig:
+        await self.ensure_builtin_configs(db)
+        config = await self._get_model_config(db, model_id)
+        if not config.enabled or not config.provider.enabled:
+            raise ModelConfigNotFoundError("评审模型未启用")
+        runtime_config = self._to_runtime_config(config)
+        if not runtime_config.api_key:
+            raise ModelConfigNotFoundError("评审模型未配置 API Key")
+        return runtime_config
+
     async def ensure_builtin_configs(self, db: AsyncSession) -> None:
         changed = False
         for definition in self._builtin_definitions():

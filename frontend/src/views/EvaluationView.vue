@@ -50,6 +50,22 @@
           {{ store.loading ? "等待模型响应" : "开始评测" }}
         </el-button>
       </div>
+
+      <div v-if="enableJudge" class="judge-row">
+        <span class="panel-label">评审模型</span>
+        <el-select
+          v-model="judgeModelId"
+          :disabled="store.loading"
+          placeholder="选择一个模型作为 LLM Judge"
+        >
+          <el-option
+            v-for="modelConfig in configuredModelConfigs"
+            :key="modelConfig.id"
+            :label="modelConfig.displayName"
+            :value="modelConfig.id"
+          />
+        </el-select>
+      </div>
     </section>
 
     <el-alert
@@ -82,14 +98,17 @@
         :key="response.id"
         :response="response"
         :elapsed-seconds="elapsedSeconds"
+        :feedback-submitting="store.feedbackSubmittingIds.includes(response.id)"
         show-actions
+        @feedback="handleFeedback"
       />
     </section>
   </section>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
 import ModelResponseCard from "../components/ModelResponseCard.vue";
@@ -100,6 +119,7 @@ const router = useRouter();
 const store = useEvaluationStore();
 const prompt = ref("");
 const selectedModels = ref([]);
+const judgeModelId = ref(null);
 const enableJudge = ref(false);
 const enableThinking = ref(false);
 const elapsedSeconds = ref(0);
@@ -129,7 +149,12 @@ const responseMap = computed(() => {
   }, {});
 });
 const canSubmit = computed(() => {
-  return !store.loading && Boolean(prompt.value.trim()) && selectedModels.value.length > 0;
+  return (
+    !store.loading &&
+    Boolean(prompt.value.trim()) &&
+    selectedModels.value.length > 0 &&
+    (!enableJudge.value || Boolean(judgeModelId.value))
+  );
 });
 const displayResponses = computed(() => {
   if (store.loading) {
@@ -181,6 +206,9 @@ function selectDefaultModels() {
   const selectedSet = new Set(selectedModels.value);
   const availableIds = configuredModelConfigs.value.map((modelConfig) => modelConfig.id);
   selectedModels.value = availableIds.filter((modelId) => selectedSet.has(modelId));
+  if (!availableIds.includes(judgeModelId.value)) {
+    judgeModelId.value = availableIds[0] || null;
+  }
 
   if (selectedModels.value.length > 0) {
     return;
@@ -217,10 +245,30 @@ async function submitTask() {
     prompt: prompt.value,
     modelIds: selectedModels.value,
     enableJudge: enableJudge.value,
+    judgeModelId: enableJudge.value ? judgeModelId.value : null,
     enableThinking: enableThinking.value
   });
   stopWaitingTimer();
 }
+
+async function handleFeedback({ responseId, feedbackType }) {
+  try {
+    const result = await store.submitFeedback(responseId, feedbackType);
+    if (result?.active) {
+      ElMessage.success(feedbackType === "like" ? "已点赞" : "已点踩");
+    } else {
+      ElMessage.success("已取消反馈");
+    }
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || "用户反馈提交失败");
+  }
+}
+
+watch(enableJudge, (enabled) => {
+  if (enabled && !judgeModelId.value) {
+    judgeModelId.value = configuredModelConfigs.value[0]?.id || null;
+  }
+});
 
 onMounted(loadModelConfigs);
 onBeforeUnmount(stopWaitingTimer);

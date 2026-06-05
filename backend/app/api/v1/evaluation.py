@@ -15,7 +15,11 @@ from app.schemas.evaluation import (
     FeedbackCreate,
     FeedbackToggleRead,
 )
-from app.services.evaluation_service import EvaluationTaskNotFoundError, evaluation_service
+from app.services.evaluation_service import (
+    EvaluationResponseNotFoundError,
+    EvaluationTaskNotFoundError,
+    evaluation_service,
+)
 
 router = APIRouter()
 
@@ -67,6 +71,6 @@ async def create_feedback(
     db: AsyncSession = Depends(get_db),
 ) -> FeedbackToggleRead:
     try:
-        return await evaluation_service.toggle_feedback(response_id, payload.feedback_type, payload.comment, db)
-    except EvaluationTaskNotFoundError as error:
+        return await evaluation_service.toggle_response_feedback(response_id, payload, db)
+    except EvaluationResponseNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error

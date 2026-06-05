@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
@@ -18,13 +19,15 @@ from app.models.response import ModelResponse
 from app.schemas.evaluation import (
     EvaluationFeedbackRead,
     EvaluationScoreRead,
-    FeedbackToggleRead,
     EvaluationTaskCreate,
     EvaluationTaskListItemRead,
     EvaluationTaskListRead,
     EvaluationTaskRead,
+    FeedbackCreate,
+    FeedbackToggleRead,
     ModelResponseRead,
 )
+from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
 from app.services.model_config_service import RuntimeModelConfig, model_config_service
 from app.services.rule_evaluator import rule_evaluator
 
@@ -43,14 +46,22 @@ BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手�
 
 用户问题如下："""
 
+ANONYMOUS_USER_ID = 0
+FEEDBACK_TYPES = ("like", "dislike")
+
 
 class EvaluationTaskNotFoundError(Exception):
+    pass
+
+
+class EvaluationResponseNotFoundError(Exception):
     pass
 
 
 class EvaluationService:
     async def create_task(self, payload: EvaluationTaskCreate, db: AsyncSession) -> EvaluationTaskRead:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
+        judge_model = await self._resolve_judge_model(db, payload)
         task_id = await self._create_task_record(db, payload)
         responses = await self._collect_model_responses(
             db=db,
@@ -58,6 +69,7 @@ class EvaluationService:
             prompt=payload.prompt,
             models=selected_models,
             extra_body=self._thinking_extra_body(payload),
+            judge_model=judge_model,
         )
         task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
         await self._finish_task_record(db, task_id, task_status)
@@ -70,6 +82,7 @@ class EvaluationService:
         db: AsyncSession,
     ) -> AsyncIterator[dict[str, object]]:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
+        judge_model = await self._resolve_judge_model(db, payload)
         task_id = await self._create_task_record(db, payload)
         model_ids = [model.id for model in selected_models]
         extra_body = self._thinking_extra_body(payload)
@@ -89,6 +102,7 @@ class EvaluationService:
         ]
         for completed_task in asyncio.as_completed(tasks):
             response = await completed_task
+            response = await self._apply_judge_score(payload.prompt, response, judge_model)
             persisted_response = await self._persist_response(db, task_id, response)
             responses.append(persisted_response)
             yield {"type": "model_response", "response": persisted_response}
@@ -107,6 +121,60 @@ class EvaluationService:
             raise EvaluationTaskNotFoundError("评测任务不存在")
 
         return self._serialize_task(task)
+
+    async def toggle_response_feedback(
+        self,
+        response_id: int,
+        payload: FeedbackCreate,
+        db: AsyncSession,
+    ) -> FeedbackToggleRead:
+        response_result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
+        if response_result.scalar_one_or_none() is None:
+            raise EvaluationResponseNotFoundError("模型回答不存在")
+
+        feedback_result = await db.execute(
+            select(UserFeedback)
+            .where(
+                UserFeedback.response_id == response_id,
+                UserFeedback.user_id == ANONYMOUS_USER_ID,
+                UserFeedback.feedback_type.in_(FEEDBACK_TYPES),
+            )
+            .order_by(UserFeedback.id.asc())
+        )
+        current_feedback = list(feedback_result.scalars().all())
+        selected_feedback = next(
+            (feedback for feedback in current_feedback if feedback.feedback_type == payload.feedback_type),
+            None,
+        )
+
+        active = True
+        if selected_feedback is not None:
+            for feedback in current_feedback:
+                await db.delete(feedback)
+            active = False
+        elif current_feedback:
+            primary_feedback = current_feedback[0]
+            primary_feedback.feedback_type = payload.feedback_type
+            primary_feedback.comment = payload.comment
+            for feedback in current_feedback[1:]:
+                await db.delete(feedback)
+        else:
+            db.add(
+                UserFeedback(
+                    user_id=ANONYMOUS_USER_ID,
+                    response_id=response_id,
+                    feedback_type=payload.feedback_type,
+                    comment=payload.comment,
+                )
+            )
+
+        await db.commit()
+        return FeedbackToggleRead(
+            responseId=response_id,
+            feedbackType=payload.feedback_type,
+            active=active,
+            feedback=await self._read_response_feedback(db, response_id),
+        )
 
     async def list_tasks(self, db: AsyncSession, page: int, page_size: int) -> EvaluationTaskListRead:
         normalized_page = max(page, 1)
@@ -143,50 +211,6 @@ class EvaluationService:
             pageSize=normalized_page_size,
         )
 
-    async def toggle_feedback(
-        self,
-        response_id: int,
-        feedback_type: str,
-        comment: str | None,
-        db: AsyncSession,
-    ) -> FeedbackToggleRead:
-        result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
-        if result.scalar_one_or_none() is None:
-            raise EvaluationTaskNotFoundError("模型回答不存在")
-
-        existing_result = await db.execute(
-            select(UserFeedback).where(
-                UserFeedback.response_id == response_id,
-                UserFeedback.feedback_type == feedback_type,
-                UserFeedback.user_id.is_(None),
-            )
-        )
-        existing_feedback = existing_result.scalar_one_or_none()
-
-        if existing_feedback is None:
-            db.add(
-                UserFeedback(
-                    user_id=None,
-                    response_id=response_id,
-                    feedback_type=feedback_type,
-                    comment=comment,
-                )
-            )
-            active = True
-        else:
-            await db.delete(existing_feedback)
-            active = False
-
-        await db.commit()
-        feedback = await self._feedback_summary(db, response_id)
-
-        return FeedbackToggleRead(
-            responseId=response_id,
-            feedbackType=feedback_type,
-            active=active,
-            feedback=feedback,
-        )
-
     async def _collect_model_responses(
         self,
         db: AsyncSession,
@@ -194,11 +218,13 @@ class EvaluationService:
         prompt: str,
         models: list[RuntimeModelConfig],
         extra_body: dict[str, object],
+        judge_model: RuntimeModelConfig | None,
     ) -> list[ModelResponseRead]:
         tasks = [self._call_model(prompt=prompt, model=model, extra_body=extra_body) for model in models]
         responses = await asyncio.gather(*tasks)
         persisted_responses = []
         for response in responses:
+            response = await self._apply_judge_score(prompt, response, judge_model)
             persisted_responses.append(await self._persist_response(db, task_id, response))
         return persisted_responses
 
@@ -276,6 +302,52 @@ class EvaluationService:
                 score=EvaluationScoreRead(**score),
             )
 
+    async def _resolve_judge_model(
+        self,
+        db: AsyncSession,
+        payload: EvaluationTaskCreate,
+    ) -> RuntimeModelConfig | None:
+        if not payload.enable_judge or payload.judge_model_id is None:
+            return None
+        return await model_config_service.resolve_runtime_model(db, payload.judge_model_id)
+
+    async def _apply_judge_score(
+        self,
+        prompt: str,
+        response: ModelResponseRead,
+        judge_model: RuntimeModelConfig | None,
+    ) -> ModelResponseRead:
+        if judge_model is None or response.status != "success":
+            return response
+
+        judge_result = await llm_judge_evaluator.evaluate(prompt=prompt, answer=response.answer, model=judge_model)
+        return response.model_copy(update={"score": self._merge_judge_score(response.score, judge_result)})
+
+    def _merge_judge_score(self, score: EvaluationScoreRead, judge_result: LLMJudgeResult) -> EvaluationScoreRead:
+        rule_final = score.rule_final if score.rule_final is not None else score.final
+        if judge_result.score is None:
+            return score.model_copy(
+                update={
+                    "final": round(rule_final, 2),
+                    "rule_final": round(rule_final, 2),
+                    "judge_final": None,
+                    "judge_comment": judge_result.comment,
+                    "judge_details": judge_result.details,
+                }
+            )
+
+        judge_final = round(judge_result.score, 2)
+        final = Decimal(str(rule_final)) * Decimal("0.60") + Decimal(str(judge_final)) * Decimal("0.40")
+        return score.model_copy(
+            update={
+                "final": float(round(final, 2)),
+                "rule_final": round(rule_final, 2),
+                "judge_final": judge_final,
+                "judge_comment": judge_result.comment,
+                "judge_details": judge_result.details,
+            }
+        )
+
     def _thinking_extra_body(self, payload: EvaluationTaskCreate) -> dict[str, object]:
         thinking_type = "enabled" if payload.enable_thinking else "disabled"
         return {"thinking": {"type": thinking_type}}
@@ -316,6 +388,7 @@ class EvaluationService:
         await db.flush()
 
         score = response.score
+        judge_comment = self._encode_judge_comment(score.judge_comment, score.judge_details)
         db.add(
             EvaluationResult(
                 response_id=response_record.id,
@@ -324,8 +397,10 @@ class EvaluationService:
                 clarity_score=Decimal(str(score.clarity)),
                 format_score=Decimal(str(score.format)),
                 safety_score=Decimal(str(score.safety)),
-                rule_score=Decimal(str(score.final)),
+                rule_score=Decimal(str(score.rule_final if score.rule_final is not None else score.final)),
+                judge_score=Decimal(str(score.judge_final)) if score.judge_final is not None else None,
                 final_score=Decimal(str(score.final)),
+                judge_comment=judge_comment,
             )
         )
         await db.commit()
@@ -369,6 +444,8 @@ class EvaluationService:
             taskId=task.id,
             status=task.status,
             prompt=task.prompt,
+            createdAt=task.created_at,
+            completedAt=task.completed_at,
             responses=[self._serialize_response(task.prompt, response) for response in responses],
         )
 
@@ -376,7 +453,7 @@ class EvaluationService:
         model_config = response.model_config
         provider = model_config.provider if model_config is not None else None
         answer = response.answer_text if response.status == "success" else response.error_message or response.answer_text
-        score = self._serialize_score(response.evaluation_result, prompt, response.answer_text)
+        score = self._serialize_score(response.evaluation_result, prompt=prompt, answer=response.answer_text)
 
         return ModelResponseRead(
             id=response.id,
@@ -392,10 +469,43 @@ class EvaluationService:
             feedback=self._serialize_feedback(response.feedback),
         )
 
+    async def _read_response_feedback(self, db: AsyncSession, response_id: int) -> EvaluationFeedbackRead:
+        result = await db.execute(select(UserFeedback).where(UserFeedback.response_id == response_id))
+        return self._serialize_feedback(list(result.scalars().all()))
+
+    def _serialize_feedback(
+        self,
+        feedback_records: list[UserFeedback],
+        user_id: int = ANONYMOUS_USER_ID,
+    ) -> EvaluationFeedbackRead:
+        like_count = sum(1 for feedback in feedback_records if feedback.feedback_type == "like")
+        dislike_count = sum(1 for feedback in feedback_records if feedback.feedback_type == "dislike")
+        return EvaluationFeedbackRead(
+            liked=any(
+                feedback.user_id == user_id and feedback.feedback_type == "like" for feedback in feedback_records
+            ),
+            disliked=any(
+                feedback.user_id == user_id and feedback.feedback_type == "dislike" for feedback in feedback_records
+            ),
+            likeCount=like_count,
+            dislikeCount=dislike_count,
+        )
+
     def _serialize_score(self, result: EvaluationResult | None, prompt: str = "", answer: str = "") -> EvaluationScoreRead:
         details = rule_evaluator.evaluate(prompt=prompt, answer=answer).get("details", {})
         if result is None:
-            return EvaluationScoreRead(relevance=0, completeness=0, clarity=0, format=0, safety=0, final=0, details=details)
+            return EvaluationScoreRead(
+                relevance=0,
+                completeness=0,
+                clarity=0,
+                format=0,
+                safety=0,
+                final=0,
+                details=details,
+                ruleFinal=0,
+            )
+
+        judge_comment, judge_details = self._decode_judge_comment(result.judge_comment)
 
         return EvaluationScoreRead(
             relevance=float(result.relevance_score),
@@ -405,33 +515,39 @@ class EvaluationService:
             safety=float(result.safety_score),
             final=float(result.final_score),
             details=details,
+            ruleFinal=float(result.rule_score),
+            judgeFinal=float(result.judge_score) if result.judge_score is not None else None,
+            judgeComment=judge_comment,
+            judgeDetails=judge_details,
         )
 
-    def _serialize_feedback(self, feedback_rows: list[UserFeedback]) -> EvaluationFeedbackRead:
-        like_count = sum(1 for feedback in feedback_rows if feedback.feedback_type == "like")
-        accepted_count = sum(1 for feedback in feedback_rows if feedback.feedback_type == "accepted")
-        return EvaluationFeedbackRead(
-            liked=like_count > 0,
-            accepted=accepted_count > 0,
-            likeCount=like_count,
-            acceptedCount=accepted_count,
-        )
+    def _encode_judge_comment(
+        self,
+        judge_comment: str | None,
+        judge_details: dict[str, list[str]],
+    ) -> str | None:
+        if judge_comment is None and not judge_details:
+            return None
+        return json.dumps({"comment": judge_comment, "details": judge_details}, ensure_ascii=False)
 
-    async def _feedback_summary(self, db: AsyncSession, response_id: int) -> EvaluationFeedbackRead:
-        result = await db.execute(
-            select(UserFeedback.feedback_type, func.count(UserFeedback.id))
-            .where(UserFeedback.response_id == response_id)
-            .group_by(UserFeedback.feedback_type)
-        )
-        counts = {feedback_type: int(count) for feedback_type, count in result.all()}
-        like_count = counts.get("like", 0)
-        accepted_count = counts.get("accepted", 0)
-        return EvaluationFeedbackRead(
-            liked=like_count > 0,
-            accepted=accepted_count > 0,
-            likeCount=like_count,
-            acceptedCount=accepted_count,
-        )
+    def _decode_judge_comment(self, value: str | None) -> tuple[str | None, dict[str, list[str]]]:
+        if not value:
+            return None, {}
+        try:
+            data = json.loads(value)
+        except json.JSONDecodeError:
+            return value, {}
+        if not isinstance(data, dict):
+            return value, {}
+
+        comment = data.get("comment")
+        details = data.get("details")
+        normalized_details: dict[str, list[str]] = {}
+        if isinstance(details, dict):
+            for key, items in details.items():
+                if isinstance(key, str) and isinstance(items, list):
+                    normalized_details[key] = [str(item) for item in items]
+        return comment if isinstance(comment, str) else None, normalized_details
 
 
 evaluation_service = EvaluationService()
