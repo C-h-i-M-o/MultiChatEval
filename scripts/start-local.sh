@@ -8,6 +8,10 @@ BACKEND_DIR="${PROJECT_ROOT}/backend"
 FRONTEND_DIR="${PROJECT_ROOT}/frontend"
 LOG_DIR="${PROJECT_ROOT}/logs"
 PYTHON_BIN="${PYTHON_BIN:-/opt/anaconda3/bin/python}"
+BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
+FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
+BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 BACKEND_PID=""
 FRONTEND_PID=""
@@ -29,16 +33,34 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+port_in_use() {
+  local port="$1"
+  lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+find_available_port() {
+  local port="$1"
+
+  while port_in_use "${port}"; do
+    warn "端口 ${port} 已被占用，尝试端口 $((port + 1))。" >&2
+    port=$((port + 1))
+  done
+
+  printf "%s" "${port}"
+}
+
 cleanup() {
   if [[ -n "${BACKEND_PID}" ]] && kill -0 "${BACKEND_PID}" >/dev/null 2>&1; then
     log "停止后端服务..."
     kill "${BACKEND_PID}" >/dev/null 2>&1 || true
   fi
+  BACKEND_PID=""
 
   if [[ -n "${FRONTEND_PID}" ]] && kill -0 "${FRONTEND_PID}" >/dev/null 2>&1; then
     log "停止前端服务..."
     kill "${FRONTEND_PID}" >/dev/null 2>&1 || true
   fi
+  FRONTEND_PID=""
 }
 
 require_command() {
@@ -109,19 +131,19 @@ run_migrations() {
 }
 
 start_backend() {
-  log "启动后端：http://127.0.0.1:8000"
+  log "启动后端：http://${BACKEND_HOST}:${BACKEND_PORT}"
   (
     cd "${BACKEND_DIR}"
-    .venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+    .venv/bin/python -m uvicorn app.main:app --reload --host "${BACKEND_HOST}" --port "${BACKEND_PORT}"
   ) >"${LOG_DIR}/backend.log" 2>&1 &
   BACKEND_PID="$!"
 }
 
 start_frontend() {
-  log "启动前端：http://127.0.0.1:5173"
+  log "启动前端：http://${FRONTEND_HOST}:${FRONTEND_PORT}"
   (
     cd "${FRONTEND_DIR}"
-    pnpm dev --host 127.0.0.1 --port 5173
+    VITE_BACKEND_TARGET="http://${BACKEND_HOST}:${BACKEND_PORT}" pnpm dev --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" --strictPort
   ) >"${LOG_DIR}/frontend.log" 2>&1 &
   FRONTEND_PID="$!"
 }
@@ -161,6 +183,8 @@ main() {
 
   prepare_backend
   prepare_frontend
+  BACKEND_PORT="$(find_available_port "${BACKEND_PORT}")"
+  FRONTEND_PORT="$(find_available_port "${FRONTEND_PORT}")"
   run_migrations
   start_backend
   start_frontend

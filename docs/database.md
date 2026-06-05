@@ -84,4 +84,10 @@ LLM Judge 第一版已复用现有字段，不新增表结构：
 
 ## user_feedback
 
-用户反馈表。用于保存点赞、点踩、采纳和评论。
+用户反馈表。用于保存点赞和点踩。
+
+- 匿名用户固定使用 `users.id = 0`，用户名为 `anonymous`。
+- 后续登录用户从 `users.id = 1` 开始自增。
+- `user_feedback.user_id` 对匿名反馈写入 `0`，不使用 `NULL`。
+- `user_id + response_id` 具备唯一约束，保证同一用户对同一回答只有一个当前反馈。
+- `feedback_type` 当前仅支持 `like` 和 `dislike`。

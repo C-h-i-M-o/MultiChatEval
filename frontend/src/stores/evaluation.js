@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 
-import { getEvaluationTask, listEvaluationTasks, streamEvaluationTask } from "../utils/api";
+import { getEvaluationTask, listEvaluationTasks, streamEvaluationTask, submitResponseFeedback } from "../utils/api";
 
 export const useEvaluationStore = defineStore("evaluation", {
   state: () => ({
@@ -14,7 +14,8 @@ export const useEvaluationStore = defineStore("evaluation", {
     historyLoading: false,
     historyErrorMessage: "",
     selectedHistoryTask: null,
-    historyDetailLoading: false
+    historyDetailLoading: false,
+    feedbackSubmittingIds: []
   }),
   actions: {
     async submitEvaluation(payload) {
@@ -89,6 +90,43 @@ export const useEvaluationStore = defineStore("evaluation", {
       } finally {
         this.historyDetailLoading = false;
       }
+    },
+    async submitFeedback(responseId, feedbackType) {
+      if (this.feedbackSubmittingIds.includes(responseId)) {
+        return null;
+      }
+
+      this.feedbackSubmittingIds = [...this.feedbackSubmittingIds, responseId];
+      try {
+        const result = await submitResponseFeedback(responseId, { feedbackType });
+        this.applyFeedbackResult(result);
+        return result;
+      } finally {
+        this.feedbackSubmittingIds = this.feedbackSubmittingIds.filter((item) => item !== responseId);
+      }
+    },
+    applyFeedbackResult(result) {
+      this.task = updateTaskResponseFeedback(this.task, result);
+      this.selectedHistoryTask = updateTaskResponseFeedback(this.selectedHistoryTask, result);
     }
   }
 });
+
+function updateTaskResponseFeedback(task, result) {
+  if (!task?.responses?.length) {
+    return task;
+  }
+
+  return {
+    ...task,
+    responses: task.responses.map((response) => {
+      if (response.id !== result.responseId) {
+        return response;
+      }
+      return {
+        ...response,
+        feedback: result.feedback
+      };
+    })
+  };
+}

@@ -66,8 +66,20 @@
     </div>
 
     <footer v-if="showActions && !response.pending" class="card-actions">
-      <el-button>采纳</el-button>
-      <el-button>点赞</el-button>
+      <el-button
+        :type="feedback.liked ? 'primary' : 'default'"
+        :loading="feedbackSubmitting"
+        @click="emitFeedback('like')"
+      >
+        点赞 {{ feedback.likeCount }}
+      </el-button>
+      <el-button
+        :type="feedback.disliked ? 'danger' : 'default'"
+        :loading="feedbackSubmitting"
+        @click="emitFeedback('dislike')"
+      >
+        点踩 {{ feedback.dislikeCount }}
+      </el-button>
       <el-button @click="detailVisible = true">详情</el-button>
     </footer>
 
@@ -110,6 +122,17 @@
           </ul>
         </article>
 
+        <article class="score-detail-item feedback-detail-item">
+          <header>
+            <span>用户反馈</span>
+            <strong>{{ feedbackSummaryText }}</strong>
+            <em>不计入当前评分</em>
+          </header>
+          <p>
+            点赞 {{ feedback.likeCount }} 次，点踩 {{ feedback.dislikeCount }} 次；当前匿名用户反馈为{{ currentFeedbackText }}。
+          </p>
+        </article>
+
         <div class="score-detail-list">
           <article v-for="dimension in scoreDimensions" :key="dimension.key" class="score-detail-item">
             <header>
@@ -145,8 +168,14 @@ const props = defineProps({
   showActions: {
     type: Boolean,
     default: false
+  },
+  feedbackSubmitting: {
+    type: Boolean,
+    default: false
   }
 });
+
+const emit = defineEmits(["feedback"]);
 
 const score = computed(() => {
   return props.response.score || {
@@ -164,6 +193,35 @@ const score = computed(() => {
 });
 
 const detailVisible = ref(false);
+
+const feedback = computed(() => {
+  return props.response.feedback || {
+    liked: false,
+    disliked: false,
+    likeCount: 0,
+    dislikeCount: 0
+  };
+});
+
+const feedbackSummaryText = computed(() => {
+  if (feedback.value.liked) {
+    return "已点赞";
+  }
+  if (feedback.value.disliked) {
+    return "已点踩";
+  }
+  return "未反馈";
+});
+
+const currentFeedbackText = computed(() => {
+  if (feedback.value.liked) {
+    return "点赞";
+  }
+  if (feedback.value.disliked) {
+    return "点踩";
+  }
+  return "未选择";
+});
 
 const scoreDimensions = computed(() => {
   const details = score.value.details || {};
@@ -210,5 +268,12 @@ function judgeDetailLabel(key) {
     dimensionScores: "维度分"
   };
   return labels[key] || key;
+}
+
+function emitFeedback(feedbackType) {
+  emit("feedback", {
+    responseId: props.response.id,
+    feedbackType
+  });
 }
 </script>

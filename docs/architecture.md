@@ -26,7 +26,7 @@ MySQL
 5. 规则评分器计算相关性、完整性、清晰度、格式符合度和安全性，并写入 `evaluation_results`。
 6. 可选启用 LLM Judge，使用用户单独指定的已配置模型对成功回答输出结构化 JSON 评分。
 7. 前端以自适应卡片、Markdown 回答内容、评分条和评分详情弹窗展示对比结果。
-8. 用户提交点赞、点踩、采纳或评论反馈。
+8. 用户在评测页或历史任务详情页提交点赞、点踩反馈，后端写入 `user_feedback`。
 
 ## 第一版边界
 
@@ -44,8 +44,8 @@ MySQL
 - `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，当前为反馈统计占位页。
 - 模型选择项从后端模型配置接口动态加载，直接显示具体模型名。
 - 结果卡片根据返回模型数量自适应布局。
-- `ModelResponseCard` 复用展示评测结果和历史任务详情中的模型回答、指标和评分条。
-- `ModelResponseCard` 的评分详情弹窗展示规则分、LLM Judge 分、最终分、维度权重和评审理由。
+- `ModelResponseCard` 复用展示评测结果和历史任务详情中的模型回答、指标、评分条和点赞/点踩按钮。
+- `ModelResponseCard` 的评分详情弹窗展示规则分、LLM Judge 分、最终分、维度权重、评审理由和用户反馈摘要。
 - 模型调用期间展示等待卡片、耗时计数和占位动画；单个模型完成后立即替换为真实回答卡片。
 - 评测表单提供全局“思考模式”开关，所有已选模型使用相同开关状态，不提供思考程度选择。
 - 评测表单提供“LLM 评审”开关，开启后必须选择一个已配置 API Key 的模型作为评审模型。
@@ -68,4 +68,6 @@ MySQL
 
 为了让前端尽早展示已完成模型，后端提供 `POST /api/evaluation/tasks/stream`。该接口使用 NDJSON 返回模型级事件，不做 token 级流式输出；旧的 `POST /api/evaluation/tasks` 仍保留一次性返回完整任务结果。
 
-两个创建接口都会写入真实任务、模型回答和评分结果。规则评分先计算本地 `rule_score`。LLM Judge 第一版参考 promptfoo、FastChat MT-Bench 和 OpenCompass 的做法，作为独立评审器叠加在规则评分之后：前端开启“LLM 评审”时必须选择一个评审模型，后端复用该模型的 OpenAI-compatible 配置，对每条成功回答要求输出 JSON，解析 `score`、优点、缺点、推荐理由和维度分。最终分为 `0.60 × 规则分 + 0.40 × Judge 分`；未启用 Judge 或 Judge 失败时最终分保留规则分，失败原因写入评分详情。`GET /api/evaluation/tasks` 提供分页历史列表，`GET /api/evaluation/tasks/{taskId}` 从数据库返回完整任务详情。
+两个创建接口都会写入真实任务、模型回答和评分结果。规则评分先计算本地 `rule_score`。LLM Judge 第一版参考 promptfoo、FastChat MT-Bench 和 OpenCompass 的做法，作为独立评审器叠加在规则评分之后：前端开启“LLM 评审”时必须选择一个评审模型，后端复用该模型的 OpenAI-compatible 配置，对每条成功回答要求输出 JSON，解析 `score`、优点、缺点、推荐理由和维度分。最终分为 `0.60 × 规则分 + 0.40 × Judge 分`；未启用 Judge 或 Judge 失败时最终分保留规则分，失败原因写入评分详情。`GET /api/evaluation/tasks` 提供分页历史列表，`GET /api/evaluation/tasks/{taskId}` 从数据库返回完整任务详情，并包含每条回答的点赞/点踩状态。
+
+用户反馈接口 `POST /api/evaluation/responses/{responseId}/feedback` 复用 `user_feedback` 表。匿名用户固定写入 `user_id = 0`；同一用户对同一回答只能保留一个当前反馈，重复点击相同类型会取消，点击另一类型会切换。当前反馈只用于展示和后续推荐基础数据，不参与 `final_score` 计算。

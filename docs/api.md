@@ -70,6 +70,8 @@ POST /api/evaluation/tasks
   "taskId": 1001,
   "status": "completed",
   "prompt": "帮我解释什么是设计模式",
+  "createdAt": null,
+  "completedAt": null,
   "responses": [
     {
       "id": 5001,
@@ -185,6 +187,8 @@ POST /api/evaluation/tasks/stream
     "taskId": 1,
     "status": "completed",
     "prompt": "帮我解释什么是设计模式",
+    "createdAt": null,
+    "completedAt": null,
     "responses": []
   }
 }
@@ -333,7 +337,7 @@ POST /api/model-configs/test
 GET /api/evaluation/tasks/{taskId}
 ```
 
-响应字段与创建评测任务一致，会从数据库读取任务、模型回答和规则评分。任务不存在时返回 404。
+响应字段与创建评测任务一致，会从数据库读取任务、模型回答和规则评分，并返回任务的 `createdAt` 与 `completedAt`。任务不存在时返回 404。
 
 ## 提交用户反馈
 
@@ -349,3 +353,28 @@ POST /api/evaluation/responses/{responseId}/feedback
   "comment": "这个回答更清楚"
 }
 ```
+
+`feedbackType` 仅支持：
+
+- `like`：点赞。
+- `dislike`：点踩。
+
+匿名用户统一使用 `user_id = 0`。同一用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。
+
+响应：
+
+```json
+{
+  "responseId": 12,
+  "feedbackType": "like",
+  "active": true,
+  "feedback": {
+    "liked": true,
+    "disliked": false,
+    "likeCount": 1,
+    "dislikeCount": 0
+  }
+}
+```
+
+回答不存在时返回 404。

@@ -543,6 +543,9 @@ h3 {
 }
 
 .card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-start;
 }
 
@@ -618,6 +621,10 @@ h3 {
   margin: 10px 0 0;
   color: #46575d;
   line-height: 1.7;
+}
+
+.feedback-detail-item strong {
+  color: #16565a;
 }
 
 .score-detail-item ul {
@@ -709,6 +716,36 @@ h3 {
 .history-response-list {
   display: grid;
   gap: 16px;
+}
+
+.history-empty-detail {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 220px;
+  padding: 28px;
+  border: 1px dashed rgba(229, 184, 93, 0.54);
+  border-radius: 8px;
+  background: rgba(255, 251, 238, 0.64);
+  color: #6d7c80;
+  text-align: center;
+}
+
+.history-empty-detail.timeout {
+  border-color: rgba(255, 103, 103, 0.54);
+  background: rgba(255, 245, 245, 0.72);
+}
+
+.history-empty-detail h4 {
+  margin: 6px 0 8px;
+  color: #17232a;
+  font-size: 18px;
+}
+
+.history-empty-detail p {
+  max-width: 420px;
+  margin: 0 0 14px;
+  line-height: 1.7;
 }
 
 .history-response-list {

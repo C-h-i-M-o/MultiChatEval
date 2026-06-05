@@ -9,6 +9,14 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'NO_AUTO_VALUE_ON_ZERO');
+
+INSERT INTO users (id, username, password_hash)
+VALUES (0, 'anonymous', 'anonymous')
+ON DUPLICATE KEY UPDATE username = VALUES(username), password_hash = VALUES(password_hash);
+
+ALTER TABLE users AUTO_INCREMENT = 1;
+
 CREATE TABLE IF NOT EXISTS conversations (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT NULL,
@@ -92,6 +100,7 @@ CREATE TABLE IF NOT EXISTS user_feedback (
   feedback_type VARCHAR(32) NOT NULL,
   comment TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_user_feedback_user_response (user_id, response_id),
   CONSTRAINT fk_user_feedback_user FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT fk_user_feedback_response FOREIGN KEY (response_id) REFERENCES model_responses(id)
 );

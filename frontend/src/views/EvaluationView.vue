@@ -98,7 +98,9 @@
         :key="response.id"
         :response="response"
         :elapsed-seconds="elapsedSeconds"
+        :feedback-submitting="store.feedbackSubmittingIds.includes(response.id)"
         show-actions
+        @feedback="handleFeedback"
       />
     </section>
   </section>
@@ -106,6 +108,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
 import ModelResponseCard from "../components/ModelResponseCard.vue";
@@ -246,6 +249,19 @@ async function submitTask() {
     enableThinking: enableThinking.value
   });
   stopWaitingTimer();
+}
+
+async function handleFeedback({ responseId, feedbackType }) {
+  try {
+    const result = await store.submitFeedback(responseId, feedbackType);
+    if (result?.active) {
+      ElMessage.success(feedbackType === "like" ? "已点赞" : "已点踩");
+    } else {
+      ElMessage.success("已取消反馈");
+    }
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || "用户反馈提交失败");
+  }
 }
 
 watch(enableJudge, (enabled) => {

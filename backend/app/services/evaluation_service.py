@@ -13,6 +13,7 @@ from app.adapters.base import ModelRequest
 from app.adapters.openai_compatible import OpenAICompatibleClient
 from app.core.config import settings
 from app.models.evaluation import EvaluationResult, EvaluationTask
+from app.models.feedback import UserFeedback
 from app.models.model_config import ModelConfig
 from app.models.response import ModelResponse
 from app.schemas.evaluation import (
@@ -22,6 +23,8 @@ from app.schemas.evaluation import (
     EvaluationTaskListItemRead,
     EvaluationTaskListRead,
     EvaluationTaskRead,
+    FeedbackCreate,
+    FeedbackToggleRead,
     ModelResponseRead,
 )
 from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
@@ -43,8 +46,15 @@ BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手�
 
 用户问题如下："""
 
+ANONYMOUS_USER_ID = 0
+FEEDBACK_TYPES = ("like", "dislike")
+
 
 class EvaluationTaskNotFoundError(Exception):
+    pass
+
+
+class EvaluationResponseNotFoundError(Exception):
     pass
 
 
@@ -111,6 +121,60 @@ class EvaluationService:
             raise EvaluationTaskNotFoundError("评测任务不存在")
 
         return self._serialize_task(task)
+
+    async def toggle_response_feedback(
+        self,
+        response_id: int,
+        payload: FeedbackCreate,
+        db: AsyncSession,
+    ) -> FeedbackToggleRead:
+        response_result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
+        if response_result.scalar_one_or_none() is None:
+            raise EvaluationResponseNotFoundError("模型回答不存在")
+
+        feedback_result = await db.execute(
+            select(UserFeedback)
+            .where(
+                UserFeedback.response_id == response_id,
+                UserFeedback.user_id == ANONYMOUS_USER_ID,
+                UserFeedback.feedback_type.in_(FEEDBACK_TYPES),
+            )
+            .order_by(UserFeedback.id.asc())
+        )
+        current_feedback = list(feedback_result.scalars().all())
+        selected_feedback = next(
+            (feedback for feedback in current_feedback if feedback.feedback_type == payload.feedback_type),
+            None,
+        )
+
+        active = True
+        if selected_feedback is not None:
+            for feedback in current_feedback:
+                await db.delete(feedback)
+            active = False
+        elif current_feedback:
+            primary_feedback = current_feedback[0]
+            primary_feedback.feedback_type = payload.feedback_type
+            primary_feedback.comment = payload.comment
+            for feedback in current_feedback[1:]:
+                await db.delete(feedback)
+        else:
+            db.add(
+                UserFeedback(
+                    user_id=ANONYMOUS_USER_ID,
+                    response_id=response_id,
+                    feedback_type=payload.feedback_type,
+                    comment=payload.comment,
+                )
+            )
+
+        await db.commit()
+        return FeedbackToggleRead(
+            responseId=response_id,
+            feedbackType=payload.feedback_type,
+            active=active,
+            feedback=await self._read_response_feedback(db, response_id),
+        )
 
     async def list_tasks(self, db: AsyncSession, page: int, page_size: int) -> EvaluationTaskListRead:
         normalized_page = max(page, 1)
@@ -371,6 +435,7 @@ class EvaluationService:
             .selectinload(ModelResponse.model_config)
             .selectinload(ModelConfig.provider),
             selectinload(EvaluationTask.responses).selectinload(ModelResponse.evaluation_result),
+            selectinload(EvaluationTask.responses).selectinload(ModelResponse.feedback),
         )
 
     def _serialize_task(self, task: EvaluationTask) -> EvaluationTaskRead:
@@ -379,6 +444,8 @@ class EvaluationService:
             taskId=task.id,
             status=task.status,
             prompt=task.prompt,
+            createdAt=task.created_at,
+            completedAt=task.completed_at,
             responses=[self._serialize_response(task.prompt, response) for response in responses],
         )
 
@@ -399,6 +466,29 @@ class EvaluationService:
             estimatedCost=float(response.estimated_cost),
             status=response.status,
             score=score,
+            feedback=self._serialize_feedback(response.feedback),
+        )
+
+    async def _read_response_feedback(self, db: AsyncSession, response_id: int) -> EvaluationFeedbackRead:
+        result = await db.execute(select(UserFeedback).where(UserFeedback.response_id == response_id))
+        return self._serialize_feedback(list(result.scalars().all()))
+
+    def _serialize_feedback(
+        self,
+        feedback_records: list[UserFeedback],
+        user_id: int = ANONYMOUS_USER_ID,
+    ) -> EvaluationFeedbackRead:
+        like_count = sum(1 for feedback in feedback_records if feedback.feedback_type == "like")
+        dislike_count = sum(1 for feedback in feedback_records if feedback.feedback_type == "dislike")
+        return EvaluationFeedbackRead(
+            liked=any(
+                feedback.user_id == user_id and feedback.feedback_type == "like" for feedback in feedback_records
+            ),
+            disliked=any(
+                feedback.user_id == user_id and feedback.feedback_type == "dislike" for feedback in feedback_records
+            ),
+            likeCount=like_count,
+            dislikeCount=dislike_count,
         )
 
     def _serialize_score(self, result: EvaluationResult | None, prompt: str = "", answer: str = "") -> EvaluationScoreRead:

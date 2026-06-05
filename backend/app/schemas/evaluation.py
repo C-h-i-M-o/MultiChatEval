@@ -41,9 +41,9 @@ class EvaluationScoreRead(BaseModel):
 
 class EvaluationFeedbackRead(BaseModel):
     liked: bool = False
-    accepted: bool = False
     like_count: int = Field(default=0, alias="likeCount")
-    accepted_count: int = Field(default=0, alias="acceptedCount")
+    disliked: bool = False
+    dislike_count: int = Field(default=0, alias="dislikeCount")
 
 
 class ModelResponseRead(BaseModel):
@@ -64,6 +64,8 @@ class EvaluationTaskRead(BaseModel):
     task_id: int = Field(alias="taskId")
     status: str
     prompt: str
+    created_at: datetime | None = Field(default=None, alias="createdAt")
+    completed_at: datetime | None = Field(default=None, alias="completedAt")
     responses: list[ModelResponseRead]
 
 
@@ -84,12 +86,12 @@ class EvaluationTaskListRead(BaseModel):
 
 
 class FeedbackCreate(BaseModel):
-    feedback_type: Literal["like", "accepted"] = Field(alias="feedbackType")
+    feedback_type: Literal["like", "dislike"] = Field(alias="feedbackType")
     comment: str | None = None
 
 
 class FeedbackToggleRead(BaseModel):
     response_id: int = Field(alias="responseId")
-    feedback_type: Literal["like", "accepted"] = Field(alias="feedbackType")
+    feedback_type: Literal["like", "dislike"] = Field(alias="feedbackType")
     active: bool
     feedback: EvaluationFeedbackRead

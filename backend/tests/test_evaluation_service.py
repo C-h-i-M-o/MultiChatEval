@@ -5,15 +5,53 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.evaluation import EvaluationScoreRead, EvaluationTaskCreate, ModelResponseRead
+from app.schemas.evaluation import EvaluationScoreRead, EvaluationTaskCreate, FeedbackCreate, ModelResponseRead
 from app.models.evaluation import EvaluationResult
-from app.services.evaluation_service import evaluation_service
+from app.models.feedback import UserFeedback
+from app.services.evaluation_service import EvaluationResponseNotFoundError, evaluation_service
 from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
 from app.services.model_config_service import RuntimeModelConfig, model_config_service
 
 
 class FakeDb:
     pass
+
+
+class FakeScalarResult:
+    def __init__(self, items: list[object]) -> None:
+        self.items = items
+
+    def scalar_one_or_none(self) -> object | None:
+        return self.items[0] if self.items else None
+
+    def scalars(self) -> "FakeScalarResult":
+        return self
+
+    def all(self) -> list[object]:
+        return self.items
+
+
+class FakeFeedbackDb:
+    def __init__(self, response_exists: bool = True, feedback_records: list[UserFeedback] | None = None) -> None:
+        self.response_exists = response_exists
+        self.feedback_records = feedback_records or []
+        self.committed = False
+
+    async def execute(self, statement: object) -> FakeScalarResult:
+        entity = statement.column_descriptions[0].get("entity")
+        if entity is UserFeedback:
+            return FakeScalarResult(sorted(self.feedback_records, key=lambda feedback: feedback.id or 0))
+        return FakeScalarResult([44] if self.response_exists else [])
+
+    def add(self, feedback: UserFeedback) -> None:
+        feedback.id = len(self.feedback_records) + 1
+        self.feedback_records.append(feedback)
+
+    async def delete(self, feedback: UserFeedback) -> None:
+        self.feedback_records = [item for item in self.feedback_records if item is not feedback]
+
+    async def commit(self) -> None:
+        self.committed = True
 
 
 def make_runtime_model(model_id: int, display_name: str) -> RuntimeModelConfig:
@@ -94,6 +132,14 @@ def test_enable_judge_requires_judge_model_id() -> None:
         EvaluationTaskCreate(prompt="你好", modelIds=[1], enableJudge=True)
 
 
+def test_feedback_create_allows_like_and_dislike_only() -> None:
+    assert FeedbackCreate(feedbackType="like").feedback_type == "like"
+    assert FeedbackCreate(feedbackType="dislike").feedback_type == "dislike"
+
+    with pytest.raises(ValidationError):
+        FeedbackCreate(feedbackType="accepted")
+
+
 def test_score_defaults_rule_final_to_final_without_judge() -> None:
     score = EvaluationScoreRead(
         relevance=8,
@@ -126,6 +172,74 @@ def test_serialize_score_rebuilds_rule_details_for_history() -> None:
     )
 
     assert score.details["format"]
+
+
+def test_serialize_feedback_uses_anonymous_user_state_and_counts() -> None:
+    feedback = evaluation_service._serialize_feedback(
+        [
+            UserFeedback(id=1, user_id=0, response_id=44, feedback_type="like"),
+            UserFeedback(id=2, user_id=2, response_id=44, feedback_type="like"),
+            UserFeedback(id=3, user_id=3, response_id=44, feedback_type="dislike"),
+        ]
+    )
+
+    assert feedback.liked is True
+    assert feedback.disliked is False
+    assert feedback.like_count == 2
+    assert feedback.dislike_count == 1
+
+
+@pytest.mark.asyncio
+async def test_toggle_response_feedback_creates_anonymous_like() -> None:
+    db = FakeFeedbackDb()
+
+    result = await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+
+    assert result.active is True
+    assert result.feedback.liked is True
+    assert result.feedback.like_count == 1
+    assert db.feedback_records[0].user_id == 0
+    assert db.feedback_records[0].feedback_type == "like"
+    assert db.committed is True
+
+
+@pytest.mark.asyncio
+async def test_toggle_response_feedback_cancels_same_type() -> None:
+    db = FakeFeedbackDb(
+        feedback_records=[UserFeedback(id=1, user_id=0, response_id=44, feedback_type="like")]
+    )
+
+    result = await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+
+    assert result.active is False
+    assert result.feedback.liked is False
+    assert result.feedback.like_count == 0
+    assert db.feedback_records == []
+
+
+@pytest.mark.asyncio
+async def test_toggle_response_feedback_switches_between_like_and_dislike() -> None:
+    db = FakeFeedbackDb(
+        feedback_records=[UserFeedback(id=1, user_id=0, response_id=44, feedback_type="dislike")]
+    )
+
+    result = await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+
+    assert result.active is True
+    assert result.feedback.liked is True
+    assert result.feedback.disliked is False
+    assert result.feedback.like_count == 1
+    assert result.feedback.dislike_count == 0
+    assert len(db.feedback_records) == 1
+    assert db.feedback_records[0].feedback_type == "like"
+
+
+@pytest.mark.asyncio
+async def test_toggle_response_feedback_requires_existing_response() -> None:
+    db = FakeFeedbackDb(response_exists=False)
+
+    with pytest.raises(EvaluationResponseNotFoundError):
+        await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
 
 
 @pytest.mark.asyncio
