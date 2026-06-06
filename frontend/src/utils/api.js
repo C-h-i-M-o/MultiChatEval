@@ -30,6 +30,25 @@ export async function submitResponseFeedback(responseId, payload) {
   return response.data;
 }
 
+export async function listResponseComments(responseId, { page, pageSize }) {
+  const response = await api.get(`/evaluation/responses/${responseId}/comments`, {
+    params: {
+      page,
+      pageSize
+    }
+  });
+  return response.data;
+}
+
+export async function createResponseComment(responseId, payload) {
+  const response = await api.post(`/evaluation/responses/${responseId}/comments`, payload);
+  return response.data;
+}
+
+export async function deleteResponseComment(commentId) {
+  await api.delete(`/evaluation/comments/${commentId}`);
+}
+
 export async function streamEvaluationTask(payload, onEvent) {
   const response = await fetch("/api/evaluation/tasks/stream", {
     method: "POST",

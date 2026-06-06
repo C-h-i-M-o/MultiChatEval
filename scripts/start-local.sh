@@ -112,17 +112,13 @@ prepare_backend() {
     "${PYTHON_BIN}" -m venv "${BACKEND_DIR}/.venv"
   fi
 
-  if ! "${venv_python}" -c "import cryptography, fastapi, uvicorn, sqlalchemy, httpx, greenlet" >/dev/null 2>&1; then
-    log "安装后端依赖..."
-    (cd "${BACKEND_DIR}" && "${venv_python}" -m pip install -e ".[dev]")
-  fi
+  log "校验并安装后端依赖..."
+  (cd "${BACKEND_DIR}" && "${venv_python}" -m pip install -e ".[dev]")
 }
 
 prepare_frontend() {
-  if [[ ! -d "${FRONTEND_DIR}/node_modules" ]]; then
-    log "安装前端依赖..."
-    (cd "${FRONTEND_DIR}" && pnpm install)
-  fi
+  log "按锁文件校验并安装前端依赖..."
+  (cd "${FRONTEND_DIR}" && pnpm install --frozen-lockfile)
 }
 
 run_migrations() {
@@ -146,6 +142,24 @@ start_frontend() {
     VITE_BACKEND_TARGET="http://${BACKEND_HOST}:${BACKEND_PORT}" pnpm dev --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" --strictPort
   ) >"${LOG_DIR}/frontend.log" 2>&1 &
   FRONTEND_PID="$!"
+}
+
+wait_for_url() {
+  local name="$1"
+  local url="$2"
+  local retries=30
+
+  log "等待${name}就绪..."
+  while (( retries > 0 )); do
+    if curl --fail --silent --show-error "${url}" >/dev/null 2>&1; then
+      log "${name}已就绪：${url}"
+      return 0
+    fi
+    retries=$((retries - 1))
+    sleep 1
+  done
+
+  fail "${name}在 30 秒内未就绪，请检查 ${LOG_DIR} 下的日志。"
 }
 
 watch_processes() {
@@ -173,6 +187,12 @@ main() {
 
   require_command docker "请先安装 Docker Desktop 并启动 Docker。"
   require_command pnpm "请先安装 pnpm。"
+  require_command lsof "请先安装 lsof。"
+  require_command curl "请先安装 curl。"
+
+  if ! docker compose version >/dev/null 2>&1; then
+    fail "当前 Docker 未提供 Compose 插件，请安装或升级 Docker Desktop。"
+  fi
 
   mkdir -p "${LOG_DIR}"
   prepare_env_file
@@ -187,7 +207,9 @@ main() {
   FRONTEND_PORT="$(find_available_port "${FRONTEND_PORT}")"
   run_migrations
   start_backend
+  wait_for_url "后端服务" "http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
   start_frontend
+  wait_for_url "前端服务" "http://${FRONTEND_HOST}:${FRONTEND_PORT}"
   watch_processes
 }
 

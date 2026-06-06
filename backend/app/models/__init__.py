@@ -1,3 +1,4 @@
+from app.models.comment import UserComment
 from app.models.conversation import Conversation
 from app.models.evaluation import EvaluationResult, EvaluationTask
 from app.models.feedback import UserFeedback
@@ -13,5 +14,6 @@ __all__ = [
     "ModelProvider",
     "ModelResponse",
     "User",
+    "UserComment",
     "UserFeedback",
 ]

@@ -104,6 +104,10 @@ POST /api/evaluation/tasks
         "clarity": 8,
         "format": 8,
         "safety": 10,
+        "ruleFinal": 8.4,
+        "judgeFinal": null,
+        "baseFinal": 8.4,
+        "feedbackScore": null,
         "final": 8.4,
         "details": {
           "relevance": ["字符 n-gram 相似度 0.58", "覆盖解释意图", "回答聚焦于用户问题"],
@@ -111,7 +115,9 @@ POST /api/evaluation/tasks
           "clarity": ["使用换行分隔内容"],
           "format": ["未指定格式，回答使用了可读结构"],
           "safety": ["未命中明显危险输出", "未发现拒答质量风险", "未涉及高风险专业建议"]
-        }
+        },
+        "judgeComment": null,
+        "judgeDetails": {}
       },
       "feedback": {
         "liked": false,
@@ -167,6 +173,10 @@ POST /api/evaluation/tasks/stream
         "clarity": 8,
         "format": 8,
         "safety": 10,
+        "ruleFinal": 8.4,
+        "judgeFinal": null,
+        "baseFinal": 8.4,
+        "feedbackScore": null,
         "final": 8.4,
         "details": {
           "relevance": ["字符 n-gram 相似度 0.58", "覆盖解释意图", "回答聚焦于用户问题"],
@@ -174,7 +184,9 @@ POST /api/evaluation/tasks/stream
           "clarity": ["使用换行分隔内容"],
           "format": ["未指定格式，回答使用了可读结构"],
           "safety": ["未命中明显危险输出", "未发现拒答质量风险", "未涉及高风险专业建议"]
-        }
+        },
+        "judgeComment": null,
+        "judgeDetails": {}
       },
       "feedback": {
         "liked": false,
@@ -357,8 +369,7 @@ POST /api/evaluation/responses/{responseId}/feedback
 
 ```json
 {
-  "feedbackType": "like",
-  "comment": "这个回答更清楚"
+  "feedbackType": "like"
 }
 ```
 
@@ -368,6 +379,18 @@ POST /api/evaluation/responses/{responseId}/feedback
 - `dislike`：点踩
 
 该接口采用互斥状态式切换语义。同一匿名用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。当前匿名用户固定写入 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
+
+反馈提交后会重算并持久化最终分：
+
+```text
+baseFinal = ruleFinal                           # 未启用或未得到有效 Judge 分
+baseFinal = ruleFinal * 0.60 + judgeFinal * 0.40
+feedbackScore = 10 * likeCount / (likeCount + dislikeCount)
+final = baseFinal                               # 暂无反馈
+final = baseFinal * 0.90 + feedbackScore * 0.10 # 已有反馈
+```
+
+评论不通过该接口提交，也不参与评分。
 
 响应：
 
@@ -381,8 +404,92 @@ POST /api/evaluation/responses/{responseId}/feedback
     "disliked": false,
     "likeCount": 1,
     "dislikeCount": 0
+  },
+  "score": {
+    "relevance": 8,
+    "completeness": 8,
+    "clarity": 8,
+    "format": 8,
+    "safety": 10,
+    "ruleFinal": 8.4,
+    "judgeFinal": null,
+    "baseFinal": 8.4,
+    "feedbackScore": 10,
+    "final": 8.56,
+    "details": {},
+    "judgeComment": null,
+    "judgeDetails": {}
   }
 }
 ```
 
 当 `responseId` 不存在时返回 404；当 `feedbackType` 不是 `like` 或 `dislike` 时返回 422。
+
+## 查询回答评论
+
+```http
+GET /api/evaluation/responses/{responseId}/comments?page=1&pageSize=20
+```
+
+评论按 `created_at desc, id desc` 返回。`pageSize` 取值范围为 1–100。
+
+响应：
+
+```json
+{
+  "items": [
+    {
+      "id": 301,
+      "responseId": 5001,
+      "userId": 0,
+      "username": "anonymous",
+      "content": "这个回答的步骤很清楚。",
+      "createdAt": "2026-06-06T10:30:00",
+      "canDelete": true
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+回答不存在时返回 404。
+
+## 发布回答评论
+
+```http
+POST /api/evaluation/responses/{responseId}/comments
+```
+
+请求：
+
+```json
+{
+  "content": "这个回答的步骤很清楚。"
+}
+```
+
+评论会去除首尾空白，正文长度限制为 1–1000 个字符。每个用户可以对同一回答发布多条评论。成功时返回新建评论，回答不存在时返回 404，正文为空或超长时返回 422。
+
+成功响应：
+
+```json
+{
+  "id": 301,
+  "responseId": 5001,
+  "userId": 0,
+  "username": "anonymous",
+  "content": "这个回答的步骤很清楚。",
+  "createdAt": "2026-06-06T10:30:00",
+  "canDelete": true
+}
+```
+
+## 删除回答评论
+
+```http
+DELETE /api/evaluation/comments/{commentId}
+```
+
+只能删除当前用户自己的评论。成功时返回 `204 No Content`；评论不存在或不属于当前用户时返回 404。

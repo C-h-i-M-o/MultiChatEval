@@ -26,3 +26,4 @@ class ModelResponse(Base):
     model_config = relationship("ModelConfig", back_populates="responses")
     evaluation_result = relationship("EvaluationResult", back_populates="response", uselist=False)
     feedback = relationship("UserFeedback", back_populates="response")
+    comments = relationship("UserComment", back_populates="response")

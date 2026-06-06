@@ -12,11 +12,16 @@ from sqlalchemy.orm import selectinload
 from app.adapters.base import ModelRequest
 from app.adapters.openai_compatible import OpenAICompatibleClient
 from app.core.config import settings
+from app.models.comment import UserComment
 from app.models.evaluation import EvaluationResult, EvaluationTask
 from app.models.feedback import UserFeedback
 from app.models.model_config import ModelConfig
 from app.models.response import ModelResponse
+from app.models.user import User
 from app.schemas.evaluation import (
+    CommentCreate,
+    CommentListRead,
+    CommentRead,
     EvaluationFeedbackRead,
     EvaluationScoreRead,
     EvaluationTaskCreate,
@@ -55,6 +60,10 @@ class EvaluationTaskNotFoundError(Exception):
 
 
 class EvaluationResponseNotFoundError(Exception):
+    pass
+
+
+class EvaluationCommentNotFoundError(Exception):
     pass
 
 
@@ -128,8 +137,16 @@ class EvaluationService:
         payload: FeedbackCreate,
         db: AsyncSession,
     ) -> FeedbackToggleRead:
-        response_result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
-        if response_result.scalar_one_or_none() is None:
+        response_result = await db.execute(
+            select(ModelResponse)
+            .options(
+                selectinload(ModelResponse.task),
+                selectinload(ModelResponse.evaluation_result),
+            )
+            .where(ModelResponse.id == response_id)
+        )
+        response_record = response_result.scalar_one_or_none()
+        if response_record is None:
             raise EvaluationResponseNotFoundError("模型回答不存在")
 
         feedback_result = await db.execute(
@@ -155,7 +172,6 @@ class EvaluationService:
         elif current_feedback:
             primary_feedback = current_feedback[0]
             primary_feedback.feedback_type = payload.feedback_type
-            primary_feedback.comment = payload.comment
             for feedback in current_feedback[1:]:
                 await db.delete(feedback)
         else:
@@ -164,17 +180,84 @@ class EvaluationService:
                     user_id=ANONYMOUS_USER_ID,
                     response_id=response_id,
                     feedback_type=payload.feedback_type,
-                    comment=payload.comment,
                 )
             )
 
+        await db.flush()
+        feedback = await self._read_response_feedback(db, response_id)
+        score = self._recalculate_final_score(response_record, feedback)
         await db.commit()
         return FeedbackToggleRead(
             responseId=response_id,
             feedbackType=payload.feedback_type,
             active=active,
-            feedback=await self._read_response_feedback(db, response_id),
+            feedback=feedback,
+            score=score,
         )
+
+    async def list_response_comments(
+        self,
+        response_id: int,
+        db: AsyncSession,
+        page: int,
+        page_size: int,
+    ) -> CommentListRead:
+        await self._require_response(db, response_id)
+        normalized_page = max(page, 1)
+        normalized_page_size = min(max(page_size, 1), 100)
+        offset = (normalized_page - 1) * normalized_page_size
+
+        total_result = await db.execute(
+            select(func.count(UserComment.id)).where(UserComment.response_id == response_id)
+        )
+        total = int(total_result.scalar_one())
+        comments_result = await db.execute(
+            select(UserComment, User.username)
+            .join(User, User.id == UserComment.user_id)
+            .where(UserComment.response_id == response_id)
+            .order_by(UserComment.created_at.desc(), UserComment.id.desc())
+            .offset(offset)
+            .limit(normalized_page_size)
+        )
+        return CommentListRead(
+            items=[
+                self._serialize_comment(comment, username)
+                for comment, username in comments_result.all()
+            ],
+            total=total,
+            page=normalized_page,
+            pageSize=normalized_page_size,
+        )
+
+    async def create_response_comment(
+        self,
+        response_id: int,
+        payload: CommentCreate,
+        db: AsyncSession,
+    ) -> CommentRead:
+        await self._require_response(db, response_id)
+        comment = UserComment(
+            user_id=ANONYMOUS_USER_ID,
+            response_id=response_id,
+            content=payload.content,
+        )
+        db.add(comment)
+        await db.commit()
+        await db.refresh(comment)
+        return self._serialize_comment(comment, "anonymous")
+
+    async def delete_response_comment(self, comment_id: int, db: AsyncSession) -> None:
+        result = await db.execute(
+            select(UserComment).where(
+                UserComment.id == comment_id,
+                UserComment.user_id == ANONYMOUS_USER_ID,
+            )
+        )
+        comment = result.scalar_one_or_none()
+        if comment is None:
+            raise EvaluationCommentNotFoundError("评论不存在")
+        await db.delete(comment)
+        await db.commit()
 
     async def list_tasks(self, db: AsyncSession, page: int, page_size: int) -> EvaluationTaskListRead:
         normalized_page = max(page, 1)
@@ -331,6 +414,7 @@ class EvaluationService:
                     "final": round(rule_final, 2),
                     "rule_final": round(rule_final, 2),
                     "judge_final": None,
+                    "base_final": round(rule_final, 2),
                     "judge_comment": judge_result.comment,
                     "judge_details": judge_result.details,
                 }
@@ -343,6 +427,7 @@ class EvaluationService:
                 "final": float(round(final, 2)),
                 "rule_final": round(rule_final, 2),
                 "judge_final": judge_final,
+                "base_final": float(round(final, 2)),
                 "judge_comment": judge_result.comment,
                 "judge_details": judge_result.details,
             }
@@ -453,7 +538,13 @@ class EvaluationService:
         model_config = response.model_config
         provider = model_config.provider if model_config is not None else None
         answer = response.answer_text if response.status == "success" else response.error_message or response.answer_text
-        score = self._serialize_score(response.evaluation_result, prompt=prompt, answer=response.answer_text)
+        feedback = self._serialize_feedback(response.feedback)
+        score = self._serialize_score(
+            response.evaluation_result,
+            prompt=prompt,
+            answer=response.answer_text,
+            feedback=feedback,
+        )
 
         return ModelResponseRead(
             id=response.id,
@@ -466,7 +557,7 @@ class EvaluationService:
             estimatedCost=float(response.estimated_cost),
             status=response.status,
             score=score,
-            feedback=self._serialize_feedback(response.feedback),
+            feedback=feedback,
         )
 
     async def _read_response_feedback(self, db: AsyncSession, response_id: int) -> EvaluationFeedbackRead:
@@ -491,7 +582,13 @@ class EvaluationService:
             dislikeCount=dislike_count,
         )
 
-    def _serialize_score(self, result: EvaluationResult | None, prompt: str = "", answer: str = "") -> EvaluationScoreRead:
+    def _serialize_score(
+        self,
+        result: EvaluationResult | None,
+        prompt: str = "",
+        answer: str = "",
+        feedback: EvaluationFeedbackRead | None = None,
+    ) -> EvaluationScoreRead:
         details = rule_evaluator.evaluate(prompt=prompt, answer=answer).get("details", {})
         if result is None:
             return EvaluationScoreRead(
@@ -503,9 +600,12 @@ class EvaluationService:
                 final=0,
                 details=details,
                 ruleFinal=0,
+                baseFinal=0,
             )
 
         judge_comment, judge_details = self._decode_judge_comment(result.judge_comment)
+        base_final = self._base_final(result)
+        feedback_score = self._feedback_score(feedback)
 
         return EvaluationScoreRead(
             relevance=float(result.relevance_score),
@@ -517,8 +617,63 @@ class EvaluationService:
             details=details,
             ruleFinal=float(result.rule_score),
             judgeFinal=float(result.judge_score) if result.judge_score is not None else None,
+            baseFinal=base_final,
+            feedbackScore=feedback_score,
             judgeComment=judge_comment,
             judgeDetails=judge_details,
+        )
+
+    def _recalculate_final_score(
+        self,
+        response: ModelResponse,
+        feedback: EvaluationFeedbackRead,
+    ) -> EvaluationScoreRead:
+        result = response.evaluation_result
+        if result is None:
+            return self._serialize_score(None, prompt=response.task.prompt, answer=response.answer_text)
+
+        base_final = self._base_final(result)
+        feedback_score = self._feedback_score(feedback)
+        final = base_final
+        if feedback_score is not None:
+            final = round(base_final * 0.90 + feedback_score * 0.10, 2)
+        result.final_score = Decimal(str(final))
+        return self._serialize_score(
+            result,
+            prompt=response.task.prompt,
+            answer=response.answer_text,
+            feedback=feedback,
+        )
+
+    def _base_final(self, result: EvaluationResult) -> float:
+        rule_final = Decimal(str(result.rule_score))
+        if result.judge_score is None:
+            return float(round(rule_final, 2))
+        base_final = rule_final * Decimal("0.60") + Decimal(str(result.judge_score)) * Decimal("0.40")
+        return float(round(base_final, 2))
+
+    def _feedback_score(self, feedback: EvaluationFeedbackRead | None) -> float | None:
+        if feedback is None:
+            return None
+        total = feedback.like_count + feedback.dislike_count
+        if total == 0:
+            return None
+        return round(10 * feedback.like_count / total, 2)
+
+    async def _require_response(self, db: AsyncSession, response_id: int) -> None:
+        result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
+        if result.scalar_one_or_none() is None:
+            raise EvaluationResponseNotFoundError("模型回答不存在")
+
+    def _serialize_comment(self, comment: UserComment, username: str) -> CommentRead:
+        return CommentRead(
+            id=comment.id,
+            responseId=comment.response_id,
+            userId=comment.user_id,
+            username=username,
+            content=comment.content,
+            createdAt=comment.created_at,
+            canDelete=comment.user_id == ANONYMOUS_USER_ID,
         )
 
     def _encode_judge_comment(

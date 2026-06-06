@@ -4,10 +4,22 @@
 
 本项目用于课程设计，目标不是判断“哪个 AI 一定最好”，而是通过多模型并发回答、客观指标、规则评分、可选 LLM 评审和用户反馈，帮助用户结构化比较不同模型的回答质量。
 
+## Demo v1 状态
+
+当前版本为可发布的 **demo-v1**，核心评测闭环已经完成：
+
+- 数据库模型配置与 API Key 管理。
+- 多模型并发调用和模型级渐进展示。
+- 本地规则评分与可选 LLM Judge。
+- 点赞/点踩反馈计分、公开评论和历史任务查询。
+- MySQL 持久化、Alembic 迁移和一键启动脚本。
+
+反馈统计页面暂不对 demo-v1 用户展示；对应能力将在后续版本实现。
+
 ## 技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts、Markdown-it、DOMPurify
+- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify
 - 数据库：MySQL 8
 - 本地环境：Docker Compose
 
@@ -41,6 +53,15 @@ MultiChatEval/
 ```
 
 脚本会自动检查 `.env`、启动 MySQL、准备后端虚拟环境、安装后端和前端依赖、执行 Alembic 数据库迁移，并同时启动后端与前端开发服务。按 `Ctrl+C` 可以停止本次启动的后端和前端进程。
+
+运行前请确保已经安装并启动：
+
+- Docker Desktop（包含 Docker Compose）。
+- Python 3.11 或更高版本。
+- Node.js 与 pnpm。
+- macOS 自带的 `curl` 和 `lsof`。
+
+脚本会按 `backend/pyproject.toml` 和 `frontend/pnpm-lock.yaml` 校验依赖，并在前后端真实可访问后才提示启动完成。
 
 如果默认端口已被占用，脚本会自动向后寻找可用端口，并把实际后端地址同步给 Vite 代理。也可以通过 `BACKEND_PORT=8001 FRONTEND_PORT=5174 ./scripts/start-local.sh` 指定起始端口。
 
@@ -76,7 +97,7 @@ http://localhost:8000
 
 ```bash
 cd frontend
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
@@ -95,22 +116,21 @@ http://localhost:5173
 3. OpenAI-compatible 适配器并发调用真实模型。
 4. 每个模型返回后立即以模型级渐进结果展示到前端。
 5. 记录回答耗时、输出 token、成本估算和错误状态。
-6. 执行规则评分并展示评分条和评分详情。
+6. 执行规则评分，可选启用 LLM Judge，并展示评分条和评分详情。
 7. 支持全局“思考模式”开关。
-8. 将评测任务、模型回答、规则评分和点赞/点踩反馈保存到 MySQL，并支持分页查看历史任务。
-9. 历史任务详情会正确展示超时未完成状态，并在暂无回答时显示明确说明。
+8. 将评测任务、模型回答、评分、点赞/点踩和公开评论保存到 MySQL，并支持分页查看历史任务。
+9. 点赞/点踩以 10% 权重计入最终分；没有反馈时保持基础分不变。
+10. 历史任务详情会正确展示超时未完成状态，并在暂无回答时显示明确说明。
 
 当前仍不做逐字 token 流式输出；`/api/evaluation/tasks/stream` 是模型级渐进返回，即一个模型完整回答完成后立刻展示。
 
-尚未完成的重点能力包括：
-
-- 反馈统计和模型推荐。
+demo-v1 之后计划继续实现用户登录、反馈统计、模型推荐、评论治理、评测报告导出、批量评测数据集和运行监控。
 
 ## 前端展示能力
 
 当前前端已经支持：
 
-- 使用多路由结构组织页面：`/` 为对比评测，`/models` 为模型配置，`/history` 为历史任务，`/feedback` 为反馈统计占位页。
+- 使用多路由结构组织页面：`/` 为对比评测，`/models` 为模型配置，`/history` 为历史任务。
 - 按实际模型名称展示模型选择项和结果卡片，例如 `deepseek-v4-flash`、`MiniMax-M2.5`、`glm-4.7`。
 - 根据模型数量自适应卡片布局：单模型占满整行，双模型并排，三模型三列展示。
 - 模型请求期间展示等待卡片、等待秒数和占位动画；某个模型先完成时，会立即替换成真实回答卡片。
@@ -119,9 +139,11 @@ http://localhost:5173
 - 使用 DOMPurify 清洗渲染后的 HTML，降低 Markdown 内容带来的 XSS 风险。
 - 自动识别 `<think>...</think>` 内容，并折叠到“思考过程”面板中，正式回答单独展示。
 - 侧边栏“历史任务”入口支持分页查看历史评测，并加载完整回答和评分详情。
-- 结果卡片支持点赞、点踩和详情弹窗，反馈会真实写入或取消写入 `user_feedback`。
+- Element Plus 使用中文语言配置，历史任务分页容量显示为 `10/页`、`20/页` 或 `50/页`。
+- 结果卡片支持点赞、点踩和详情弹窗，反馈会真实写入或取消写入 `user_feedback`，并立即更新最终分。
+- 评分详情支持分页查看、发布和删除公开评论，评论独立保存在 `user_comments`，不参与评分。
 - 历史任务时间按北京时间展示；`pending` 任务默认显示“进行中”，超过前端请求超时时间后仍未完成才显示为“超时未完成”。
-- 侧边栏“反馈统计”入口已路由化，当前展示未实现占位说明。
+- 反馈统计占位路由仍保留给后续开发，但 demo-v1 侧边栏不展示该入口。
 
 ## 真实模型配置
 

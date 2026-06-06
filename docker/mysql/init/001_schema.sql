@@ -98,11 +98,20 @@ CREATE TABLE IF NOT EXISTS user_feedback (
   user_id BIGINT NULL,
   response_id BIGINT NOT NULL,
   feedback_type VARCHAR(32) NOT NULL,
-  comment TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_user_feedback_user_response (user_id, response_id),
   CONSTRAINT fk_user_feedback_user FOREIGN KEY (user_id) REFERENCES users(id),
   CONSTRAINT fk_user_feedback_response FOREIGN KEY (response_id) REFERENCES model_responses(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_comments (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  response_id BIGINT NOT NULL,
+  content TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_user_comments_user FOREIGN KEY (user_id) REFERENCES users(id),
+  CONSTRAINT fk_user_comments_response FOREIGN KEY (response_id) REFERENCES model_responses(id)
 );
 
 INSERT INTO model_providers (name, base_url, enabled)
