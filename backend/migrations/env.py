@@ -5,7 +5,17 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.db.base import Base
-from app.models import Conversation, EvaluationResult, EvaluationTask, ModelConfig, ModelProvider, ModelResponse, User, UserFeedback
+from app.models import (
+    Conversation,
+    EvaluationResult,
+    EvaluationTask,
+    ModelConfig,
+    ModelProvider,
+    ModelResponse,
+    User,
+    UserComment,
+    UserFeedback,
+)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("mysql+aiomysql://", "mysql+pymysql://"))

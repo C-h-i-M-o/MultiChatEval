@@ -83,7 +83,7 @@
       <el-button @click="detailVisible = true">详情</el-button>
     </footer>
 
-    <el-dialog v-model="detailVisible" title="评分详情" width="680px" class="score-detail-dialog">
+    <el-dialog v-model="detailVisible" title="评分详情" width="min(760px, 94vw)" class="score-detail-dialog">
       <section class="score-detail">
         <div class="score-summary">
           <div>
@@ -98,6 +98,14 @@
             <div>
               <dt>LLM 评审</dt>
               <dd>{{ judgeScoreText }}</dd>
+            </div>
+            <div>
+              <dt>基础分</dt>
+              <dd>{{ score.baseFinal ?? score.final }}</dd>
+            </div>
+            <div>
+              <dt>反馈分</dt>
+              <dd>{{ feedbackScoreText }}</dd>
             </div>
             <div>
               <dt>耗时</dt>
@@ -126,11 +134,12 @@
           <header>
             <span>用户反馈</span>
             <strong>{{ feedbackSummaryText }}</strong>
-            <em>不计入当前评分</em>
+            <em>权重 10%</em>
           </header>
           <p>
             点赞 {{ feedback.likeCount }} 次，点踩 {{ feedback.dislikeCount }} 次；当前匿名用户反馈为{{ currentFeedbackText }}。
           </p>
+          <p>{{ feedbackFormulaText }}</p>
         </article>
 
         <div class="score-detail-list">
@@ -145,14 +154,86 @@
             </ul>
           </article>
         </div>
+
+        <section class="comment-panel">
+          <header class="comment-panel-head">
+            <div>
+              <p class="panel-label">公开讨论</p>
+              <h4>回答评论</h4>
+            </div>
+            <span>{{ commentTotal }} 条</span>
+          </header>
+
+          <div class="comment-composer">
+            <el-input
+              v-model="commentContent"
+              type="textarea"
+              :rows="3"
+              maxlength="1000"
+              show-word-limit
+              resize="vertical"
+              placeholder="写下你对这个回答的看法"
+            />
+            <div class="comment-composer-actions">
+              <span>评论公开展示，不参与评分。</span>
+              <el-button
+                type="primary"
+                :loading="commentSubmitting"
+                :disabled="!commentContent.trim()"
+                @click="submitComment"
+              >
+                发布评论
+              </el-button>
+            </div>
+          </div>
+
+          <div v-loading="commentsLoading" class="comment-list">
+            <article v-for="comment in comments" :key="comment.id" class="comment-item">
+              <header>
+                <div>
+                  <strong>{{ comment.username }}</strong>
+                  <time>{{ formatCommentTime(comment.createdAt) }}</time>
+                </div>
+                <el-button
+                  v-if="comment.canDelete"
+                  link
+                  type="danger"
+                  :loading="deletingCommentIds.includes(comment.id)"
+                  @click="removeComment(comment)"
+                >
+                  删除
+                </el-button>
+              </header>
+              <p>{{ comment.content }}</p>
+            </article>
+            <el-empty v-if="!commentsLoading && !comments.length" description="还没有评论，来写第一条吧" />
+          </div>
+
+          <el-pagination
+            v-if="commentTotal > commentPageSize"
+            class="comment-pagination"
+            background
+            layout="prev, pager, next"
+            :current-page="commentPage"
+            :page-size="commentPageSize"
+            :total="commentTotal"
+            @current-change="changeCommentPage"
+          />
+        </section>
       </section>
     </el-dialog>
   </article>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { computed, ref, watch } from "vue";
 
+import {
+  createResponseComment,
+  deleteResponseComment,
+  listResponseComments
+} from "../utils/api";
 import MarkdownRenderer from "./MarkdownRenderer.vue";
 import ScoreBar from "./ScoreBar.vue";
 
@@ -187,12 +268,22 @@ const score = computed(() => {
     final: 0,
     ruleFinal: 0,
     judgeFinal: null,
+    baseFinal: 0,
+    feedbackScore: null,
     judgeComment: null,
     judgeDetails: {}
   };
 });
 
 const detailVisible = ref(false);
+const comments = ref([]);
+const commentTotal = ref(0);
+const commentPage = ref(1);
+const commentPageSize = 10;
+const commentsLoading = ref(false);
+const commentSubmitting = ref(false);
+const deletingCommentIds = ref([]);
+const commentContent = ref("");
 
 const feedback = computed(() => {
   return props.response.feedback || {
@@ -240,6 +331,19 @@ const judgeScoreText = computed(() => {
     : `${score.value.judgeFinal} / 10`;
 });
 
+const feedbackScoreText = computed(() => {
+  return score.value.feedbackScore === null || score.value.feedbackScore === undefined
+    ? "暂无反馈"
+    : `${score.value.feedbackScore} / 10`;
+});
+
+const feedbackFormulaText = computed(() => {
+  if (score.value.feedbackScore === null || score.value.feedbackScore === undefined) {
+    return "暂无点赞或点踩，最终分保持基础分不变。";
+  }
+  return `最终分 = 基础分 ${score.value.baseFinal} × 90% + 反馈分 ${score.value.feedbackScore} × 10%。`;
+});
+
 const judgeDetailItems = computed(() => {
   const details = score.value.judgeDetails || {};
   return Object.entries(details).flatMap(([label, items]) => {
@@ -276,4 +380,102 @@ function emitFeedback(feedbackType) {
     feedbackType
   });
 }
+
+async function loadComments(page = commentPage.value) {
+  if (!props.response.id) {
+    return;
+  }
+  commentsLoading.value = true;
+  try {
+    const result = await listResponseComments(props.response.id, {
+      page,
+      pageSize: commentPageSize
+    });
+    comments.value = result.items;
+    commentTotal.value = result.total;
+    commentPage.value = result.page;
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || "评论加载失败");
+  } finally {
+    commentsLoading.value = false;
+  }
+}
+
+async function submitComment() {
+  const content = commentContent.value.trim();
+  if (!content || commentSubmitting.value) {
+    return;
+  }
+  commentSubmitting.value = true;
+  try {
+    await createResponseComment(props.response.id, { content });
+    commentContent.value = "";
+    await loadComments(1);
+    ElMessage.success("评论已发布");
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || "评论发布失败");
+  } finally {
+    commentSubmitting.value = false;
+  }
+}
+
+async function removeComment(comment) {
+  try {
+    await ElMessageBox.confirm("删除后无法恢复，确定删除这条评论吗？", "删除评论", {
+      confirmButtonText: "删除",
+      cancelButtonText: "取消",
+      type: "warning"
+    });
+  } catch {
+    return;
+  }
+
+  deletingCommentIds.value = [...deletingCommentIds.value, comment.id];
+  try {
+    await deleteResponseComment(comment.id);
+    const nextTotal = Math.max(commentTotal.value - 1, 0);
+    const lastPage = Math.max(Math.ceil(nextTotal / commentPageSize), 1);
+    await loadComments(Math.min(commentPage.value, lastPage));
+    ElMessage.success("评论已删除");
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.detail || error?.message || "评论删除失败");
+  } finally {
+    deletingCommentIds.value = deletingCommentIds.value.filter((id) => id !== comment.id);
+  }
+}
+
+async function changeCommentPage(page) {
+  await loadComments(page);
+}
+
+function formatCommentTime(value) {
+  if (!value) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).format(new Date(value));
+}
+
+watch(detailVisible, (visible) => {
+  if (visible) {
+    loadComments(1);
+  }
+});
+
+watch(
+  () => props.response.id,
+  () => {
+    comments.value = [];
+    commentTotal.value = 0;
+    commentPage.value = 1;
+    commentContent.value = "";
+  }
+);
 </script>

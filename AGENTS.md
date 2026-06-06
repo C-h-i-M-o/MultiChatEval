@@ -48,6 +48,7 @@ MultiChatEval/
     - 模型回答
     - 评分结果
     - 用户反馈
+    - 用户评论
 - API 路由：
     - `GET /api/health`
     - `GET /api/model-configs`
@@ -60,6 +61,9 @@ MultiChatEval/
     - `GET /api/evaluation/tasks`
     - `GET /api/evaluation/tasks/{taskId}`
     - `POST /api/evaluation/responses/{responseId}/feedback`
+    - `GET /api/evaluation/responses/{responseId}/comments`
+    - `POST /api/evaluation/responses/{responseId}/comments`
+    - `DELETE /api/evaluation/comments/{commentId}`
 - 模型适配器接口：`backend/app/adapters/base.py`
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
@@ -71,14 +75,14 @@ MultiChatEval/
 - 思考模式字段以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。MiniMax 等 OpenAI-compatible 供应商即使收到 `thinking.type=disabled`，也可能仍返回 `<think>` 或 reasoning 内容。
 - `POST /api/evaluation/tasks` 保留一次性返回完整结果。
 - `POST /api/evaluation/tasks/stream` 支持模型级渐进返回：哪个模型完整回答先完成，哪个模型结果先展示。
-- 评测任务、模型回答和规则评分会真实写入 MySQL。
+- 评测任务、模型回答、规则评分、LLM Judge 结果、点赞/点踩和评论会真实写入 MySQL。
 - `GET /api/evaluation/tasks` 支持分页查询历史任务。
 - `GET /api/evaluation/tasks/{taskId}` 支持从数据库查询任务详情。
 
 ### 前端
 
 - Vue 3 + JavaScript + Vite 基础项目
-- 主页面：`frontend/src/views/EvaluationWorkspace.vue`
+- 主页面：`frontend/src/views/EvaluationView.vue`
 - 功能骨架：
     - 输入问题
     - 按已启用且已配置 API Key 的模型配置选择模型
@@ -94,6 +98,8 @@ MultiChatEval/
     - `MarkdownRenderer` 支持 Markdown 回答渲染
     - `<think>...</think>` 内容折叠为“思考过程”
     - 侧边栏“历史任务”入口支持分页查看历史评测并加载详情
+    - Element Plus 使用中文语言配置，分页容量后缀显示为 `/页`
+    - 评分详情支持分页查看、发布和删除公开评论
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
@@ -183,9 +189,9 @@ MODEL_REQUEST_TIMEOUT=90
 
 当前已实现：
 
-- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 模型级渐进展示 → 规则评分 → 前端对比展示。
+- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 模型级渐进展示 → 规则评分与可选 LLM Judge → 前端对比展示。
 - 模型配置从数据库动态读取。
-- 模型耗时、输出 token、成本估算、错误状态和规则评分会返回给前端。
+- 模型耗时、输出 token、成本估算、错误状态、规则评分和可选 LLM Judge 结果会返回给前端。
 - `<think>...</think>` 和 `reasoning_content` 会折叠展示为“思考过程”。
 
 ### 已实现：持久化与历史任务
@@ -202,20 +208,21 @@ MODEL_REQUEST_TIMEOUT=90
 
 - 相关性评分使用字符 n-gram 相似度、意图覆盖、回答聚焦度、显式要求对齐和离题惩罚，不使用旧的关键词交集主算法。
 - 完整性、清晰度、格式和安全性已增加更细的规则与命中项明细；安全性使用危险输出控制、拒答质量、高风险领域谨慎性和隐私/凭据保护四类本地信号合成。
+- LLM Judge 输出结构化 JSON，评分、理由和明细会持久化；有效 Judge 分以 40% 权重计入基础分。
+- 点赞比例映射为反馈分，并以 10% 权重计入最终分；没有反馈时最终分保持基础分。
 
 待做：
 
 - 增加语言一致性评分。
-- 将 LLM Judge 分数纳入综合评分。
 
 ### LLM Judge
 
-待做：
+已实现：
 
-- 设计评审 Prompt。
-- 要求评审模型输出 JSON。
-- 解析评分、优点、缺点和推荐理由。
-- 将 LLM 评审分纳入综合评分。
+- 使用独立评审 Prompt，并将候选回答视为不可信输入。
+- 要求评审模型输出结构化 JSON。
+- 解析评分、优点、缺点、改进建议和推荐理由。
+- 将有效 LLM Judge 分以 40% 权重纳入基础分。
 
 ### 用户反馈与推荐
 
@@ -225,26 +232,27 @@ MODEL_REQUEST_TIMEOUT=90
 - 点赞和点踩会真实写入或取消写入 `user_feedback`。
 - 匿名用户固定使用 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
 - 评测页和历史任务详情页都可以提交点赞或点踩。
-- 评分详情弹窗会展示维度分数、权重、命中项明细和当前反馈状态。
+- 点赞/点踩变化会重算并持久化最终分。
+- 评分详情弹窗会展示维度分数、权重、命中项明细、当前反馈状态和评分公式。
+- 支持分页查看、发布和硬删除公开评论；同一用户对同一回答的评论数量不受限制。
 
 待做：
 
-- 收藏和评论输入。
 - 增加反馈统计和模型推荐。
 
-## 推荐的评分思路
+## 当前评分公式
 
-综合分建议：
+当前基础分和最终分：
 
 ```text
-FinalScore =
-  0.25 × 客观性能分
-+ 0.25 × 规则评分
-+ 0.40 × LLM 评审分
-+ 0.10 × 用户反馈分
+BaseFinal = RuleFinal
+BaseFinal = 0.60 × RuleFinal + 0.40 × JudgeFinal  # Judge 有效时
+FeedbackScore = 10 × LikeCount / (LikeCount + DislikeCount)
+Final = BaseFinal                                 # 暂无反馈
+Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 ```
 
-第一版可以先只使用规则评分，等真实模型接入稳定后再加入 LLM Judge。
+评论不参与评分。当前匿名访客统一使用 `user_id = 0`，登录体系接入前无法区分不同匿名访客。
 
 ## 开源项目参考
 
@@ -293,13 +301,13 @@ FinalScore =
 4. `docs/api.md`
 5. `docs/system-features-status.md`
 6. `backend/app/services/evaluation_service.py`
-7. `frontend/src/views/EvaluationWorkspace.vue`
+7. `frontend/src/views/EvaluationView.vue`
 
 优先推进的任务是：
 
 1. 安装依赖并启动前后端。
 2. 确认前端能调用后端真实模型接口。
 3. 确认模型级渐进展示和全局思考模式行为正常。
-4. 将评测任务、模型回答和评分结果持久化到 MySQL。
-5. 实现 LLM Judge。
-6. 增加反馈统计和模型推荐。
+4. 验证评分结果、点赞/点踩和公开评论均正确持久化到 MySQL。
+5. 增加反馈统计和模型推荐。
+6. 接入登录体系，区分真实用户反馈和评论。

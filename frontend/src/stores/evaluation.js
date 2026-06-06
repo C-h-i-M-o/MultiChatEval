@@ -125,7 +125,8 @@ function updateTaskResponseFeedback(task, result) {
       }
       return {
         ...response,
-        feedback: result.feedback
+        feedback: result.feedback,
+        score: result.score
       };
     })
   };

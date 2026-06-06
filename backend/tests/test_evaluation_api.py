@@ -4,8 +4,19 @@ from fastapi.testclient import TestClient
 import pytest
 
 from app.main import app
-from app.schemas.evaluation import EvaluationTaskListItemRead, EvaluationTaskListRead, EvaluationTaskRead
-from app.services.evaluation_service import EvaluationTaskNotFoundError, evaluation_service
+from app.schemas.evaluation import (
+    CommentListRead,
+    CommentRead,
+    EvaluationTaskListItemRead,
+    EvaluationTaskListRead,
+    EvaluationTaskRead,
+)
+from app.services.evaluation_service import (
+    EvaluationCommentNotFoundError,
+    EvaluationResponseNotFoundError,
+    evaluation_service,
+)
+from app.services.evaluation_service import EvaluationTaskNotFoundError
 
 
 def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> None:
@@ -105,3 +116,107 @@ def test_list_evaluation_tasks_returns_paginated_result(monkeypatch: pytest.Monk
         "page": 2,
         "pageSize": 20,
     }
+
+
+def test_list_response_comments_returns_paginated_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    created_at = datetime(2026, 6, 6, 10, 30, 0)
+
+    async def fake_list_comments(
+        response_id: int,
+        _db: object,
+        page: int,
+        page_size: int,
+    ) -> CommentListRead:
+        assert response_id == 44
+        assert page == 2
+        assert page_size == 10
+        return CommentListRead(
+            items=[
+                CommentRead(
+                    id=301,
+                    responseId=44,
+                    userId=0,
+                    username="anonymous",
+                    content="评论内容",
+                    createdAt=created_at,
+                    canDelete=True,
+                )
+            ],
+            total=11,
+            page=2,
+            pageSize=10,
+        )
+
+    monkeypatch.setattr(evaluation_service, "list_response_comments", fake_list_comments)
+
+    response = TestClient(app).get("/api/evaluation/responses/44/comments?page=2&pageSize=10")
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["content"] == "评论内容"
+    assert response.json()["pageSize"] == 10
+
+
+def test_create_response_comment_returns_created_comment(monkeypatch: pytest.MonkeyPatch) -> None:
+    created_at = datetime(2026, 6, 6, 10, 30, 0)
+
+    async def fake_create_comment(response_id: int, payload: object, _db: object) -> CommentRead:
+        assert response_id == 44
+        assert payload.content == "评论内容"
+        return CommentRead(
+            id=301,
+            responseId=44,
+            userId=0,
+            username="anonymous",
+            content=payload.content,
+            createdAt=created_at,
+            canDelete=True,
+        )
+
+    monkeypatch.setattr(evaluation_service, "create_response_comment", fake_create_comment)
+
+    response = TestClient(app).post(
+        "/api/evaluation/responses/44/comments",
+        json={"content": "  评论内容  "},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["content"] == "评论内容"
+
+
+def test_create_response_comment_returns_404_when_response_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_create_comment(_response_id: int, _payload: object, _db: object) -> None:
+        raise EvaluationResponseNotFoundError("模型回答不存在")
+
+    monkeypatch.setattr(evaluation_service, "create_response_comment", fake_create_comment)
+
+    response = TestClient(app).post(
+        "/api/evaluation/responses/404/comments",
+        json={"content": "评论内容"},
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "模型回答不存在"}
+
+
+def test_delete_response_comment_returns_204(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_delete_comment(comment_id: int, _db: object) -> None:
+        assert comment_id == 301
+
+    monkeypatch.setattr(evaluation_service, "delete_response_comment", fake_delete_comment)
+
+    response = TestClient(app).delete("/api/evaluation/comments/301")
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+def test_delete_response_comment_returns_404_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_delete_comment(_comment_id: int, _db: object) -> None:
+        raise EvaluationCommentNotFoundError("评论不存在")
+
+    monkeypatch.setattr(evaluation_service, "delete_response_comment", fake_delete_comment)
+
+    response = TestClient(app).delete("/api/evaluation/comments/404")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "评论不存在"}

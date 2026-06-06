@@ -15,3 +15,4 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     conversations = relationship("Conversation", back_populates="user")
+    comments = relationship("UserComment", back_populates="user")

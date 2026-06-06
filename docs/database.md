@@ -73,9 +73,11 @@
 - `clarity_score`：清晰度
 - `format_score`：格式符合度
 - `safety_score`：安全性
-- `rule_score` / `final_score`：规则综合分
+- `rule_score`：规则综合分
+- `judge_score` / `judge_comment`：可选 LLM Judge 分数、理由和结构化明细
+- `final_score`：当前最终分；无用户反馈时等于基础分，有反馈时写入包含 10% 反馈分的结果
 
-`judge_score` 和 `judge_comment` 保留给后续 LLM Judge 使用。
+基础分为规则分，或在 Judge 有效时使用 `rule_score * 0.60 + judge_score * 0.40`。存在点赞/点踩时，反馈分按点赞比例映射到 0–10，并以 10% 权重计入 `final_score`；评论不参与评分。
 
 ## user_feedback
 
@@ -90,4 +92,19 @@
 - `like`：点赞
 - `dislike`：点踩
 
-收藏、评论统计和登录用户维度暂未接入。
+`user_feedback` 不再保存评论。
+
+## user_comments
+
+公开评论表。每条记录表示用户对某个模型回答发布的一条纯文本评论。
+
+- `user_id`：评论用户；当前匿名用户固定为 `0`。
+- `response_id`：关联 `model_responses.id`。
+- `content`：去除首尾空白后的评论正文，接口限制为 1–1000 个字符。
+- `created_at`：评论发布时间。
+- 不设置 `user_id + response_id` 唯一约束，同一用户可以对同一回答发布多条评论。
+- 第一版支持发布、分页查询和硬删除，不支持编辑、评论点赞、审核或富文本。
+
+旧版 `user_feedback.comment` 中已有的非空内容会在 Alembic 迁移时复制到 `user_comments`，随后删除旧字段。
+
+当前尚未接入真实登录体系，因此所有匿名访客都映射为 `user_id = 0`，无法在不同匿名访客之间区分评论归属。
