@@ -8,10 +8,16 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 > 多模型对话质量评估与智能推荐平台。
 
+## demo-v1 发布状态
+
+当前 `complete-v1` 分支对应可发布的 demo-v1。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。
+
+demo-v1 左侧导航只展示对比评测、模型配置和历史任务。`/feedback` 占位路由暂时保留供后续开发，但不向 demo-v1 用户展示入口。
+
 ## 当前技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、ECharts、Markdown-it、DOMPurify
+- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -239,6 +245,15 @@ MODEL_REQUEST_TIMEOUT=90
 待做：
 
 - 增加反馈统计和模型推荐。
+
+### demo-v1 后续路线
+
+- 用户注册、登录、会话和真实用户反馈归属。
+- 反馈统计看板与基于历史质量、成本和偏好的模型推荐。
+- 评论审核、举报和管理能力。
+- 评测结果导出、分享与可复现报告。
+- 批量评测数据集、回归对比和自定义评分权重。
+- 服务健康监控、调用失败分析和成本趋势统计。
 
 ## 当前评分公式
 

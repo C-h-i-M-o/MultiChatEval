@@ -35,14 +35,14 @@ MySQL
 
 ## 前端展示层
 
-前端展示层采用 Vue Router 多路由结构，统一布局位于 `frontend/src/components/AppLayout.vue`。侧边栏导航负责在对比评测、模型配置、历史任务和反馈统计之间切换，各页面只承担单一业务职责。
+前端展示层采用 Vue Router 多路由结构，统一布局位于 `frontend/src/components/AppLayout.vue`。demo-v1 侧边栏只展示对比评测、模型配置和历史任务，各页面只承担单一业务职责。
 
 当前展示层包含：
 
 - `/` 对应 `frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
 - `/models` 对应 `frontend/src/views/ModelConfigsView.vue`，用于维护内置模型和自定义 OpenAI-compatible 模型。
 - `/history` 对应 `frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
-- `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，当前为反馈统计占位页。
+- `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，当前为后续版本保留的反馈统计占位路由，不在 demo-v1 导航中展示。
 - Element Plus 在应用入口启用中文语言配置，历史任务分页容量统一显示为 `/页`。
 - 模型选择项从后端模型配置接口动态加载，直接显示具体模型名。
 - 结果卡片根据返回模型数量自适应布局。
