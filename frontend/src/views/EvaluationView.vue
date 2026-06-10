@@ -89,17 +89,14 @@
 
     <el-alert v-if="store.errorMessage" :title="store.errorMessage" type="error" show-icon />
 
-    <section class="result-grid" :class="resultGridClass">
-      <ModelResponseCard
-        v-for="response in displayResponses"
-        :key="response.id"
-        :response="response"
-        :elapsed-seconds="elapsedSeconds"
-        :feedback-submitting="store.feedbackSubmittingIds.includes(response.id)"
-        show-actions
-        @feedback="handleFeedback"
-      />
-    </section>
+    <ModelResponseSummaryGrid
+      :responses="displayResponses"
+      :elapsed-seconds="elapsedSeconds"
+      :feedback-submitting-ids="store.feedbackSubmittingIds"
+      layout-mode="grid"
+      show-actions
+      @feedback="handleFeedback"
+    />
   </section>
 </template>
 
@@ -109,6 +106,7 @@ import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
 import ModelResponseCard from "../components/ModelResponseCard.vue";
+import ModelResponseSummaryGrid from "../components/ModelResponseSummaryGrid.vue";
 import { useAuthStore } from "../stores/auth";
 import { useEvaluationStore } from "../stores/evaluation";
 import { listAvailableModels } from "../utils/api";
@@ -172,17 +170,6 @@ const displayResponses = computed(() => {
   }
   return responses.value;
 });
-const resultGridClass = computed(() => {
-  const count = displayResponses.value.length;
-  if (count === 1) {
-    return "one-card";
-  }
-  if (count === 2) {
-    return "two-cards";
-  }
-  return "three-cards";
-});
-
 function startWaitingTimer() {
   stopWaitingTimer();
   elapsedSeconds.value = 0;

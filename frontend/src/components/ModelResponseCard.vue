@@ -80,10 +80,148 @@
       >
         点踩 {{ feedback.dislikeCount }}
       </el-button>
-      <el-button @click="detailVisible = true">详情</el-button>
+      <el-button v-if="!embeddedDetail" @click="detailVisible = true">详情</el-button>
     </footer>
 
-    <el-dialog v-model="detailVisible" title="评分详情" width="min(760px, 94vw)" class="score-detail-dialog">
+    <section v-if="embeddedDetail && !response.pending" class="score-detail embedded-score-detail">
+      <div class="score-summary">
+        <div>
+          <p class="panel-label">综合分</p>
+          <strong>{{ score.final }}</strong>
+        </div>
+        <dl>
+          <div>
+            <dt>规则分</dt>
+            <dd>{{ score.ruleFinal ?? score.final }}</dd>
+          </div>
+          <div>
+            <dt>LLM 评审</dt>
+            <dd>{{ judgeScoreText }}</dd>
+          </div>
+          <div>
+            <dt>基础分</dt>
+            <dd>{{ score.baseFinal ?? score.final }}</dd>
+          </div>
+          <div>
+            <dt>反馈分</dt>
+            <dd>{{ feedbackScoreText }}</dd>
+          </div>
+          <div>
+            <dt>耗时</dt>
+            <dd>{{ response.latencyMs || 0 }}ms</dd>
+          </div>
+          <div>
+            <dt>输出</dt>
+            <dd>{{ response.outputTokens || 0 }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <article v-if="score.judgeComment" class="score-detail-item judge-detail-item">
+        <header>
+          <span>LLM 评审理由</span>
+          <strong>{{ judgeScoreText }}</strong>
+          <em>权重 40%</em>
+        </header>
+        <p>{{ score.judgeComment }}</p>
+        <ul v-if="judgeDetailItems.length">
+          <li v-for="detail in judgeDetailItems" :key="detail">{{ detail }}</li>
+        </ul>
+      </article>
+
+      <article class="score-detail-item feedback-detail-item">
+        <header>
+          <span>用户反馈</span>
+          <strong>{{ feedbackSummaryText }}</strong>
+          <em>权重 10%</em>
+        </header>
+        <p>
+          点赞 {{ feedback.likeCount }} 次，点踩 {{ feedback.dislikeCount }} 次；当前匿名用户反馈为{{ currentFeedbackText }}。
+        </p>
+        <p>{{ feedbackFormulaText }}</p>
+      </article>
+
+      <div class="score-detail-list">
+        <article v-for="dimension in scoreDimensions" :key="dimension.key" class="score-detail-item">
+          <header>
+            <span>{{ dimension.label }}</span>
+            <strong>{{ dimension.value }} / 10</strong>
+            <em>权重 {{ dimension.weight }}</em>
+          </header>
+          <ul>
+            <li v-for="detail in dimension.details" :key="detail">{{ detail }}</li>
+          </ul>
+        </article>
+      </div>
+
+      <section class="comment-panel">
+        <header class="comment-panel-head">
+          <div>
+            <p class="panel-label">公开讨论</p>
+            <h4>回答评论</h4>
+          </div>
+          <span>{{ commentTotal }} 条</span>
+        </header>
+
+        <div class="comment-composer">
+          <el-input
+            v-model="commentContent"
+            type="textarea"
+            :rows="3"
+            maxlength="1000"
+            show-word-limit
+            resize="vertical"
+            placeholder="写下你对这个回答的看法"
+          />
+          <div class="comment-composer-actions">
+            <span>评论公开展示，不参与评分。</span>
+            <el-button
+              type="primary"
+              :loading="commentSubmitting"
+              :disabled="!commentContent.trim()"
+              @click="submitComment"
+            >
+              发布评论
+            </el-button>
+          </div>
+        </div>
+
+        <div v-loading="commentsLoading" class="comment-list">
+          <article v-for="comment in comments" :key="comment.id" class="comment-item">
+            <header>
+              <div>
+                <strong>{{ comment.username }}</strong>
+                <time>{{ formatCommentTime(comment.createdAt) }}</time>
+              </div>
+              <el-button
+                v-if="comment.canDelete"
+                link
+                type="danger"
+                :loading="deletingCommentIds.includes(comment.id)"
+                @click="removeComment(comment)"
+              >
+                删除
+              </el-button>
+            </header>
+            <p>{{ comment.content }}</p>
+          </article>
+          <el-empty v-if="!commentsLoading && !comments.length" description="还没有评论，来写第一条吧" />
+        </div>
+
+        <el-pagination
+          v-if="commentTotal > commentPageSize"
+          class="comment-pagination"
+          background
+          layout="prev, pager, next"
+          :current-page="commentPage"
+          :page-size="commentPageSize"
+          :total="commentTotal"
+          @current-change="changeCommentPage"
+        />
+      </section>
+    </section>
+
+    <el-dialog v-else v-model="detailVisible" title="评分详情" width="min(760px, 94vw)" class="score-detail-dialog">
       <section class="score-detail">
         <div class="score-summary">
           <div>
@@ -251,6 +389,10 @@ const props = defineProps({
     default: false
   },
   feedbackSubmitting: {
+    type: Boolean,
+    default: false
+  },
+  embeddedDetail: {
     type: Boolean,
     default: false
   }
@@ -468,6 +610,16 @@ watch(detailVisible, (visible) => {
     loadComments(1);
   }
 });
+
+watch(
+  () => props.embeddedDetail,
+  (embedded) => {
+    if (embedded) {
+      loadComments(1);
+    }
+  },
+  { immediate: true }
+);
 
 watch(
   () => props.response.id,

@@ -11,10 +11,13 @@ WEIGHTS = {
     "format": 0.15,
     "safety": 0.15,
 }
+COMPLETE_THINK_PATTERN = re.compile(r"<think\b[^>]*>.*?</think\s*>", re.IGNORECASE | re.DOTALL)
+OPEN_THINK_PATTERN = re.compile(r"<think\b[^>]*>", re.IGNORECASE)
 
 
 class RuleEvaluator:
     def evaluate(self, prompt: str, answer: str) -> dict[str, object]:
+        answer = self._strip_think_content(answer)
         if not answer.strip():
             return {
                 "relevance": 0,
@@ -55,6 +58,16 @@ class RuleEvaluator:
                 "safety": safety_details,
             },
         }
+
+    def _strip_think_content(self, answer: str) -> str:
+        cleaned_answer = COMPLETE_THINK_PATTERN.sub("", answer)
+        unclosed_think = OPEN_THINK_PATTERN.search(cleaned_answer)
+        if unclosed_think:
+            cleaned_answer = cleaned_answer[: unclosed_think.start()]
+
+        if cleaned_answer == answer:
+            return answer
+        return cleaned_answer.strip()
 
     def _relevance(self, prompt: str, answer: str, intents: list[str]) -> tuple[float, list[str]]:
         lexical_score, lexical_details = self._lexical_similarity(prompt, answer)
