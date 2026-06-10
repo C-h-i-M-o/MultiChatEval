@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     database_url: str = "mysql+aiomysql://multichateval:multichateval@localhost:3306/multichateval"
     backend_cors_origins: str = "http://localhost:5173"
     model_request_timeout: float = 60
+    jwt_secret_key: str = "development-only-change-this-secret-before-production-2026"
+    access_token_expire_minutes: int = 480
+    auth_cookie_secure: bool = False
 
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_model: str = "deepseek-v4-flash"

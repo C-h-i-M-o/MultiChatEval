@@ -24,6 +24,7 @@ frontend/.vite/
 # 数据与日志
 *.log
 data/
+backups/
 
 # 工具输出
 .playwright-mcp/

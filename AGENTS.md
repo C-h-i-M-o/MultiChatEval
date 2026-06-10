@@ -8,11 +8,11 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 > 多模型对话质量评估与智能推荐平台。
 
-## demo-v1 发布状态
+## 当前版本状态
 
-`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。
+当前 `codex/dev-v2` 分支已完成 v2 阶段 1：开放注册、HttpOnly Cookie JWT、普通用户/管理员 RBAC、真实用户数据归属和公开/私有评测。demo-v1 的多模型评测、评分、历史、反馈和评论闭环继续保留。
 
-demo-v1 左侧导航只展示对比评测、模型配置和历史任务。`/feedback` 占位路由暂时保留供后续开发，但不向 demo-v1 用户展示入口。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。`/feedback` 占位路由暂时保留供后续开发，但不向 demo-v1 用户展示入口。
 
 ## 当前技术栈
 
@@ -57,11 +57,16 @@ MultiChatEval/
     - 用户评论
 - API 路由：
     - `GET /api/health`
-    - `GET /api/model-configs`
-    - `POST /api/model-configs`
-    - `PUT /api/model-configs/{modelConfigId}`
-    - `DELETE /api/model-configs/{modelConfigId}`
-    - `POST /api/model-configs/test`
+    - `POST /api/auth/register`
+    - `POST /api/auth/login`
+    - `POST /api/auth/logout`
+    - `GET /api/auth/me`
+    - `GET /api/models/available`
+    - `GET /api/admin/model-configs`
+    - `POST /api/admin/model-configs`
+    - `PUT /api/admin/model-configs/{modelConfigId}`
+    - `DELETE /api/admin/model-configs/{modelConfigId}`
+    - `POST /api/admin/model-configs/test`
     - `POST /api/evaluation/tasks`
     - `POST /api/evaluation/tasks/stream`
     - `GET /api/evaluation/tasks`
@@ -77,7 +82,7 @@ MultiChatEval/
 - 规则评分会排除完整或未闭合的 `<think>` 思考内容，仅评价最终回答；原始回答仍完整保存和返回。
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
 - 评测请求发送给模型前，会在用户原始问题前拼接系统内置提示词；数据库、历史任务和接口响应中的 `prompt` 仍保留用户原始问题。
-- 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。
+- 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；管理员需要在前端“模型配置”页面维护 API Key。
 - 评测请求支持全局“思考模式”开关。关闭时所有模型统一发送 `thinking.type=disabled`；开启时统一发送 `thinking.type=enabled`；不传递思考程度参数。
 - 思考模式字段以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。MiniMax 等 OpenAI-compatible 供应商即使收到 `thinking.type=disabled`，也可能仍返回 `<think>` 或 reasoning 内容。
 - `POST /api/evaluation/tasks` 保留一次性返回完整结果。
@@ -85,10 +90,13 @@ MultiChatEval/
 - 评测任务、模型回答、规则评分、LLM Judge 结果、点赞/点踩和评论会真实写入 MySQL。
 - `GET /api/evaluation/tasks` 支持分页查询历史任务。
 - `GET /api/evaluation/tasks/{taskId}` 支持从数据库查询任务详情。
+- 评测任务支持 `public` 和 `private`；公开任务对所有登录用户可见，私有任务只对创建者可见。
+- 反馈和评论归属当前登录用户，用户只能删除自己的评论。
 
 ### 前端
 
 - Vue 3 + JavaScript + Vite 基础项目
+- 登录页和注册页：`frontend/src/views/AuthView.vue`
 - 主页面：`frontend/src/views/EvaluationView.vue`
 - 功能骨架：
     - 输入问题
@@ -96,7 +104,8 @@ MultiChatEval/
     - 启用或关闭 LLM 评审开关
     - 展示多模型回答摘要卡和全文详情弹窗
     - 展示耗时、输出长度、成本和评分条
-    - 当系统内没有任何已配置 API Key 的模型时，提醒用户先进入“模型配置”页面
+    - 当系统内没有可用模型时，管理员可进入模型配置，普通用户会看到联系管理员提示
+    - 支持公开和私有评测选择
 - 前端展示增强：
     - 请求期间显示等待卡片、耗时计数和完成进度
     - 模型完成即展示，避免等待最慢模型后才统一呈现
@@ -108,7 +117,8 @@ MultiChatEval/
 - 侧边栏“历史任务”入口支持分页查看历史评测，回答使用单列紧凑列表并可加载详情
     - Element Plus 使用中文语言配置，分页容量后缀显示为 `/页`
     - 评分详情支持分页查看、发布和删除公开评论
-- 桌面端侧边栏固定在可视区域内，“默认流程”保持在侧栏底部；移动端恢复普通流式布局
+	    - 根据用户角色控制模型配置导航和页面访问
+	- 桌面端侧边栏固定在可视区域内，"默认流程"保持在侧栏底部；移动端恢复普通流式布局
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
@@ -123,6 +133,7 @@ MultiChatEval/
     - `docs/api.md`
     - `docs/open-source-reuse.md`
     - `docs/v2-development-plan.md`
+    - `docs/v2-stage1-auth-rbac-design.md`
 
 ## 本地运行方式
 
@@ -240,8 +251,8 @@ MODEL_REQUEST_TIMEOUT=90
 
 - 点赞、点踩按钮已接通反馈接口。
 - 点赞和点踩会真实写入或取消写入 `user_feedback`。
-- 匿名用户固定使用 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
-- 评测页和历史任务详情页都可以在回答摘要卡或全文详情弹窗中提交点赞或点踩。
+- demo-v1 旧匿名数据继续归属 `user_id = 0`；新反馈和评论归属当前登录用户。
+- 评测页和历史任务详情页都可以提交点赞或点踩。
 - 点赞/点踩变化会重算并持久化最终分。
 - 全文详情弹窗会展示完整回答、维度分数、权重、命中项明细、当前反馈状态和评分公式。
 - 支持分页查看、发布和硬删除公开评论；同一用户对同一回答的评论数量不受限制。
@@ -250,7 +261,7 @@ MODEL_REQUEST_TIMEOUT=90
 
 - 增加反馈统计和模型推荐。
 
-### demo-v1 后续路线
+### v2 后续路线
 
 - 用户注册、登录、会话和真实用户反馈归属。
 - 反馈统计看板与基于历史质量、成本和偏好的模型推荐。
@@ -271,7 +282,7 @@ Final = BaseFinal                                 # 暂无反馈
 Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 ```
 
-评论不参与评分。当前匿名访客统一使用 `user_id = 0`，登录体系接入前无法区分不同匿名访客。
+评论不参与评分。新评论归属当前登录用户，只有作者可以删除；旧匿名评论继续归属 `user_id = 0`。
 
 ## 开源项目参考
 
@@ -329,4 +340,4 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 3. 确认模型级渐进展示和全局思考模式行为正常。
 4. 验证评分结果、点赞/点踩和公开评论均正确持久化到 MySQL。
 5. 增加反馈统计和模型推荐。
-6. 接入登录体系，区分真实用户反馈和评论。
+6. 验证公开任务跨用户可见、私有任务仅创建者可见。

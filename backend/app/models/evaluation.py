@@ -12,13 +12,15 @@ class EvaluationTask(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     conversation_id: Mapped[int | None] = mapped_column(ForeignKey("conversations.id"), nullable=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     prompt: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="pending")
+    visibility: Mapped[str] = mapped_column(String(16), default="public")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     conversation = relationship("Conversation", back_populates="tasks")
+    user = relationship("User", back_populates="tasks")
     responses = relationship("ModelResponse", back_populates="task")
 
 

@@ -13,6 +13,7 @@ from app.core.api_keys import has_stored_api_key, load_api_key, mask_stored_api_
 from app.core.config import settings
 from app.models.model_config import ModelConfig, ModelProvider
 from app.schemas.model_config import (
+    AvailableModelRead,
     ModelConfigCreate,
     ModelConfigRead,
     ModelConfigTestRequest,
@@ -55,6 +56,20 @@ class ModelConfigNotFoundError(ModelConfigServiceError):
 
 
 class ModelConfigService:
+    async def list_available_configs(self, db: AsyncSession) -> list[AvailableModelRead]:
+        await self.ensure_builtin_configs(db)
+        configs = await self._list_enabled_model_configs(db)
+        return [
+            AvailableModelRead(
+                id=config.id,
+                providerName=config.provider.name,
+                displayName=config.display_name,
+                modelName=config.model_name,
+            )
+            for config in configs
+            if has_stored_api_key(config.provider.api_key_encrypted)
+        ]
+
     async def list_configs(self, db: AsyncSession) -> list[ModelConfigRead]:
         await self.ensure_builtin_configs(db)
         configs = await self._list_model_configs(db)

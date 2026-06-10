@@ -7,7 +7,9 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import get_current_user
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.evaluation import (
     CommentCreate,
     CommentListRead,
@@ -32,17 +34,24 @@ router = APIRouter()
 async def create_evaluation_task(
     payload: EvaluationTaskCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> EvaluationTaskRead:
-    return await evaluation_service.create_task(payload, db)
+    return await evaluation_service.create_task(payload, db, current_user.id, current_user.username)
 
 
 @router.post("/tasks/stream")
 async def stream_evaluation_task(
     payload: EvaluationTaskCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> StreamingResponse:
     async def render_events() -> AsyncIterator[str]:
-        async for event in evaluation_service.stream_task_events(payload, db):
+        async for event in evaluation_service.stream_task_events(
+            payload,
+            db,
+            current_user.id,
+            current_user.username,
+        ):
             yield json.dumps(jsonable_encoder(event), ensure_ascii=False) + "\n"
 
     return StreamingResponse(render_events(), media_type="application/x-ndjson")
@@ -53,17 +62,19 @@ async def list_evaluation_tasks(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> EvaluationTaskListRead:
-    return await evaluation_service.list_tasks(db, page, page_size)
+    return await evaluation_service.list_tasks(db, page, page_size, current_user.id)
 
 
 @router.get("/tasks/{task_id}", response_model=EvaluationTaskRead)
 async def get_evaluation_task(
     task_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> EvaluationTaskRead:
     try:
-        return await evaluation_service.get_task(task_id, db)
+        return await evaluation_service.get_task(task_id, db, current_user.id)
     except EvaluationTaskNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -73,9 +84,15 @@ async def create_feedback(
     response_id: int,
     payload: FeedbackCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> FeedbackToggleRead:
     try:
-        return await evaluation_service.toggle_response_feedback(response_id, payload, db)
+        return await evaluation_service.toggle_response_feedback(
+            response_id,
+            payload,
+            db,
+            current_user.id,
+        )
     except EvaluationResponseNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -86,9 +103,16 @@ async def list_response_comments(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> CommentListRead:
     try:
-        return await evaluation_service.list_response_comments(response_id, db, page, page_size)
+        return await evaluation_service.list_response_comments(
+            response_id,
+            db,
+            page,
+            page_size,
+            current_user.id,
+        )
     except EvaluationResponseNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -98,9 +122,16 @@ async def create_response_comment(
     response_id: int,
     payload: CommentCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> CommentRead:
     try:
-        return await evaluation_service.create_response_comment(response_id, payload, db)
+        return await evaluation_service.create_response_comment(
+            response_id,
+            payload,
+            db,
+            current_user.id,
+            current_user.username,
+        )
     except EvaluationResponseNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -109,9 +140,10 @@ async def create_response_comment(
 async def delete_response_comment(
     comment_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Response:
     try:
-        await evaluation_service.delete_response_comment(comment_id, db)
+        await evaluation_service.delete_response_comment(comment_id, db, current_user.id)
     except EvaluationCommentNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     return Response(status_code=204)

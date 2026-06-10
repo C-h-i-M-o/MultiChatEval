@@ -6,6 +6,9 @@ CREATE TABLE IF NOT EXISTS users (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   username VARCHAR(64) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(16) NOT NULL DEFAULT 'user',
+  status VARCHAR(16) NOT NULL DEFAULT 'active',
+  last_login_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -13,7 +16,10 @@ SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'NO_AUTO_VALUE_ON_ZERO
 
 INSERT INTO users (id, username, password_hash)
 VALUES (0, 'anonymous', 'anonymous')
-ON DUPLICATE KEY UPDATE username = VALUES(username), password_hash = VALUES(password_hash);
+ON DUPLICATE KEY UPDATE
+  username = VALUES(username),
+  password_hash = VALUES(password_hash),
+  status = 'disabled';
 
 ALTER TABLE users AUTO_INCREMENT = 1;
 
@@ -49,9 +55,10 @@ CREATE TABLE IF NOT EXISTS model_configs (
 CREATE TABLE IF NOT EXISTS evaluation_tasks (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   conversation_id BIGINT NULL,
-  user_id BIGINT NULL,
+  user_id BIGINT NOT NULL,
   prompt TEXT NOT NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'pending',
+  visibility VARCHAR(16) NOT NULL DEFAULT 'public',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   completed_at DATETIME NULL,
   CONSTRAINT fk_evaluation_tasks_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id),
@@ -95,7 +102,7 @@ CREATE TABLE IF NOT EXISTS evaluation_results (
 
 CREATE TABLE IF NOT EXISTS user_feedback (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
-  user_id BIGINT NULL,
+  user_id BIGINT NOT NULL,
   response_id BIGINT NOT NULL,
   feedback_type VARCHAR(32) NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

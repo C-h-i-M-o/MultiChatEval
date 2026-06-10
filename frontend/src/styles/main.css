@@ -126,6 +126,93 @@ h3 {
   color: #fff;
 }
 
+.sidebar-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(247, 244, 232, 0.14);
+  border-radius: 10px;
+  background: rgba(247, 244, 232, 0.06);
+}
+
+.sidebar-user strong,
+.sidebar-user span {
+  display: block;
+}
+
+.sidebar-user span {
+  margin-top: 3px;
+  color: rgba(247, 244, 232, 0.58);
+  font-size: 12px;
+}
+
+.sidebar-logout {
+  color: #f7f4e8 !important;
+}
+
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 32px;
+  place-items: center;
+}
+
+.auth-card {
+  display: grid;
+  width: min(440px, 100%);
+  gap: 26px;
+  padding: 38px;
+  border: 1px solid rgba(23, 35, 42, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 70px rgba(23, 35, 42, 0.14);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.auth-brand h1 {
+  color: #17232a;
+}
+
+.auth-description {
+  margin: 10px 0 0;
+  color: #66767b;
+  line-height: 1.6;
+}
+
+.auth-submit {
+  width: 100%;
+}
+
+.auth-switch {
+  margin: 0;
+  color: #66767b;
+  text-align: center;
+}
+
+.auth-switch a {
+  color: #16616a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.history-item-tags {
+  display: flex;
+  gap: 6px;
+}
+
+.history-owner {
+  margin: 8px 0 0;
+  color: #6d7c80;
+  font-size: 13px;
+}
+
 .panel,
 .query-panel,
 .response-card,
@@ -1319,6 +1406,14 @@ h3 {
   .comment-composer-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .auth-shell {
+    padding: 18px;
+  }
+
+  .auth-card {
+    padding: 26px 22px;
   }
 
   .metric-row,
