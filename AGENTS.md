@@ -74,6 +74,7 @@ MultiChatEval/
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
 - 规则评分相关性使用轻量本地多信号评分，不依赖外部语义模型或下载。
+- 规则评分会排除完整或未闭合的 `<think>` 思考内容，仅评价最终回答；原始回答仍完整保存和返回。
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
 - 评测请求发送给模型前，会在用户原始问题前拼接系统内置提示词；数据库、历史任务和接口响应中的 `prompt` 仍保留用户原始问题。
 - 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。

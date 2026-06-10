@@ -23,6 +23,47 @@ def test_rule_evaluator_returns_zero_scores_for_empty_answer() -> None:
     assert "回答为空" in result["details"]["relevance"]
 
 
+def test_rule_evaluator_ignores_complete_think_block() -> None:
+    prompt = "请解释 FastAPI 的路由机制"
+    final_answer = "FastAPI 通过装饰器注册路由，并根据请求方法和路径把请求分发给对应处理函数。"
+
+    result = rule_evaluator.evaluate(
+        prompt=prompt,
+        answer=f"<THINK>\n这里是很长的内部推理，不应影响回答长度、结构或安全评分。\n</THINK>\n\n{final_answer}",
+    )
+    expected = rule_evaluator.evaluate(prompt=prompt, answer=final_answer)
+
+    assert result == expected
+
+
+def test_rule_evaluator_treats_think_only_answer_as_empty() -> None:
+    result = rule_evaluator.evaluate(
+        prompt="请解释 FastAPI 的路由机制",
+        answer="<think>\n这里只包含模型的内部思考过程。\n</think>",
+    )
+
+    assert result["relevance"] == 0
+    assert result["completeness"] == 0
+    assert result["clarity"] == 0
+    assert result["format"] == 0
+    assert result["safety"] == 0
+    assert result["final"] == 0
+    assert "回答为空" in result["details"]["relevance"]
+
+
+def test_rule_evaluator_ignores_unclosed_think_block_and_following_content() -> None:
+    prompt = "请解释 FastAPI 的路由机制"
+    final_answer = "FastAPI 使用路由表匹配请求路径和方法，再调用对应的处理函数。"
+
+    result = rule_evaluator.evaluate(
+        prompt=prompt,
+        answer=f"{final_answer}\n<think>\n这段未闭合的内部推理不应进入评分。",
+    )
+    expected = rule_evaluator.evaluate(prompt=prompt, answer=final_answer)
+
+    assert result == expected
+
+
 def test_rule_evaluator_scores_related_answer_higher_than_unrelated_answer() -> None:
     evaluator = RuleEvaluator()
 
