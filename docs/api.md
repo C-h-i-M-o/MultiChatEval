@@ -1,4 +1,4 @@
-# API 草案
+# API 说明
 
 ## 健康检查
 
@@ -28,11 +28,14 @@ POST /api/evaluation/tasks
   "prompt": "帮我解释什么是设计模式",
   "modelIds": [1, 2, 3],
   "enableJudge": false,
+  "judgeModelId": null,
   "enableThinking": false
 }
 ```
 
 `modelIds` 使用 `model_configs.id`。如果不传，后端默认选择已启用的 DeepSeek 和 MiniMax；如果这两个模型不可用，则选择前两个已启用模型。
+
+`enableJudge` 为 `true` 时必须传入 `judgeModelId`，且该模型必须已启用并配置 API Key。`judgeModelId` 用于确定评审调用；候选回答仍由 `modelIds` 决定，同一模型可以同时承担候选回答和评审角色。
 
 `enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
 
@@ -57,6 +60,8 @@ POST /api/evaluation/tasks
 第一版不提供思考程度选项，也不会发送 `thinkingEffort` 或 `reasoning_effort`。
 
 注意：关闭思考模式时后端确认传输的是 `thinking.type=disabled`，不是 `thinkingmode:disabled`。MiniMax 等部分 OpenAI-compatible 供应商即使收到该参数，也可能仍在 `content`、`reasoning_content` 或 `<think>...</think>` 中返回思考内容；这属于供应商接口行为，不代表前端开关未传递。
+
+规则评分会在评分入口排除完整的 `<think>...</think>` 区块；若标签未闭合，则忽略 `<think>` 及其后续内容。原始回答仍会完整保存和返回。该规则仅描述本地规则评分输入，不改变可选 LLM Judge 的候选回答输入。
 
 发送给模型前，后端会在用户原始问题前追加系统内置提示词，用于统一回答质量、安全性和格式要求。接口响应和数据库中的 `prompt` 仍保留用户原始问题。
 

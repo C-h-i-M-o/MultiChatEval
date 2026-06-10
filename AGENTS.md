@@ -10,14 +10,14 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 ## demo-v1 发布状态
 
-当前 `complete-v1` 分支对应可发布的 demo-v1。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。
 
 demo-v1 左侧导航只展示对比评测、模型配置和历史任务。`/feedback` 占位路由暂时保留供后续开发，但不向 demo-v1 用户展示入口。
 
 ## 当前技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify
+- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -101,12 +101,14 @@ MultiChatEval/
     - 请求期间显示等待卡片、耗时计数和完成进度
     - 模型完成即展示，避免等待最慢模型后才统一呈现
     - 对比评测回答使用平衡摘要网格，四个模型固定两行两列，五至九个模型自动铺满每一行
+    - 使用 GSAP 实现结果进入、等待卡替换、评分条和详情弹窗动画，并适配减少动态效果偏好
     - 支持全局“思考模式”开关
     - `MarkdownRenderer` 支持 Markdown 回答渲染
     - `<think>...</think>` 内容折叠为“思考过程”
 - 侧边栏“历史任务”入口支持分页查看历史评测，回答使用单列紧凑列表并可加载详情
     - Element Plus 使用中文语言配置，分页容量后缀显示为 `/页`
     - 评分详情支持分页查看、发布和删除公开评论
+- 桌面端侧边栏固定在可视区域内，“默认流程”保持在侧栏底部；移动端恢复普通流式布局
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
