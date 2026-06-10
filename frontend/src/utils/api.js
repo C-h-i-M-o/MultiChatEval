@@ -2,8 +2,28 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: "/api",
-  timeout: 120000
+  timeout: 120000,
+  withCredentials: true
 });
+
+export async function registerUser(payload) {
+  const response = await api.post("/auth/register", payload);
+  return response.data;
+}
+
+export async function loginUser(payload) {
+  const response = await api.post("/auth/login", payload);
+  return response.data;
+}
+
+export async function logoutUser() {
+  await api.post("/auth/logout");
+}
+
+export async function getCurrentUser() {
+  const response = await api.get("/auth/me");
+  return response.data;
+}
 
 export async function createEvaluationTask(payload) {
   const response = await api.post("/evaluation/tasks", payload);
@@ -52,6 +72,7 @@ export async function deleteResponseComment(commentId) {
 export async function streamEvaluationTask(payload, onEvent) {
   const response = await fetch("/api/evaluation/tasks/stream", {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json"
     },
@@ -59,8 +80,8 @@ export async function streamEvaluationTask(payload, onEvent) {
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "评测任务创建失败");
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.detail || "评测任务创建失败");
   }
 
   if (!response.body) {
@@ -95,27 +116,32 @@ export async function streamEvaluationTask(payload, onEvent) {
   }
 }
 
+export async function listAvailableModels() {
+  const response = await api.get("/models/available");
+  return response.data;
+}
+
 export async function listModelConfigs() {
-  const response = await api.get("/model-configs");
+  const response = await api.get("/admin/model-configs");
   return response.data;
 }
 
 export async function createModelConfig(payload) {
-  const response = await api.post("/model-configs", payload);
+  const response = await api.post("/admin/model-configs", payload);
   return response.data;
 }
 
 export async function updateModelConfig(id, payload) {
-  const response = await api.put(`/model-configs/${id}`, payload);
+  const response = await api.put(`/admin/model-configs/${id}`, payload);
   return response.data;
 }
 
 export async function deleteModelConfig(id) {
-  const response = await api.delete(`/model-configs/${id}`);
+  const response = await api.delete(`/admin/model-configs/${id}`);
   return response.data;
 }
 
 export async function testModelConfig(payload) {
-  const response = await api.post("/model-configs/test", payload);
+  const response = await api.post("/admin/model-configs/test", payload);
   return response.data;
 }

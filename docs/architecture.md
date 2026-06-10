@@ -6,6 +6,7 @@ MultiChatEval 采用前后端分离架构：
 Vue 前端
   ↓
 FastAPI API
+  ├── Auth / RBAC
   ↓
 Evaluation Service
   ├── Model Adapter Layer
@@ -19,15 +20,21 @@ MySQL
 
 ## 核心流程
 
-1. 用户输入问题，选择多个模型。
-2. 后端创建评测任务，并写入 `evaluation_tasks`。
-3. 后端从数据库读取已启用的模型配置，并发请求 DeepSeek、MiniMax、GLM 或用户自定义 OpenAI-compatible 模型。
-4. 系统将每个模型的回答内容、响应时间、token 数、成本估算和错误状态写入 `model_responses`。
-5. 规则评分器计算相关性、完整性、清晰度、格式符合度和安全性，并写入 `evaluation_results`。
-6. 可选启用 LLM Judge，让评审模型输出结构化评分。
-7. 前端以自适应卡片、Markdown 回答内容、评分条和评分详情弹窗展示对比结果。
-8. 用户在回答卡片上提交点赞或点踩反馈，后端以互斥状态式语义写入、切换或取消 `user_feedback`，并重算最终分。
-9. 用户可以在评分详情中分页查看、发布和删除公开评论，评论独立写入 `user_comments`，不参与评分。
+1. 用户注册或登录，后端通过 HttpOnly Cookie JWT 恢复当前用户。
+2. 用户输入问题，选择多个模型和公开或私有模式。
+3. 后端创建评测任务，将当前用户和可见性写入 `evaluation_tasks`。
+4. 后端从数据库读取已启用的模型配置，并发请求模型。
+5. 系统持久化模型回答、规则评分和可选 LLM Judge 结果。
+6. 前端展示评测结果，登录用户提交归属于自己的反馈和评论。
+
+## 认证与权限层
+
+- 开放注册用户默认为普通用户。
+- 密码使用 Argon2 哈希，登录态使用写入 HttpOnly Cookie 的短期 JWT。
+- `get_current_user` 负责认证，`require_admin` 负责管理员授权。
+- 普通用户通过精简接口读取可评测模型，完整模型配置接口仅管理员可访问。
+- 公开任务对所有登录用户可见；私有任务仅创建者可见。
+- 对无权访问的私有任务或回答返回 404，避免资源枚举。
 
 ## 第一版边界
 
@@ -35,12 +42,13 @@ MySQL
 
 ## 前端展示层
 
-前端展示层采用 Vue Router 多路由结构，统一布局位于 `frontend/src/components/AppLayout.vue`。demo-v1 侧边栏只展示对比评测、模型配置和历史任务，各页面只承担单一业务职责。
+前端展示层采用 Vue Router 多路由结构，统一业务布局位于 `frontend/src/components/AppLayout.vue`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。
 
 当前展示层包含：
 
 - `/` 对应 `frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
-- `/models` 对应 `frontend/src/views/ModelConfigsView.vue`，用于维护内置模型和自定义 OpenAI-compatible 模型。
+- `/login` 和 `/register` 对应 `frontend/src/views/AuthView.vue`，用于登录和开放注册。
+- `/models` 对应 `frontend/src/views/ModelConfigsView.vue`，仅管理员用于维护内置模型和自定义 OpenAI-compatible 模型。
 - `/history` 对应 `frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
 - `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，当前为后续版本保留的反馈统计占位路由，不在 demo-v1 导航中展示。
 - Element Plus 在应用入口启用中文语言配置，历史任务分页容量统一显示为 `/页`。
@@ -63,7 +71,7 @@ MySQL
 - `MiniMax-M2.5`
 - `glm-4.7`
 
-用户需要在模型配置页为内置模型填写自己的 API Key，也可以新增其他 OpenAI-compatible 供应商模型。系统不会从 `.env` 读取内置模型 API Key。API Key 当前以 `plain:` 版本化明文格式保存，所有业务逻辑通过密钥 helper 读取，未来可以升级为 `enc:v1:` 加密格式而不改变接口。
+管理员需要在模型配置页为内置模型填写 API Key，也可以新增其他 OpenAI-compatible 供应商模型。普通用户只读取管理员启用且已配置密钥的模型精简列表。系统不会从 `.env` 读取内置模型 API Key。API Key 当前以 `plain:` 版本化明文格式保存，所有业务逻辑通过密钥 helper 读取，未来可以升级为 `enc:v1:` 加密格式而不改变接口。
 
 后端在每次评测请求中会先把系统内置提示词拼接到用户原始问题前，再发送给模型；任务记录、历史详情和接口响应中的 `prompt` 仍保留用户原始问题。随后后端统一追加思考模式参数。关闭思考模式时，所有模型请求都会发送 `thinking.type=disabled`；开启思考模式时，所有模型请求都会发送 `thinking.type=enabled`。这里发送的是嵌套 JSON 字段 `thinking.type`，不是 `thinkingmode`。第一版不传递思考程度参数。如果某个 OpenAI-compatible 供应商不支持 `thinking` 字段并返回错误，该失败只展示在对应模型卡片中，不影响其他模型继续返回。MiniMax 等供应商即使收到 `thinking.type=disabled`，也可能仍在返回内容中包含 `<think>` 或 reasoning 字段，前端会按当前渲染规则折叠展示。
 
@@ -71,6 +79,6 @@ MySQL
 
 两个创建接口都会写入真实任务、模型回答和规则评分。规则评分器采用轻量本地多信号评分：相关性由字符 n-gram 相似度、关键词覆盖、意图覆盖、回答聚焦度、显式要求对齐和离题惩罚共同计算；安全性由危险输出控制、拒答质量、高风险领域谨慎性和隐私/凭据保护共同计算。评分过程不依赖外部语义模型或下载。可选 LLM Judge 有效时，基础分由规则分 60% 和 Judge 分 40% 合成。`GET /api/evaluation/tasks` 提供分页历史列表，`GET /api/evaluation/tasks/{taskId}` 从数据库返回完整任务详情、任务创建/完成时间，并携带每条回答的反馈状态。反馈接口会对 `user_feedback` 执行互斥状态式新增、切换或取消。
 
-匿名反馈固定写入 `user_id = 0`。同一用户对同一回答只能保留一个当前反馈，重复点击相同类型会取消，点击另一类型会在点赞和点踩之间切换。没有反馈时最终分等于基础分；存在反馈时，点赞比例映射为 0–10 的反馈分，并以 10% 权重计入 `final_score`。反馈接口返回更新后的反馈状态和评分，前端同步刷新卡片。
+新反馈写入当前登录用户 ID，demo-v1 旧匿名反馈继续保留在 `user_id = 0`。同一用户对同一回答只能保留一个当前反馈，重复点击相同类型会取消，点击另一类型会在点赞和点踩之间切换。没有反馈时最终分等于基础分；存在反馈时，点赞比例映射为 0–10 的反馈分，并以 10% 权重计入 `final_score`。反馈接口返回更新后的反馈状态和评分，前端同步刷新卡片。
 
-公开评论使用独立的 `user_comments` 表和分页接口，不嵌入任务详情响应，避免评论增长导致历史任务载荷持续膨胀。评论支持发布和按归属硬删除，不支持编辑；评论不参与评分。当前所有匿名访客共用 `user_id = 0`，在登录体系接入前无法区分不同匿名访客。
+公开评论使用独立的 `user_comments` 表和分页接口，不嵌入任务详情响应，避免评论增长导致历史任务载荷持续膨胀。评论支持发布和按归属硬删除，不支持编辑；评论不参与评分。新评论归属当前登录用户，只有作者可以删除。

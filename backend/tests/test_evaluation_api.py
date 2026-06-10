@@ -3,7 +3,9 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 import pytest
 
+from app.api.dependencies import get_current_user
 from app.main import app
+from app.models.user import User
 from app.schemas.evaluation import (
     CommentListRead,
     CommentRead,
@@ -17,6 +19,19 @@ from app.services.evaluation_service import (
     evaluation_service,
 )
 from app.services.evaluation_service import EvaluationTaskNotFoundError
+
+
+@pytest.fixture(autouse=True)
+def authenticated_user() -> object:
+    app.dependency_overrides[get_current_user] = lambda: User(
+        id=7,
+        username="test_user",
+        password_hash="unused",
+        role="user",
+        status="active",
+    )
+    yield
+    app.dependency_overrides.clear()
 
 
 def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> None:
@@ -33,8 +48,9 @@ def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> Non
 
 
 def test_get_evaluation_task_returns_404_when_task_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_get_task(task_id: int, _db: object) -> None:
+    async def fake_get_task(task_id: int, _db: object, user_id: int) -> None:
         assert task_id == 404
+        assert user_id == 7
         raise EvaluationTaskNotFoundError("评测任务不存在")
 
     monkeypatch.setattr(evaluation_service, "get_task", fake_get_task)
@@ -48,8 +64,9 @@ def test_get_evaluation_task_returns_404_when_task_missing(monkeypatch: pytest.M
 def test_get_evaluation_task_returns_task_timestamps(monkeypatch: pytest.MonkeyPatch) -> None:
     created_at = datetime(2026, 6, 3, 12, 0, 0)
 
-    async def fake_get_task(task_id: int, _db: object) -> EvaluationTaskRead:
+    async def fake_get_task(task_id: int, _db: object, user_id: int) -> EvaluationTaskRead:
         assert task_id == 10
+        assert user_id == 7
         return EvaluationTaskRead(
             taskId=10,
             status="pending",
@@ -68,18 +85,27 @@ def test_get_evaluation_task_returns_task_timestamps(monkeypatch: pytest.MonkeyP
         "taskId": 10,
         "status": "pending",
         "prompt": "历史问题",
-        "createdAt": "2026-06-03T12:00:00",
-        "completedAt": None,
-        "responses": [],
+            "createdAt": "2026-06-03T12:00:00",
+            "completedAt": None,
+            "ownerId": None,
+            "ownerUsername": "anonymous",
+            "visibility": "public",
+            "responses": [],
     }
 
 
 def test_list_evaluation_tasks_returns_paginated_result(monkeypatch: pytest.MonkeyPatch) -> None:
     created_at = datetime(2026, 6, 3, 12, 0, 0)
 
-    async def fake_list_tasks(_db: object, page: int, page_size: int) -> EvaluationTaskListRead:
+    async def fake_list_tasks(
+        _db: object,
+        page: int,
+        page_size: int,
+        user_id: int,
+    ) -> EvaluationTaskListRead:
         assert page == 2
         assert page_size == 20
+        assert user_id == 7
         return EvaluationTaskListRead(
             items=[
                 EvaluationTaskListItemRead(
@@ -108,9 +134,12 @@ def test_list_evaluation_tasks_returns_paginated_result(monkeypatch: pytest.Monk
                 "status": "completed",
                 "prompt": "历史问题",
                 "createdAt": "2026-06-03T12:00:00",
-                "completedAt": "2026-06-03T12:00:00",
-                "responseCount": 3,
-            }
+                    "completedAt": "2026-06-03T12:00:00",
+                    "responseCount": 3,
+                    "ownerId": None,
+                    "ownerUsername": "anonymous",
+                    "visibility": "public",
+                }
         ],
         "total": 21,
         "page": 2,
@@ -126,10 +155,12 @@ def test_list_response_comments_returns_paginated_result(monkeypatch: pytest.Mon
         _db: object,
         page: int,
         page_size: int,
+        user_id: int,
     ) -> CommentListRead:
         assert response_id == 44
         assert page == 2
         assert page_size == 10
+        assert user_id == 7
         return CommentListRead(
             items=[
                 CommentRead(
@@ -159,14 +190,22 @@ def test_list_response_comments_returns_paginated_result(monkeypatch: pytest.Mon
 def test_create_response_comment_returns_created_comment(monkeypatch: pytest.MonkeyPatch) -> None:
     created_at = datetime(2026, 6, 6, 10, 30, 0)
 
-    async def fake_create_comment(response_id: int, payload: object, _db: object) -> CommentRead:
+    async def fake_create_comment(
+        response_id: int,
+        payload: object,
+        _db: object,
+        user_id: int,
+        username: str,
+    ) -> CommentRead:
         assert response_id == 44
         assert payload.content == "评论内容"
+        assert user_id == 7
+        assert username == "test_user"
         return CommentRead(
             id=301,
             responseId=44,
-            userId=0,
-            username="anonymous",
+            userId=7,
+            username="test_user",
             content=payload.content,
             createdAt=created_at,
             canDelete=True,
@@ -184,7 +223,13 @@ def test_create_response_comment_returns_created_comment(monkeypatch: pytest.Mon
 
 
 def test_create_response_comment_returns_404_when_response_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_create_comment(_response_id: int, _payload: object, _db: object) -> None:
+    async def fake_create_comment(
+        _response_id: int,
+        _payload: object,
+        _db: object,
+        _user_id: int,
+        _username: str,
+    ) -> None:
         raise EvaluationResponseNotFoundError("模型回答不存在")
 
     monkeypatch.setattr(evaluation_service, "create_response_comment", fake_create_comment)
@@ -199,8 +244,9 @@ def test_create_response_comment_returns_404_when_response_missing(monkeypatch: 
 
 
 def test_delete_response_comment_returns_204(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_delete_comment(comment_id: int, _db: object) -> None:
+    async def fake_delete_comment(comment_id: int, _db: object, user_id: int) -> None:
         assert comment_id == 301
+        assert user_id == 7
 
     monkeypatch.setattr(evaluation_service, "delete_response_comment", fake_delete_comment)
 
@@ -211,7 +257,7 @@ def test_delete_response_comment_returns_204(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_delete_response_comment_returns_404_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_delete_comment(_comment_id: int, _db: object) -> None:
+    async def fake_delete_comment(_comment_id: int, _db: object, _user_id: int) -> None:
         raise EvaluationCommentNotFoundError("评论不存在")
 
     monkeypatch.setattr(evaluation_service, "delete_response_comment", fake_delete_comment)

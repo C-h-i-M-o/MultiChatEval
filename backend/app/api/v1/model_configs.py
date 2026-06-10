@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import require_admin
 from app.db.session import get_db
 from app.schemas.model_config import (
     ModelConfigCreate,
@@ -15,7 +16,7 @@ from app.services.model_config_service import (
     model_config_service,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("", response_model=list[ModelConfigRead])

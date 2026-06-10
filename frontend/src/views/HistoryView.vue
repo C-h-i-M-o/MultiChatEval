@@ -32,11 +32,16 @@
           >
             <span class="history-item-title">{{ taskItem.prompt }}</span>
             <span class="history-item-meta">
-              {{ formatTime(taskItem.createdAt) }} · {{ taskItem.responseCount }} 个回答
+              {{ taskItem.ownerUsername }} · {{ formatTime(taskItem.createdAt) }} · {{ taskItem.responseCount }} 个回答
             </span>
-            <el-tag :type="historyStatusTagType(taskItem)" effect="plain">
-              {{ historyStatusText(taskItem) }}
-            </el-tag>
+            <span class="history-item-tags">
+              <el-tag type="info" effect="plain">
+                {{ taskItem.visibility === "private" ? "私有" : "公开" }}
+              </el-tag>
+              <el-tag :type="historyStatusTagType(taskItem)" effect="plain">
+                {{ historyStatusText(taskItem) }}
+              </el-tag>
+            </span>
           </button>
         </div>
 
@@ -64,6 +69,10 @@
             <div>
               <p class="panel-label">任务详情</p>
               <h3>{{ store.selectedHistoryTask.prompt }}</h3>
+              <p class="history-owner">
+                {{ store.selectedHistoryTask.ownerUsername }} ·
+                {{ store.selectedHistoryTask.visibility === "private" ? "私有评测" : "公开评测" }}
+              </p>
             </div>
             <el-tag :type="selectedHistoryStatusTagType" effect="plain">
               {{ selectedHistoryStatusText }}

@@ -1,8 +1,8 @@
 # 系统功能与实现状态
 
-最后更新：2026-06-06
+最后更新：2026-06-11
 
-当前版本：**demo-v1 已完成**。核心评测、评分、历史记录、用户反馈和评论链路已可运行；反馈统计入口在 demo-v1 导航中隐藏，留待后续版本实现。
+当前版本：**v2 阶段 1 已完成**。demo-v1 核心评测闭环保持可用，账号体系、权限控制和公开/私有评测已经接入。
 
 本文档根据当前代码实现梳理 MultiChatEval 的系统功能、模块边界和完成情况。状态说明：
 
@@ -17,6 +17,17 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 当前版本优先保证多模型、规则评分、LLM Judge、模型级渐进展示、历史任务查询和用户反馈的完整链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口；哪个模型完整回答先完成，前端就先展示哪个模型。评测任务、回答、评分、点赞/点踩和公开评论会写入 MySQL，并可在历史任务页继续查看和操作。
 
 ## 2. 前端功能
+
+### 2.0 账号与权限
+
+状态：已实现
+
+已实现能力：
+
+- 开放注册、登录、退出和登录态恢复。
+- 普通用户和管理员导航、页面权限隔离。
+- 评测任务支持公开和私有模式。
+- 管理员模型配置页面仅管理员可访问。
 
 ### 2.1 多模型评测工作台
 
@@ -40,8 +51,8 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 当前限制：
 
-- 反馈统计能力将在后续版本实现，demo-v1 不展示导航入口。
-- 尚未接入真实用户登录体系。
+- 反馈统计能力将在后续阶段实现。
+- token 额度、反馈统计和模型推荐将在后续阶段实现。
 
 ### 2.2 模型配置页面
 
@@ -98,8 +109,8 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 当前限制：
 
-- 反馈统计能力将在后续版本实现，demo-v1 不展示导航入口。
-- 匿名访客当前统一映射为 `user_id = 0`。
+- 反馈统计能力将在后续版本实现。
+- demo-v1 旧匿名数据继续保留，新任务、反馈和评论归属真实登录用户。
 
 ### 2.4.1 历史任务分页页
 
@@ -170,7 +181,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 已实现能力：
 
 - 前端采用统一侧边栏布局。
-- 已配置 `/`、`/models`、`/history` 三个 demo-v1 导航路径；`/feedback` 作为后续版本占位路由保留但不展示入口。
+- 已配置 `/login`、`/register`、`/`、`/models`、`/history` 路由；`/models` 仅管理员可访问，`/feedback` 继续作为后续版本占位路由。
 - 未匹配路径会重定向到 `/`。
 - 模型回答卡片抽为复用组件，供评测结果和历史任务详情共同使用。
 
@@ -341,7 +352,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 已实现能力：
 
 - 反馈会真实写入 `user_feedback`。
-- 匿名用户固定写入 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
+- 新反馈写入当前登录用户 ID，旧匿名反馈继续归属 `user_id = 0`。
 - 同一用户对同一回答只能保留一个当前反馈。
 - 重复提交同一回答的同类反馈会取消该反馈，提交另一类型会在点赞和点踩之间切换。
 - 接口会返回 `active` 和当前回答的 `feedback` 状态。
@@ -351,7 +362,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 
 当前限制：
 
-- 尚未实现反馈统计、推荐和真实用户登录维度。
+- 尚未实现反馈统计和推荐。
 
 ### 3.5.1 回答公开评论
 
@@ -374,8 +385,8 @@ POST /api/evaluation/responses/{response_id}/feedback
 
 当前限制：
 
-- 不支持评论点赞、审核、富文本和真实用户登录。
-- 所有匿名访客共用 `user_id = 0`，暂时无法区分不同匿名访客。
+- 不支持评论点赞、审核和富文本。
+- demo-v1 历史匿名评论继续归属 `user_id = 0`。
 
 ### 3.6 模型配置接口
 
@@ -383,16 +394,17 @@ POST /api/evaluation/responses/{response_id}/feedback
 
 接口：
 
-- `GET /api/model-configs`
-- `POST /api/model-configs`
-- `PUT /api/model-configs/{model_config_id}`
-- `DELETE /api/model-configs/{model_config_id}`
-- `POST /api/model-configs/test`
+- `GET /api/models/available`
+- `GET /api/admin/model-configs`
+- `POST /api/admin/model-configs`
+- `PUT /api/admin/model-configs/{model_config_id}`
+- `DELETE /api/admin/model-configs/{model_config_id}`
+- `POST /api/admin/model-configs/test`
 
 已实现能力：
 
 - 查询模型配置时自动补齐 DeepSeek、MiniMax、GLM 三个内置模型。
-- 内置模型不会从 `.env` 读取 API Key，用户需要在前端模型配置页填写自己的 Key。
+- 内置模型不会从 `.env` 读取 API Key，管理员需要在前端模型配置页填写 Key。
 - 支持新增自定义 OpenAI-compatible 模型配置。
 - 支持编辑内置和自定义配置。
 - 支持删除自定义配置，内置配置只能禁用。
@@ -570,7 +582,7 @@ final =
 - 创建评测任务时写入 `evaluation_tasks`。
 - 模型回答完成后写入 `model_responses`。
 - 规则评分结果写入 `evaluation_results`。
-- 用户反馈写入 `user_feedback`，匿名用户固定使用 `user_id = 0`。
+- 用户反馈写入 `user_feedback` 并归属当前登录用户。
 - 历史任务列表和任务详情从数据库读取。
 
 - 点赞和点踩反馈已写入 `user_feedback`，并支持重复点击取消或互斥切换。
@@ -636,7 +648,7 @@ final =
 ```text
 用户输入问题
   ↓
-前端从 GET /api/model-configs 加载可选模型
+前端从 GET /api/models/available 加载可选模型
   ↓
 前端选择模型并提交 POST /api/evaluation/tasks
   ↓
@@ -665,8 +677,9 @@ final =
 
 建议按以下顺序推进：
 
-1. 接入用户注册、登录和会话，将匿名反馈与评论切换为真实用户归属。
-2. 基于已持久化的评分、点赞和点踩数据实现反馈统计与模型推荐。
+1. 实现用户 token 用量统计与每日额度限制。
+2. 接入统一语义分析模块并升级相关性评分。
+3. 基于已持久化的评分、点赞和点踩数据实现反馈统计与模型推荐。
 3. 增加评论审核、举报和管理能力。
 4. 支持评测结果导出、分享、批量数据集和回归对比。
 5. 增加服务健康、失败原因、模型成本和质量趋势监控。

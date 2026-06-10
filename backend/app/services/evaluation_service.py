@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 import httpx
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -51,7 +51,6 @@ BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手�
 
 用户问题如下："""
 
-ANONYMOUS_USER_ID = 0
 FEEDBACK_TYPES = ("like", "dislike")
 
 
@@ -68,10 +67,16 @@ class EvaluationCommentNotFoundError(Exception):
 
 
 class EvaluationService:
-    async def create_task(self, payload: EvaluationTaskCreate, db: AsyncSession) -> EvaluationTaskRead:
+    async def create_task(
+        self,
+        payload: EvaluationTaskCreate,
+        db: AsyncSession,
+        user_id: int,
+        username: str,
+    ) -> EvaluationTaskRead:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
         judge_model = await self._resolve_judge_model(db, payload)
-        task_id = await self._create_task_record(db, payload)
+        task_id = await self._create_task_record(db, payload, user_id)
         responses = await self._collect_model_responses(
             db=db,
             task_id=task_id,
@@ -83,16 +88,26 @@ class EvaluationService:
         task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
         await self._finish_task_record(db, task_id, task_status)
 
-        return EvaluationTaskRead(taskId=task_id, status=task_status, prompt=payload.prompt, responses=responses)
+        return EvaluationTaskRead(
+            taskId=task_id,
+            status=task_status,
+            prompt=payload.prompt,
+            ownerId=user_id,
+            ownerUsername=username,
+            visibility=payload.visibility,
+            responses=responses,
+        )
 
     async def stream_task_events(
         self,
         payload: EvaluationTaskCreate,
         db: AsyncSession,
+        user_id: int,
+        username: str,
     ) -> AsyncIterator[dict[str, object]]:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
         judge_model = await self._resolve_judge_model(db, payload)
-        task_id = await self._create_task_record(db, payload)
+        task_id = await self._create_task_record(db, payload, user_id)
         model_ids = [model.id for model in selected_models]
         extra_body = self._thinking_extra_body(payload)
         responses: list[ModelResponseRead] = []
@@ -120,30 +135,48 @@ class EvaluationService:
         await self._finish_task_record(db, task_id, task_status)
         yield {
             "type": "task_completed",
-            "task": EvaluationTaskRead(taskId=task_id, status=task_status, prompt=payload.prompt, responses=responses),
+            "task": EvaluationTaskRead(
+                taskId=task_id,
+                status=task_status,
+                prompt=payload.prompt,
+                ownerId=user_id,
+                ownerUsername=username,
+                visibility=payload.visibility,
+                responses=responses,
+            ),
         }
 
-    async def get_task(self, task_id: int, db: AsyncSession) -> EvaluationTaskRead:
-        result = await db.execute(self._task_detail_query().where(EvaluationTask.id == task_id))
+    async def get_task(self, task_id: int, db: AsyncSession, user_id: int) -> EvaluationTaskRead:
+        result = await db.execute(
+            self._task_detail_query().where(
+                EvaluationTask.id == task_id,
+                self._task_access_condition(user_id),
+            )
+        )
         task = result.scalar_one_or_none()
         if task is None:
             raise EvaluationTaskNotFoundError("评测任务不存在")
 
-        return self._serialize_task(task)
+        return self._serialize_task(task, user_id)
 
     async def toggle_response_feedback(
         self,
         response_id: int,
         payload: FeedbackCreate,
         db: AsyncSession,
+        user_id: int,
     ) -> FeedbackToggleRead:
         response_result = await db.execute(
             select(ModelResponse)
+            .join(EvaluationTask, EvaluationTask.id == ModelResponse.task_id)
             .options(
                 selectinload(ModelResponse.task),
                 selectinload(ModelResponse.evaluation_result),
             )
-            .where(ModelResponse.id == response_id)
+            .where(
+                ModelResponse.id == response_id,
+                self._task_access_condition(user_id),
+            )
         )
         response_record = response_result.scalar_one_or_none()
         if response_record is None:
@@ -153,7 +186,7 @@ class EvaluationService:
             select(UserFeedback)
             .where(
                 UserFeedback.response_id == response_id,
-                UserFeedback.user_id == ANONYMOUS_USER_ID,
+                UserFeedback.user_id == user_id,
                 UserFeedback.feedback_type.in_(FEEDBACK_TYPES),
             )
             .order_by(UserFeedback.id.asc())
@@ -177,14 +210,14 @@ class EvaluationService:
         else:
             db.add(
                 UserFeedback(
-                    user_id=ANONYMOUS_USER_ID,
+                    user_id=user_id,
                     response_id=response_id,
                     feedback_type=payload.feedback_type,
                 )
             )
 
         await db.flush()
-        feedback = await self._read_response_feedback(db, response_id)
+        feedback = await self._read_response_feedback(db, response_id, user_id)
         score = self._recalculate_final_score(response_record, feedback)
         await db.commit()
         return FeedbackToggleRead(
@@ -201,8 +234,9 @@ class EvaluationService:
         db: AsyncSession,
         page: int,
         page_size: int,
+        user_id: int,
     ) -> CommentListRead:
-        await self._require_response(db, response_id)
+        await self._require_response_access(db, response_id, user_id)
         normalized_page = max(page, 1)
         normalized_page_size = min(max(page_size, 1), 100)
         offset = (normalized_page - 1) * normalized_page_size
@@ -221,7 +255,7 @@ class EvaluationService:
         )
         return CommentListRead(
             items=[
-                self._serialize_comment(comment, username)
+                self._serialize_comment(comment, username, user_id)
                 for comment, username in comments_result.all()
             ],
             total=total,
@@ -234,23 +268,25 @@ class EvaluationService:
         response_id: int,
         payload: CommentCreate,
         db: AsyncSession,
+        user_id: int,
+        username: str,
     ) -> CommentRead:
-        await self._require_response(db, response_id)
+        await self._require_response_access(db, response_id, user_id)
         comment = UserComment(
-            user_id=ANONYMOUS_USER_ID,
+            user_id=user_id,
             response_id=response_id,
             content=payload.content,
         )
         db.add(comment)
         await db.commit()
         await db.refresh(comment)
-        return self._serialize_comment(comment, "anonymous")
+        return self._serialize_comment(comment, username, user_id)
 
-    async def delete_response_comment(self, comment_id: int, db: AsyncSession) -> None:
+    async def delete_response_comment(self, comment_id: int, db: AsyncSession, user_id: int) -> None:
         result = await db.execute(
             select(UserComment).where(
                 UserComment.id == comment_id,
-                UserComment.user_id == ANONYMOUS_USER_ID,
+                UserComment.user_id == user_id,
             )
         )
         comment = result.scalar_one_or_none()
@@ -259,16 +295,26 @@ class EvaluationService:
         await db.delete(comment)
         await db.commit()
 
-    async def list_tasks(self, db: AsyncSession, page: int, page_size: int) -> EvaluationTaskListRead:
+    async def list_tasks(
+        self,
+        db: AsyncSession,
+        page: int,
+        page_size: int,
+        user_id: int,
+    ) -> EvaluationTaskListRead:
         normalized_page = max(page, 1)
         normalized_page_size = min(max(page_size, 1), 100)
         offset = (normalized_page - 1) * normalized_page_size
 
-        total_result = await db.execute(select(func.count(EvaluationTask.id)))
+        total_result = await db.execute(
+            select(func.count(EvaluationTask.id)).where(self._task_access_condition(user_id))
+        )
         total = int(total_result.scalar_one())
         rows_result = await db.execute(
             select(EvaluationTask, func.count(ModelResponse.id))
+            .options(selectinload(EvaluationTask.user))
             .outerjoin(ModelResponse, ModelResponse.task_id == EvaluationTask.id)
+            .where(self._task_access_condition(user_id))
             .group_by(EvaluationTask.id)
             .order_by(EvaluationTask.created_at.desc(), EvaluationTask.id.desc())
             .offset(offset)
@@ -283,6 +329,9 @@ class EvaluationService:
                 createdAt=task.created_at,
                 completedAt=task.completed_at,
                 responseCount=int(response_count),
+                ownerId=task.user_id,
+                ownerUsername=task.user.username if task.user is not None else "anonymous",
+                visibility=task.visibility,
             )
             for task, response_count in rows_result.all()
         ]
@@ -440,11 +489,18 @@ class EvaluationService:
     def _model_prompt(self, prompt: str) -> str:
         return f"{BUILTIN_SYSTEM_PROMPT}\n\n{prompt.strip()}"
 
-    async def _create_task_record(self, db: AsyncSession, payload: EvaluationTaskCreate) -> int:
+    async def _create_task_record(
+        self,
+        db: AsyncSession,
+        payload: EvaluationTaskCreate,
+        user_id: int,
+    ) -> int:
         task = EvaluationTask(
             conversation_id=payload.conversation_id,
+            user_id=user_id,
             prompt=payload.prompt,
             status="pending",
+            visibility=payload.visibility,
         )
         db.add(task)
         await db.commit()
@@ -521,9 +577,10 @@ class EvaluationService:
             .selectinload(ModelConfig.provider),
             selectinload(EvaluationTask.responses).selectinload(ModelResponse.evaluation_result),
             selectinload(EvaluationTask.responses).selectinload(ModelResponse.feedback),
+            selectinload(EvaluationTask.user),
         )
 
-    def _serialize_task(self, task: EvaluationTask) -> EvaluationTaskRead:
+    def _serialize_task(self, task: EvaluationTask, user_id: int) -> EvaluationTaskRead:
         responses = sorted(task.responses, key=lambda response: (response.created_at, response.id))
         return EvaluationTaskRead(
             taskId=task.id,
@@ -531,14 +588,17 @@ class EvaluationService:
             prompt=task.prompt,
             createdAt=task.created_at,
             completedAt=task.completed_at,
-            responses=[self._serialize_response(task.prompt, response) for response in responses],
+            ownerId=task.user_id,
+            ownerUsername=task.user.username if task.user is not None else "anonymous",
+            visibility=task.visibility,
+            responses=[self._serialize_response(task.prompt, response, user_id) for response in responses],
         )
 
-    def _serialize_response(self, prompt: str, response: ModelResponse) -> ModelResponseRead:
+    def _serialize_response(self, prompt: str, response: ModelResponse, user_id: int) -> ModelResponseRead:
         model_config = response.model_config
         provider = model_config.provider if model_config is not None else None
         answer = response.answer_text if response.status == "success" else response.error_message or response.answer_text
-        feedback = self._serialize_feedback(response.feedback)
+        feedback = self._serialize_feedback(response.feedback, user_id)
         score = self._serialize_score(
             response.evaluation_result,
             prompt=prompt,
@@ -560,14 +620,19 @@ class EvaluationService:
             feedback=feedback,
         )
 
-    async def _read_response_feedback(self, db: AsyncSession, response_id: int) -> EvaluationFeedbackRead:
+    async def _read_response_feedback(
+        self,
+        db: AsyncSession,
+        response_id: int,
+        user_id: int,
+    ) -> EvaluationFeedbackRead:
         result = await db.execute(select(UserFeedback).where(UserFeedback.response_id == response_id))
-        return self._serialize_feedback(list(result.scalars().all()))
+        return self._serialize_feedback(list(result.scalars().all()), user_id)
 
     def _serialize_feedback(
         self,
         feedback_records: list[UserFeedback],
-        user_id: int = ANONYMOUS_USER_ID,
+        user_id: int,
     ) -> EvaluationFeedbackRead:
         like_count = sum(1 for feedback in feedback_records if feedback.feedback_type == "like")
         dislike_count = sum(1 for feedback in feedback_records if feedback.feedback_type == "dislike")
@@ -660,12 +725,29 @@ class EvaluationService:
             return None
         return round(10 * feedback.like_count / total, 2)
 
-    async def _require_response(self, db: AsyncSession, response_id: int) -> None:
-        result = await db.execute(select(ModelResponse.id).where(ModelResponse.id == response_id))
+    async def _require_response_access(
+        self,
+        db: AsyncSession,
+        response_id: int,
+        user_id: int,
+    ) -> None:
+        result = await db.execute(
+            select(ModelResponse.id)
+            .join(EvaluationTask, EvaluationTask.id == ModelResponse.task_id)
+            .where(
+                ModelResponse.id == response_id,
+                self._task_access_condition(user_id),
+            )
+        )
         if result.scalar_one_or_none() is None:
             raise EvaluationResponseNotFoundError("模型回答不存在")
 
-    def _serialize_comment(self, comment: UserComment, username: str) -> CommentRead:
+    def _serialize_comment(
+        self,
+        comment: UserComment,
+        username: str,
+        user_id: int,
+    ) -> CommentRead:
         return CommentRead(
             id=comment.id,
             responseId=comment.response_id,
@@ -673,7 +755,13 @@ class EvaluationService:
             username=username,
             content=comment.content,
             createdAt=comment.created_at,
-            canDelete=comment.user_id == ANONYMOUS_USER_ID,
+            canDelete=comment.user_id == user_id,
+        )
+
+    def _task_access_condition(self, user_id: int) -> object:
+        return or_(
+            EvaluationTask.visibility == "public",
+            EvaluationTask.user_id == user_id,
         )
 
     def _encode_judge_comment(

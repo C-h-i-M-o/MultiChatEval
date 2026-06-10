@@ -11,6 +11,7 @@ class EvaluationTaskCreate(BaseModel):
     enable_judge: bool = Field(default=False, alias="enableJudge")
     judge_model_id: int | None = Field(default=None, alias="judgeModelId")
     enable_thinking: bool = Field(default=False, alias="enableThinking")
+    visibility: Literal["public", "private"] = "public"
 
     @model_validator(mode="after")
     def require_judge_model(self) -> "EvaluationTaskCreate":
@@ -73,6 +74,9 @@ class EvaluationTaskRead(BaseModel):
     prompt: str
     created_at: datetime | None = Field(default=None, alias="createdAt")
     completed_at: datetime | None = Field(default=None, alias="completedAt")
+    owner_id: int | None = Field(default=None, alias="ownerId")
+    owner_username: str = Field(default="anonymous", alias="ownerUsername")
+    visibility: Literal["public", "private"] = "public"
     responses: list[ModelResponseRead]
 
 
@@ -83,6 +87,9 @@ class EvaluationTaskListItemRead(BaseModel):
     created_at: datetime = Field(alias="createdAt")
     completed_at: datetime | None = Field(default=None, alias="completedAt")
     response_count: int = Field(alias="responseCount")
+    owner_id: int | None = Field(default=None, alias="ownerId")
+    owner_username: str = Field(default="anonymous", alias="ownerUsername")
+    visibility: Literal["public", "private"] = "public"
 
 
 class EvaluationTaskListRead(BaseModel):

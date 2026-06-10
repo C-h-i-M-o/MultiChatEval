@@ -75,6 +75,29 @@ def test_serialize_config_never_exposes_raw_api_key() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_available_configs_only_returns_enabled_configs_with_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured = make_config(provider_name="deepseek", config_id=1)
+    missing_key = make_config(provider_name="minimax", config_id=2)
+    missing_key.provider.api_key_encrypted = None
+
+    async def fake_ensure_builtin_configs(_db: FakeDb) -> None:
+        return None
+
+    async def fake_list_enabled_model_configs(_db: FakeDb) -> list[ModelConfig]:
+        return [configured, missing_key]
+
+    monkeypatch.setattr(model_config_service, "ensure_builtin_configs", fake_ensure_builtin_configs)
+    monkeypatch.setattr(model_config_service, "_list_enabled_model_configs", fake_list_enabled_model_configs)
+
+    result = await model_config_service.list_available_configs(FakeDb())
+
+    assert [item.id for item in result] == [1]
+    assert result[0].display_name == "测试模型"
+
+
+@pytest.mark.asyncio
 async def test_update_config_keeps_old_api_key_when_payload_key_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     db = FakeDb()
     config = make_config()

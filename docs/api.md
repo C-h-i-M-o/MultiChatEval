@@ -1,5 +1,55 @@
 # API 草案
 
+## 认证约定
+
+除健康检查、注册和登录外，业务接口均要求浏览器携带后端签发的 HttpOnly Cookie。未登录返回 `401`，普通用户访问管理员接口返回 `403`。
+
+### 注册
+
+```http
+POST /api/auth/register
+```
+
+```json
+{
+  "username": "demo_user",
+  "password": "password123"
+}
+```
+
+注册成功返回当前用户并设置登录 Cookie。重复用户名返回 `409`。
+
+### 登录
+
+```http
+POST /api/auth/login
+```
+
+请求结构与注册相同。登录成功返回当前用户并设置登录 Cookie；凭据错误返回 `401`，禁用用户返回 `403`。
+
+### 当前用户
+
+```http
+GET /api/auth/me
+```
+
+```json
+{
+  "id": 1,
+  "username": "demo_user",
+  "role": "user",
+  "status": "active"
+}
+```
+
+### 退出
+
+```http
+POST /api/auth/logout
+```
+
+成功时清除登录 Cookie 并返回 `204 No Content`。
+
 ## 健康检查
 
 ```http
@@ -28,11 +78,14 @@ POST /api/evaluation/tasks
   "prompt": "帮我解释什么是设计模式",
   "modelIds": [1, 2, 3],
   "enableJudge": false,
-  "enableThinking": false
+  "enableThinking": false,
+  "visibility": "public"
 }
 ```
 
 `modelIds` 使用 `model_configs.id`。如果不传，后端默认选择已启用的 DeepSeek 和 MiniMax；如果这两个模型不可用，则选择前两个已启用模型。
+
+`visibility` 支持 `public` 和 `private`，默认 `public`。公开任务可被所有登录用户查看，私有任务只对创建者可见。
 
 `enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
 
@@ -244,10 +297,18 @@ GET /api/evaluation/tasks?page=1&pageSize=10
 
 `page` 从 1 开始，`pageSize` 默认 10，最大 100。列表按 `created_at desc, id desc` 排序。
 
+## 查询可评测模型
+
+```http
+GET /api/models/available
+```
+
+所有登录用户可访问，只返回已启用且已配置 API Key 的模型精简信息。
+
 ## 查询模型配置
 
 ```http
-GET /api/model-configs
+GET /api/admin/model-configs
 ```
 
 响应：
@@ -271,12 +332,12 @@ GET /api/model-configs
 ]
 ```
 
-系统内置模型首次创建时不会读取 `.env` 中的 API Key，因此 `hasApiKey` 默认为 `false`。列表接口不会返回原始 API Key。
+该接口仅管理员可访问。系统内置模型首次创建时不会读取 `.env` 中的 API Key，因此 `hasApiKey` 默认为 `false`。列表接口不会返回原始 API Key。
 
 ## 创建模型配置
 
 ```http
-POST /api/model-configs
+POST /api/admin/model-configs
 ```
 
 请求：
@@ -300,7 +361,7 @@ POST /api/model-configs
 ## 更新模型配置
 
 ```http
-PUT /api/model-configs/{modelConfigId}
+PUT /api/admin/model-configs/{modelConfigId}
 ```
 
 请求字段与创建接口一致，均为可选字段。`apiKey` 为空字符串或不传时表示保留原密钥。内置配置可编辑 Base URL、API Key、模型名、展示名和启用状态，但不能删除。
@@ -308,7 +369,7 @@ PUT /api/model-configs/{modelConfigId}
 ## 删除模型配置
 
 ```http
-DELETE /api/model-configs/{modelConfigId}
+DELETE /api/admin/model-configs/{modelConfigId}
 ```
 
 仅自定义配置允许删除。内置 DeepSeek、MiniMax、GLM 只能禁用，不能删除。
@@ -316,7 +377,7 @@ DELETE /api/model-configs/{modelConfigId}
 ## 测试模型配置连接
 
 ```http
-POST /api/model-configs/test
+POST /api/admin/model-configs/test
 ```
 
 测试已保存配置：
@@ -378,7 +439,7 @@ POST /api/evaluation/responses/{responseId}/feedback
 - `like`：点赞
 - `dislike`：点踩
 
-该接口采用互斥状态式切换语义。同一匿名用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。当前匿名用户固定写入 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
+该接口采用互斥状态式切换语义。同一登录用户对同一回答只能保留一个当前反馈：重复提交相同类型会取消，提交另一类型会从点赞切换为点踩或反向切换。反馈写入当前登录用户 ID；demo-v1 旧匿名反馈继续归属 `user_id = 0`。
 
 反馈提交后会重算并持久化最终分：
 

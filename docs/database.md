@@ -4,6 +4,16 @@
 
 用户表，保存登录用户信息。
 
+字段重点：
+
+- `username`：登录用户名，唯一。
+- `password_hash`：Argon2 密码哈希。
+- `role`：用户角色，支持 `user` 和 `admin`。
+- `status`：用户状态，支持 `active` 和 `disabled`。
+- `last_login_at`：最近一次登录成功时间。
+
+开放注册用户默认为 `user` 和 `active`。匿名用户固定使用 `id = 0`，状态为 `disabled`，只用于承载 demo-v1 历史数据，不允许登录。
+
 ## conversations
 
 会话表，保存用户的一组评测上下文。
@@ -14,11 +24,15 @@
 
 字段重点：
 
+- `user_id`：任务创建者。旧匿名任务统一迁移为 `0`。
 - `prompt`：用户问题
 - `status`：任务状态
+- `visibility`：`public` 或 `private`，默认 `public`
 - `completed_at`：完成时间
 
 创建评测时会先写入任务记录。同步接口和模型级渐进接口都会使用真实任务 ID 返回给前端。
+
+公开任务对所有登录用户可见；私有任务只对创建者可见。管理员通过普通任务接口也不能查看其他用户的私有任务。
 
 ## model_providers
 
@@ -81,11 +95,10 @@
 
 ## user_feedback
 
-用户反馈表。当前用于保存匿名点赞和点踩状态。
+用户反馈表。用于保存登录用户的点赞和点踩状态。
 
-- 匿名用户固定使用 `users.id = 0`，用户名为 `anonymous`。
-- 后续登录用户从 `users.id = 1` 开始自增。
-- `user_feedback.user_id` 对匿名反馈写入 `0`，不使用 `NULL`。
+- demo-v1 旧匿名反馈继续归属 `users.id = 0`。
+- 新反馈写入当前登录用户 ID。
 - `user_id + response_id` 具备唯一约束，保证同一用户对同一回答只有一个当前反馈。
 - 当前支持的 `feedback_type` 为：
 
@@ -107,4 +120,4 @@
 
 旧版 `user_feedback.comment` 中已有的非空内容会在 Alembic 迁移时复制到 `user_comments`，随后删除旧字段。
 
-当前尚未接入真实登录体系，因此所有匿名访客都映射为 `user_id = 0`，无法在不同匿名访客之间区分评论归属。
+demo-v1 旧匿名评论继续归属 `user_id = 0`。新评论写入当前登录用户 ID，只有评论作者可以删除。

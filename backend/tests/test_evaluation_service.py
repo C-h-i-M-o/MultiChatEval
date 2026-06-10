@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from app.schemas.evaluation import (
     CommentCreate,
@@ -25,6 +26,9 @@ from app.services.evaluation_service import (
 )
 from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
 from app.services.model_config_service import RuntimeModelConfig, model_config_service
+
+TEST_USER_ID = 7
+TEST_USERNAME = "test_user"
 
 
 class FakeDb:
@@ -228,6 +232,24 @@ def test_enable_judge_requires_judge_model_id() -> None:
         EvaluationTaskCreate(prompt="你好", modelIds=[1], enableJudge=True)
 
 
+def test_evaluation_task_defaults_to_public_and_accepts_private() -> None:
+    assert EvaluationTaskCreate(prompt="公开问题").visibility == "public"
+    assert EvaluationTaskCreate(prompt="私有问题", visibility="private").visibility == "private"
+
+    with pytest.raises(ValidationError):
+        EvaluationTaskCreate(prompt="错误问题", visibility="internal")
+
+
+def test_task_access_condition_allows_public_or_owned_private_tasks() -> None:
+    statement = select(EvaluationTask).where(
+        evaluation_service._task_access_condition(TEST_USER_ID)
+    )
+    compiled = str(statement.compile(compile_kwargs={"literal_binds": True}))
+
+    assert "evaluation_tasks.visibility = 'public'" in compiled
+    assert "evaluation_tasks.user_id = 7" in compiled
+
+
 def test_feedback_create_allows_like_and_dislike_only() -> None:
     assert FeedbackCreate(feedbackType="like").feedback_type == "like"
     assert FeedbackCreate(feedbackType="dislike").feedback_type == "dislike"
@@ -280,13 +302,14 @@ def test_serialize_score_rebuilds_rule_details_for_history() -> None:
     assert score.details["format"]
 
 
-def test_serialize_feedback_uses_anonymous_user_state_and_counts() -> None:
+def test_serialize_feedback_uses_current_user_state_and_counts() -> None:
     feedback = evaluation_service._serialize_feedback(
         [
             UserFeedback(id=1, user_id=0, response_id=44, feedback_type="like"),
             UserFeedback(id=2, user_id=2, response_id=44, feedback_type="like"),
             UserFeedback(id=3, user_id=3, response_id=44, feedback_type="dislike"),
-        ]
+        ],
+        user_id=2,
     )
 
     assert feedback.liked is True
@@ -296,10 +319,15 @@ def test_serialize_feedback_uses_anonymous_user_state_and_counts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_toggle_response_feedback_creates_anonymous_like() -> None:
+async def test_toggle_response_feedback_creates_current_user_like() -> None:
     db = FakeFeedbackDb()
 
-    result = await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+    result = await evaluation_service.toggle_response_feedback(
+        44,
+        FeedbackCreate(feedbackType="like"),
+        db,
+        TEST_USER_ID,
+    )
 
     assert result.active is True
     assert result.feedback.liked is True
@@ -308,7 +336,7 @@ async def test_toggle_response_feedback_creates_anonymous_like() -> None:
     assert result.score.feedback_score == 10
     assert result.score.final == 8.56
     assert db.response.evaluation_result.final_score == Decimal("8.56")
-    assert db.feedback_records[0].user_id == 0
+    assert db.feedback_records[0].user_id == TEST_USER_ID
     assert db.feedback_records[0].feedback_type == "like"
     assert db.committed is True
 
@@ -316,10 +344,17 @@ async def test_toggle_response_feedback_creates_anonymous_like() -> None:
 @pytest.mark.asyncio
 async def test_toggle_response_feedback_cancels_same_type() -> None:
     db = FakeFeedbackDb(
-        feedback_records=[UserFeedback(id=1, user_id=0, response_id=44, feedback_type="like")]
+        feedback_records=[
+            UserFeedback(id=1, user_id=TEST_USER_ID, response_id=44, feedback_type="like")
+        ]
     )
 
-    result = await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+    result = await evaluation_service.toggle_response_feedback(
+        44,
+        FeedbackCreate(feedbackType="like"),
+        db,
+        TEST_USER_ID,
+    )
 
     assert result.active is False
     assert result.feedback.liked is False
@@ -332,10 +367,17 @@ async def test_toggle_response_feedback_cancels_same_type() -> None:
 @pytest.mark.asyncio
 async def test_toggle_response_feedback_switches_between_like_and_dislike() -> None:
     db = FakeFeedbackDb(
-        feedback_records=[UserFeedback(id=1, user_id=0, response_id=44, feedback_type="dislike")]
+        feedback_records=[
+            UserFeedback(id=1, user_id=TEST_USER_ID, response_id=44, feedback_type="dislike")
+        ]
     )
 
-    result = await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+    result = await evaluation_service.toggle_response_feedback(
+        44,
+        FeedbackCreate(feedbackType="like"),
+        db,
+        TEST_USER_ID,
+    )
 
     assert result.active is True
     assert result.feedback.liked is True
@@ -352,7 +394,12 @@ async def test_toggle_response_feedback_requires_existing_response() -> None:
     db = FakeFeedbackDb(response_exists=False)
 
     with pytest.raises(EvaluationResponseNotFoundError):
-        await evaluation_service.toggle_response_feedback(44, FeedbackCreate(feedbackType="like"), db)
+        await evaluation_service.toggle_response_feedback(
+            44,
+            FeedbackCreate(feedbackType="like"),
+            db,
+            TEST_USER_ID,
+        )
 
 
 def test_feedback_score_uses_like_ratio() -> None:
@@ -382,13 +429,15 @@ async def test_create_response_comment_persists_trimmed_content() -> None:
         44,
         CommentCreate(content="  评论内容  "),
         db,
+        TEST_USER_ID,
+        TEST_USERNAME,
     )
 
     assert result.id == 301
     assert result.content == "评论内容"
     assert result.can_delete is True
     assert db.comment is not None
-    assert db.comment.user_id == 0
+    assert db.comment.user_id == TEST_USER_ID
     assert db.committed is True
 
 
@@ -397,7 +446,13 @@ async def test_create_response_comment_requires_existing_response() -> None:
     db = FakeCreateCommentDb(response_exists=False)
 
     with pytest.raises(EvaluationResponseNotFoundError):
-        await evaluation_service.create_response_comment(404, CommentCreate(content="评论内容"), db)
+        await evaluation_service.create_response_comment(
+            404,
+            CommentCreate(content="评论内容"),
+            db,
+            TEST_USER_ID,
+            TEST_USERNAME,
+        )
 
 
 @pytest.mark.asyncio
@@ -405,14 +460,20 @@ async def test_list_response_comments_returns_latest_page() -> None:
     created_at = datetime(2026, 6, 6, 10, 30, 0)
     comment = UserComment(
         id=301,
-        user_id=0,
+        user_id=TEST_USER_ID,
         response_id=44,
         content="评论内容",
         created_at=created_at,
     )
-    db = FakeListCommentDb([(comment, "anonymous")])
+    db = FakeListCommentDb([(comment, TEST_USERNAME)])
 
-    result = await evaluation_service.list_response_comments(44, db, page=2, page_size=10)
+    result = await evaluation_service.list_response_comments(
+        44,
+        db,
+        page=2,
+        page_size=10,
+        user_id=TEST_USER_ID,
+    )
 
     assert result.total == 1
     assert result.page == 2
@@ -422,10 +483,10 @@ async def test_list_response_comments_returns_latest_page() -> None:
 
 @pytest.mark.asyncio
 async def test_delete_response_comment_deletes_owned_comment() -> None:
-    comment = UserComment(id=301, user_id=0, response_id=44, content="评论内容")
+    comment = UserComment(id=301, user_id=TEST_USER_ID, response_id=44, content="评论内容")
     db = FakeDeleteCommentDb(comment)
 
-    await evaluation_service.delete_response_comment(301, db)
+    await evaluation_service.delete_response_comment(301, db, TEST_USER_ID)
 
     assert db.deleted is True
     assert db.committed is True
@@ -436,7 +497,7 @@ async def test_delete_response_comment_requires_owned_comment() -> None:
     db = FakeDeleteCommentDb(None)
 
     with pytest.raises(EvaluationCommentNotFoundError):
-        await evaluation_service.delete_response_comment(404, db)
+        await evaluation_service.delete_response_comment(404, db, TEST_USER_ID)
 
 
 @pytest.mark.asyncio
@@ -454,8 +515,13 @@ async def test_stream_task_events_yields_model_responses_in_completion_order(mon
             await asyncio.sleep(0.02)
         return make_response(model.id, model.display_name, response_id=model.id + 500)
 
-    async def fake_create_task_record(_db: FakeDb, payload: EvaluationTaskCreate) -> int:
+    async def fake_create_task_record(
+        _db: FakeDb,
+        payload: EvaluationTaskCreate,
+        user_id: int,
+    ) -> int:
         assert payload.prompt == "测试问题"
+        assert user_id == TEST_USER_ID
         return 101
 
     async def fake_persist_response(_db: FakeDb, task_id: int, response: ModelResponseRead) -> ModelResponseRead:
@@ -476,6 +542,8 @@ async def test_stream_task_events_yields_model_responses_in_completion_order(mon
         evaluation_service.stream_task_events(
             EvaluationTaskCreate(prompt="测试问题", modelIds=[1, 2], enableThinking=False),
             FakeDb(),
+            TEST_USER_ID,
+            TEST_USERNAME,
         )
     )
 
@@ -510,7 +578,12 @@ async def test_stream_task_events_keeps_running_when_one_model_fails(monkeypatch
         status = "failed" if model.id == 1 else "success"
         return make_response(model.id, model.display_name, status=status)
 
-    async def fake_create_task_record(_db: FakeDb, _payload: EvaluationTaskCreate) -> int:
+    async def fake_create_task_record(
+        _db: FakeDb,
+        _payload: EvaluationTaskCreate,
+        user_id: int,
+    ) -> int:
+        assert user_id == TEST_USER_ID
         return 102
 
     async def fake_persist_response(_db: FakeDb, _task_id: int, response: ModelResponseRead) -> ModelResponseRead:
@@ -530,6 +603,8 @@ async def test_stream_task_events_keeps_running_when_one_model_fails(monkeypatch
         evaluation_service.stream_task_events(
             EvaluationTaskCreate(prompt="测试问题", modelIds=[1, 2], enableThinking=True),
             FakeDb(),
+            TEST_USER_ID,
+            TEST_USERNAME,
         )
     )
 
@@ -552,8 +627,13 @@ async def test_create_task_persists_task_responses_and_scores(monkeypatch: pytes
         assert extra_body == {"thinking": {"type": "disabled"}}
         return make_response(model.id, model.display_name, response_id=700)
 
-    async def fake_create_task_record(_db: FakeDb, payload: EvaluationTaskCreate) -> int:
+    async def fake_create_task_record(
+        _db: FakeDb,
+        payload: EvaluationTaskCreate,
+        user_id: int,
+    ) -> int:
         assert payload.prompt == "需要保存的问题"
+        assert user_id == TEST_USER_ID
         return 200
 
     async def fake_persist_response(_db: FakeDb, task_id: int, response: ModelResponseRead) -> ModelResponseRead:
@@ -574,12 +654,17 @@ async def test_create_task_persists_task_responses_and_scores(monkeypatch: pytes
     task = await evaluation_service.create_task(
         EvaluationTaskCreate(prompt="需要保存的问题", modelIds=[3]),
         FakeDb(),
+        TEST_USER_ID,
+        TEST_USERNAME,
     )
 
     assert task.task_id == 200
     assert task.status == "completed"
     assert task.responses[0].id == 700
     assert task.responses[0].model_config_id == 3
+    assert task.owner_id == TEST_USER_ID
+    assert task.owner_username == TEST_USERNAME
+    assert task.visibility == "public"
     assert persisted_response_ids == [700]
 
 
@@ -616,7 +701,12 @@ async def test_create_task_applies_judge_score_when_enabled(monkeypatch: pytest.
             },
         )
 
-    async def fake_create_task_record(_db: FakeDb, _payload: EvaluationTaskCreate) -> int:
+    async def fake_create_task_record(
+        _db: FakeDb,
+        _payload: EvaluationTaskCreate,
+        user_id: int,
+    ) -> int:
+        assert user_id == TEST_USER_ID
         return 200
 
     async def fake_persist_response(_db: FakeDb, _task_id: int, response: ModelResponseRead) -> ModelResponseRead:
@@ -637,6 +727,8 @@ async def test_create_task_applies_judge_score_when_enabled(monkeypatch: pytest.
     task = await evaluation_service.create_task(
         EvaluationTaskCreate(prompt="需要评审的问题", modelIds=[3], enableJudge=True, judgeModelId=9),
         FakeDb(),
+        TEST_USER_ID,
+        TEST_USERNAME,
     )
 
     assert task.responses[0].score.rule_final == 8.4
@@ -669,7 +761,12 @@ async def test_create_task_keeps_rule_score_when_judge_fails(monkeypatch: pytest
         assert model.id == 9
         return LLMJudgeResult(score=None, comment="LLM 评审失败：返回内容不是合法 JSON", details={})
 
-    async def fake_create_task_record(_db: FakeDb, _payload: EvaluationTaskCreate) -> int:
+    async def fake_create_task_record(
+        _db: FakeDb,
+        _payload: EvaluationTaskCreate,
+        user_id: int,
+    ) -> int:
+        assert user_id == TEST_USER_ID
         return 200
 
     async def fake_persist_response(_db: FakeDb, _task_id: int, response: ModelResponseRead) -> ModelResponseRead:
@@ -689,6 +786,8 @@ async def test_create_task_keeps_rule_score_when_judge_fails(monkeypatch: pytest
     task = await evaluation_service.create_task(
         EvaluationTaskCreate(prompt="需要评审的问题", modelIds=[3], enableJudge=True, judgeModelId=9),
         FakeDb(),
+        TEST_USER_ID,
+        TEST_USERNAME,
     )
 
     assert task.responses[0].score.final == 8.4

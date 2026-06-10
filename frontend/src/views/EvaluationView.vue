@@ -7,13 +7,13 @@
       </div>
     </header>
 
-    <section v-if="showApiKeyNotice" class="api-key-notice">
+    <section v-if="showModelNotice" class="api-key-notice">
       <div>
-        <p class="panel-label">模型密钥</p>
-        <h3>请先配置模型 API Key</h3>
-        <p>系统内置模型不会读取 .env 中的密钥。请进入模型配置，为 DeepSeek、MiniMax、GLM 或自定义模型填写自己的 API Key。</p>
+        <p class="panel-label">可用模型</p>
+        <h3>当前没有可用于评测的模型</h3>
+        <p>{{ authStore.isAdmin ? "请进入模型配置启用模型并填写 API Key。" : "请联系管理员配置可用模型。" }}</p>
       </div>
-      <el-button type="primary" @click="router.push('/models')">去配置</el-button>
+      <el-button v-if="authStore.isAdmin" type="primary" @click="router.push('/models')">去配置</el-button>
     </section>
 
     <section class="query-panel">
@@ -23,6 +23,10 @@
           <h3>创建一次多模型评测</h3>
         </div>
         <div class="query-switches">
+          <el-radio-group v-model="visibility" :disabled="store.loading" size="small">
+            <el-radio-button value="public">公开评测</el-radio-button>
+            <el-radio-button value="private">私有评测</el-radio-button>
+          </el-radio-group>
           <el-switch v-model="enableThinking" :disabled="store.loading" active-text="思考模式" />
           <el-switch v-model="enableJudge" :disabled="store.loading" active-text="LLM 评审" />
         </div>
@@ -75,13 +79,6 @@
       show-icon
     />
 
-    <el-alert
-      v-if="!modelConfigLoading && configuredModelConfigs.length === 0"
-      title="暂无可评测模型，请先在模型配置中填写 API Key 并启用至少一个模型"
-      type="warning"
-      show-icon
-    />
-
     <section v-if="store.loading" class="waiting-banner" aria-live="polite">
       <div>
         <p class="panel-label">模型调用中</p>
@@ -112,16 +109,19 @@ import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
 import ModelResponseCard from "../components/ModelResponseCard.vue";
+import { useAuthStore } from "../stores/auth";
 import { useEvaluationStore } from "../stores/evaluation";
-import { listModelConfigs } from "../utils/api";
+import { listAvailableModels } from "../utils/api";
 
 const router = useRouter();
+const authStore = useAuthStore();
 const store = useEvaluationStore();
 const prompt = ref("");
 const selectedModels = ref([]);
 const judgeModelId = ref(null);
 const enableJudge = ref(false);
 const enableThinking = ref(false);
+const visibility = ref("public");
 const elapsedSeconds = ref(0);
 const pendingModelIds = ref([]);
 const modelConfigs = ref([]);
@@ -130,12 +130,8 @@ const modelConfigErrorMessage = ref("");
 let waitingTimerId = null;
 
 const responses = computed(() => store.task?.responses || []);
-const configuredModelConfigs = computed(() => {
-  return modelConfigs.value.filter((modelConfig) => modelConfig.enabled && modelConfig.hasApiKey);
-});
-const showApiKeyNotice = computed(() => {
-  return !modelConfigLoading.value && modelConfigs.value.length > 0 && modelConfigs.value.every((modelConfig) => !modelConfig.hasApiKey);
-});
+const configuredModelConfigs = computed(() => modelConfigs.value);
+const showModelNotice = computed(() => !modelConfigLoading.value && configuredModelConfigs.value.length === 0);
 const modelNameMap = computed(() => {
   return modelConfigs.value.reduce((names, modelConfig) => {
     names[modelConfig.id] = modelConfig.displayName;
@@ -225,7 +221,7 @@ async function loadModelConfigs() {
   modelConfigErrorMessage.value = "";
 
   try {
-    modelConfigs.value = await listModelConfigs();
+    modelConfigs.value = await listAvailableModels();
     selectDefaultModels();
   } catch (error) {
     modelConfigErrorMessage.value = error?.message || "模型配置加载失败";
@@ -246,7 +242,8 @@ async function submitTask() {
     modelIds: selectedModels.value,
     enableJudge: enableJudge.value,
     judgeModelId: enableJudge.value ? judgeModelId.value : null,
-    enableThinking: enableThinking.value
+    enableThinking: enableThinking.value,
+    visibility: visibility.value
   });
   stopWaitingTimer();
 }

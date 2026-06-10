@@ -1,6 +1,13 @@
 from pydantic import BaseModel, Field
 
 
+class AvailableModelRead(BaseModel):
+    id: int
+    provider_name: str = Field(alias="providerName")
+    display_name: str = Field(alias="displayName")
+    model_name: str = Field(alias="modelName")
+
+
 class ModelConfigRead(BaseModel):
     id: int
     provider_name: str = Field(alias="providerName")

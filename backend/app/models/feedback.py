@@ -10,7 +10,7 @@ class UserFeedback(Base):
     __tablename__ = "user_feedback"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     response_id: Mapped[int] = mapped_column(ForeignKey("model_responses.id"))
     feedback_type: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
