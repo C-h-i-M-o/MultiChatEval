@@ -43,6 +43,7 @@ MultiChatEval/
 - `docs/architecture.md`：系统架构和核心流程。
 - `docs/api.md`：后端接口草案。
 - `docs/database.md`：数据库表结构说明。
+- `docs/v2-development-plan.md`：v2 云端多用户版本的开发顺序、流程和验收标准。
 
 ## 快速开始
 
