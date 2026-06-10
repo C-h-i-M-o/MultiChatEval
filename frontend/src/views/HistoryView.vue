@@ -83,16 +83,14 @@
             </el-button>
           </div>
 
-          <div v-else class="history-response-list">
-            <ModelResponseCard
-              v-for="response in store.selectedHistoryTask.responses"
-              :key="response.id"
-              :response="response"
-              :feedback-submitting="store.feedbackSubmittingIds.includes(response.id)"
-              show-actions
-              @feedback="handleFeedback"
-            />
-          </div>
+          <ModelResponseSummaryGrid
+            v-else
+            :responses="store.selectedHistoryTask.responses"
+            :feedback-submitting-ids="store.feedbackSubmittingIds"
+            layout-mode="list"
+            show-actions
+            @feedback="handleFeedback"
+          />
         </div>
       </section>
     </section>
@@ -103,7 +101,7 @@
 import { computed, onMounted } from "vue";
 import { ElMessage } from "element-plus";
 
-import ModelResponseCard from "../components/ModelResponseCard.vue";
+import ModelResponseSummaryGrid from "../components/ModelResponseSummaryGrid.vue";
 import { useEvaluationStore } from "../stores/evaluation";
 
 const store = useEvaluationStore();

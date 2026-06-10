@@ -10,14 +10,14 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 ## demo-v1 发布状态
 
-当前 `complete-v1` 分支对应可发布的 demo-v1。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。
 
 demo-v1 左侧导航只展示对比评测、模型配置和历史任务。`/feedback` 占位路由暂时保留供后续开发，但不向 demo-v1 用户展示入口。
 
 ## 当前技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify
+- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -74,6 +74,7 @@ MultiChatEval/
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
 - 规则评分相关性使用轻量本地多信号评分，不依赖外部语义模型或下载。
+- 规则评分会排除完整或未闭合的 `<think>` 思考内容，仅评价最终回答；原始回答仍完整保存和返回。
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
 - 评测请求发送给模型前，会在用户原始问题前拼接系统内置提示词；数据库、历史任务和接口响应中的 `prompt` 仍保留用户原始问题。
 - 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；新用户需要在前端“模型配置”页面填写自己的 API Key。
@@ -93,19 +94,21 @@ MultiChatEval/
     - 输入问题
     - 按已启用且已配置 API Key 的模型配置选择模型
     - 启用或关闭 LLM 评审开关
-    - 展示多模型回答卡片
+    - 展示多模型回答摘要卡和全文详情弹窗
     - 展示耗时、输出长度、成本和评分条
     - 当系统内没有任何已配置 API Key 的模型时，提醒用户先进入“模型配置”页面
 - 前端展示增强：
     - 请求期间显示等待卡片、耗时计数和完成进度
     - 模型完成即展示，避免等待最慢模型后才统一呈现
-    - 结果卡片根据模型数量自适应布局
+    - 对比评测回答使用平衡摘要网格，四个模型固定两行两列，五至九个模型自动铺满每一行
+    - 使用 GSAP 实现结果进入、等待卡替换、评分条和详情弹窗动画，并适配减少动态效果偏好
     - 支持全局“思考模式”开关
     - `MarkdownRenderer` 支持 Markdown 回答渲染
     - `<think>...</think>` 内容折叠为“思考过程”
-    - 侧边栏“历史任务”入口支持分页查看历史评测并加载详情
+- 侧边栏“历史任务”入口支持分页查看历史评测，回答使用单列紧凑列表并可加载详情
     - Element Plus 使用中文语言配置，分页容量后缀显示为 `/页`
     - 评分详情支持分页查看、发布和删除公开评论
+- 桌面端侧边栏固定在可视区域内，“默认流程”保持在侧栏底部；移动端恢复普通流式布局
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
@@ -237,9 +240,9 @@ MODEL_REQUEST_TIMEOUT=90
 - 点赞、点踩按钮已接通反馈接口。
 - 点赞和点踩会真实写入或取消写入 `user_feedback`。
 - 匿名用户固定使用 `user_id = 0`，后续登录用户从 `id = 1` 开始自增。
-- 评测页和历史任务详情页都可以提交点赞或点踩。
+- 评测页和历史任务详情页都可以在回答摘要卡或全文详情弹窗中提交点赞或点踩。
 - 点赞/点踩变化会重算并持久化最终分。
-- 评分详情弹窗会展示维度分数、权重、命中项明细、当前反馈状态和评分公式。
+- 全文详情弹窗会展示完整回答、维度分数、权重、命中项明细、当前反馈状态和评分公式。
 - 支持分页查看、发布和硬删除公开评论；同一用户对同一回答的评论数量不受限制。
 
 待做：
