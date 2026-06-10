@@ -122,6 +122,7 @@ MultiChatEval/
     - `docs/database.md`
     - `docs/api.md`
     - `docs/open-source-reuse.md`
+    - `docs/v2-development-plan.md`
 
 ## 本地运行方式
 
