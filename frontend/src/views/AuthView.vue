@@ -52,6 +52,7 @@ import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
 import { useAuthStore } from "../stores/auth";
+import { getApiErrorMessage } from "../utils/errors";
 
 const route = useRoute();
 const router = useRouter();
@@ -79,7 +80,7 @@ async function submit() {
     const redirectPath = typeof route.query.redirect === "string" ? route.query.redirect : "/";
     await router.replace(redirectPath);
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || "认证失败，请检查输入");
+    ElMessage.error(getApiErrorMessage(error, "认证失败，请检查输入"));
   }
 }
 </script>
