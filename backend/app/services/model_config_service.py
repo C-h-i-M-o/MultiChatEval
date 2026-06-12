@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 from app.adapters.base import ModelRequest
 from app.adapters.openai_compatible import OpenAICompatibleClient
 from app.core.api_keys import has_stored_api_key, load_api_key, mask_stored_api_key, store_api_key
-from app.core.config import settings
 from app.models.model_config import ModelConfig, ModelProvider
 from app.schemas.model_config import (
     AvailableModelRead,
@@ -20,18 +19,6 @@ from app.schemas.model_config import (
     ModelConfigTestResult,
     ModelConfigUpdate,
 )
-
-BUILTIN_PROVIDER_NAMES = {"deepseek", "minimax", "glm"}
-DEFAULT_PROVIDER_NAMES = ("deepseek", "minimax")
-
-
-@dataclass(frozen=True)
-class BuiltinModelDefinition:
-    provider_name: str
-    display_name: str
-    model_name: str
-    base_url: str
-
 
 @dataclass(frozen=True)
 class RuntimeModelConfig:
@@ -43,7 +30,13 @@ class RuntimeModelConfig:
     api_key: str
     input_price: Decimal
     output_price: Decimal
+    cache_hit_price: Decimal
+    cache_creation_price: Decimal
+    currency: str
     max_tokens: int
+    temperature: float
+    timeout_seconds: int
+    notes: str
     extra_body: dict[str, object]
 
 
@@ -57,7 +50,6 @@ class ModelConfigNotFoundError(ModelConfigServiceError):
 
 class ModelConfigService:
     async def list_available_configs(self, db: AsyncSession) -> list[AvailableModelRead]:
-        await self.ensure_builtin_configs(db)
         configs = await self._list_enabled_model_configs(db)
         return [
             AvailableModelRead(
@@ -71,15 +63,11 @@ class ModelConfigService:
         ]
 
     async def list_configs(self, db: AsyncSession) -> list[ModelConfigRead]:
-        await self.ensure_builtin_configs(db)
         configs = await self._list_model_configs(db)
         return [self._serialize_config(config) for config in configs]
 
     async def create_config(self, db: AsyncSession, payload: ModelConfigCreate) -> ModelConfigRead:
         provider_name = self._required_text(payload.provider_name, "供应商名称")
-        if provider_name in BUILTIN_PROVIDER_NAMES:
-            raise ModelConfigServiceError("内置供应商配置已存在，不能重复创建")
-
         existing_provider = await self._get_provider_by_name(db, provider_name)
         if existing_provider is not None:
             raise ModelConfigServiceError("供应商名称已存在")
@@ -99,6 +87,12 @@ class ModelConfigService:
             display_name=self._required_text(payload.display_name, "展示名"),
             price_input=Decimal(str(payload.price_input)),
             price_output=Decimal(str(payload.price_output)),
+            price_cache_hit=Decimal(str(payload.price_cache_hit)),
+            price_cache_creation=Decimal(str(payload.price_cache_creation)),
+            currency=payload.currency,
+            temperature=Decimal(str(payload.temperature)),
+            timeout_seconds=payload.timeout_seconds,
+            notes=payload.notes.strip(),
             max_tokens=payload.max_tokens,
             enabled=payload.enabled,
         )
@@ -110,15 +104,10 @@ class ModelConfigService:
     async def update_config(self, db: AsyncSession, model_config_id: int, payload: ModelConfigUpdate) -> ModelConfigRead:
         config = await self._get_model_config(db, model_config_id)
         provider = config.provider
-        builtin = self._is_builtin(provider.name)
 
         if payload.provider_name is not None:
             provider_name = self._required_text(payload.provider_name, "供应商名称")
-            if builtin and provider_name != provider.name:
-                raise ModelConfigServiceError("内置供应商名称不能修改")
-            if not builtin and provider_name != provider.name:
-                if provider_name in BUILTIN_PROVIDER_NAMES:
-                    raise ModelConfigServiceError("自定义配置不能使用内置供应商名称")
+            if provider_name != provider.name:
                 existing_provider = await self._get_provider_by_name(db, provider_name)
                 if existing_provider is not None:
                     raise ModelConfigServiceError("供应商名称已存在")
@@ -141,6 +130,18 @@ class ModelConfigService:
             config.price_input = Decimal(str(payload.price_input))
         if payload.price_output is not None:
             config.price_output = Decimal(str(payload.price_output))
+        if payload.price_cache_hit is not None:
+            config.price_cache_hit = Decimal(str(payload.price_cache_hit))
+        if payload.price_cache_creation is not None:
+            config.price_cache_creation = Decimal(str(payload.price_cache_creation))
+        if payload.currency is not None:
+            config.currency = payload.currency
+        if payload.temperature is not None:
+            config.temperature = Decimal(str(payload.temperature))
+        if payload.timeout_seconds is not None:
+            config.timeout_seconds = payload.timeout_seconds
+        if payload.notes is not None:
+            config.notes = payload.notes.strip()
 
         await db.commit()
         updated_config = await self._get_model_config(db, model_config_id)
@@ -149,9 +150,6 @@ class ModelConfigService:
     async def delete_config(self, db: AsyncSession, model_config_id: int) -> None:
         config = await self._get_model_config(db, model_config_id)
         provider = config.provider
-        if self._is_builtin(provider.name):
-            raise ModelConfigServiceError("内置模型配置不能删除，请改为禁用")
-
         await db.delete(config)
         await db.delete(provider)
         await db.commit()
@@ -163,7 +161,7 @@ class ModelConfigService:
                 model_name=runtime_config.model_name,
                 base_url=runtime_config.base_url,
                 api_key=runtime_config.api_key,
-                timeout=min(settings.model_request_timeout, 30),
+                timeout=min(runtime_config.timeout_seconds, 30),
                 extra_body=runtime_config.extra_body,
             )
             reply = await asyncio.wait_for(
@@ -172,9 +170,10 @@ class ModelConfigService:
                         prompt="请用一句话回复：连接测试成功",
                         model_name=runtime_config.model_name,
                         max_tokens=min(runtime_config.max_tokens, 64),
+                        temperature=runtime_config.temperature,
                     )
                 ),
-                timeout=min(settings.model_request_timeout + 5, 35),
+                timeout=min(runtime_config.timeout_seconds + 5, 35),
             )
         except (TimeoutError, httpx.HTTPError, ValueError, KeyError, IndexError, ModelConfigServiceError) as error:
             return ModelConfigTestResult(success=False, message=f"连接测试失败：{error}", latencyMs=0)
@@ -182,7 +181,6 @@ class ModelConfigService:
         return ModelConfigTestResult(success=True, message="连接测试成功", latencyMs=reply.latency_ms)
 
     async def resolve_runtime_models(self, db: AsyncSession, model_ids: list[int]) -> list[RuntimeModelConfig]:
-        await self.ensure_builtin_configs(db)
         configs = await self._list_enabled_model_configs(db)
         if not configs:
             return []
@@ -195,7 +193,6 @@ class ModelConfigService:
         return [self._to_runtime_config(config) for config in selected_configs]
 
     async def resolve_runtime_model(self, db: AsyncSession, model_id: int) -> RuntimeModelConfig:
-        await self.ensure_builtin_configs(db)
         config = await self._get_model_config(db, model_id)
         if not config.enabled or not config.provider.enabled:
             raise ModelConfigNotFoundError("评审模型未启用")
@@ -203,43 +200,6 @@ class ModelConfigService:
         if not runtime_config.api_key:
             raise ModelConfigNotFoundError("评审模型未配置 API Key")
         return runtime_config
-
-    async def ensure_builtin_configs(self, db: AsyncSession) -> None:
-        changed = False
-        for definition in self._builtin_definitions():
-            provider = await self._get_provider_by_name(db, definition.provider_name)
-            if provider is None:
-                provider = ModelProvider(
-                    name=definition.provider_name,
-                    base_url=definition.base_url,
-                    api_key_encrypted=None,
-                    enabled=True,
-                )
-                db.add(provider)
-                await db.flush()
-                changed = True
-            else:
-                if not provider.base_url:
-                    provider.base_url = definition.base_url
-                    changed = True
-
-            config = await self._get_first_config_by_provider_id(db, provider.id)
-            if config is None:
-                db.add(
-                    ModelConfig(
-                        provider_id=provider.id,
-                        model_name=definition.model_name,
-                        display_name=definition.display_name,
-                        price_input=Decimal("0"),
-                        price_output=Decimal("0"),
-                        max_tokens=1024,
-                        enabled=True,
-                    )
-                )
-                changed = True
-
-        if changed:
-            await db.commit()
 
     async def _resolve_test_config(self, db: AsyncSession, payload: ModelConfigTestRequest) -> RuntimeModelConfig:
         if payload.model_config_id is not None:
@@ -258,7 +218,17 @@ class ModelConfigService:
                 api_key=api_key,
                 input_price=runtime_config.input_price,
                 output_price=runtime_config.output_price,
-                max_tokens=payload.max_tokens,
+                cache_hit_price=runtime_config.cache_hit_price,
+                cache_creation_price=runtime_config.cache_creation_price,
+                currency=runtime_config.currency,
+                max_tokens=payload.max_tokens or runtime_config.max_tokens,
+                temperature=(
+                    runtime_config.temperature
+                    if payload.temperature is None
+                    else payload.temperature
+                ),
+                timeout_seconds=payload.timeout_seconds or runtime_config.timeout_seconds,
+                notes=runtime_config.notes,
                 extra_body=self._extra_body_for_provider(provider_name),
             )
 
@@ -272,7 +242,13 @@ class ModelConfigService:
             api_key=self._required_text(payload.api_key, "API Key"),
             input_price=Decimal("0"),
             output_price=Decimal("0"),
-            max_tokens=payload.max_tokens,
+            cache_hit_price=Decimal("0"),
+            cache_creation_price=Decimal("0"),
+            currency="CNY",
+            max_tokens=payload.max_tokens or 128,
+            temperature=0.7 if payload.temperature is None else payload.temperature,
+            timeout_seconds=payload.timeout_seconds or 30,
+            notes="",
             extra_body=self._extra_body_for_provider(provider_name),
         )
 
@@ -307,12 +283,6 @@ class ModelConfigService:
         result = await db.execute(select(ModelProvider).where(ModelProvider.name == provider_name))
         return result.scalar_one_or_none()
 
-    async def _get_first_config_by_provider_id(self, db: AsyncSession, provider_id: int) -> ModelConfig | None:
-        result = await db.execute(
-            select(ModelConfig).where(ModelConfig.provider_id == provider_id).order_by(ModelConfig.id)
-        )
-        return result.scalars().first()
-
     def _serialize_config(self, config: ModelConfig) -> ModelConfigRead:
         provider = config.provider
         stored_key = provider.api_key_encrypted
@@ -323,12 +293,17 @@ class ModelConfigService:
             modelName=config.model_name,
             baseUrl=provider.base_url or "",
             enabled=bool(provider.enabled and config.enabled),
-            builtin=self._is_builtin(provider.name),
             hasApiKey=has_stored_api_key(stored_key),
             maskedApiKey=mask_stored_api_key(stored_key),
             maxTokens=config.max_tokens,
+            temperature=float(config.temperature),
+            timeoutSeconds=config.timeout_seconds,
+            notes=config.notes or "",
+            currency=config.currency,
             priceInput=float(config.price_input),
             priceOutput=float(config.price_output),
+            priceCacheHit=float(config.price_cache_hit),
+            priceCacheCreation=float(config.price_cache_creation),
         )
 
     def _to_runtime_config(self, config: ModelConfig) -> RuntimeModelConfig:
@@ -342,37 +317,18 @@ class ModelConfigService:
             api_key=load_api_key(provider.api_key_encrypted),
             input_price=Decimal(config.price_input),
             output_price=Decimal(config.price_output),
+            cache_hit_price=Decimal(config.price_cache_hit),
+            cache_creation_price=Decimal(config.price_cache_creation),
+            currency=config.currency,
             max_tokens=config.max_tokens,
+            temperature=float(config.temperature),
+            timeout_seconds=config.timeout_seconds,
+            notes=config.notes or "",
             extra_body=self._extra_body_for_provider(provider.name),
         )
 
     def _default_model_configs(self, configs: list[ModelConfig]) -> list[ModelConfig]:
-        default_configs = [config for config in configs if config.provider.name in DEFAULT_PROVIDER_NAMES]
-        if default_configs:
-            return default_configs[:2]
         return configs[:2]
-
-    def _builtin_definitions(self) -> list[BuiltinModelDefinition]:
-        return [
-            BuiltinModelDefinition(
-                provider_name="deepseek",
-                display_name=settings.deepseek_model,
-                model_name=settings.deepseek_model,
-                base_url=settings.deepseek_base_url,
-            ),
-            BuiltinModelDefinition(
-                provider_name="minimax",
-                display_name=settings.minimax_model,
-                model_name=settings.minimax_model,
-                base_url=settings.minimax_base_url,
-            ),
-            BuiltinModelDefinition(
-                provider_name="glm",
-                display_name=settings.zhipu_model,
-                model_name=settings.zhipu_model,
-                base_url=settings.zhipu_base_url,
-            ),
-        ]
 
     def _extra_body_for_provider(self, provider_name: str) -> dict[str, object]:
         if provider_name == "glm":
@@ -386,9 +342,5 @@ class ModelConfigService:
         if not cleaned_value:
             raise ModelConfigServiceError(f"{field_name}不能为空")
         return cleaned_value
-
-    def _is_builtin(self, provider_name: str) -> bool:
-        return provider_name in BUILTIN_PROVIDER_NAMES
-
 
 model_config_service = ModelConfigService()

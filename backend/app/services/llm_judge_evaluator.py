@@ -8,7 +8,6 @@ import httpx
 
 from app.adapters.base import ModelRequest
 from app.adapters.openai_compatible import OpenAICompatibleClient
-from app.core.config import settings
 from app.services.model_config_service import RuntimeModelConfig
 
 
@@ -37,7 +36,9 @@ class LLMJudgeEvaluator:
             api_key=model.api_key,
             input_price=model.input_price,
             output_price=model.output_price,
-            timeout=settings.model_request_timeout,
+            cache_hit_price=model.cache_hit_price,
+            cache_creation_price=model.cache_creation_price,
+            timeout=model.timeout_seconds,
             extra_body=model.extra_body,
         )
 
@@ -47,7 +48,7 @@ class LLMJudgeEvaluator:
                     prompt=self._judge_prompt(prompt=prompt, answer=answer),
                     model_name=model.model_name,
                     max_tokens=min(max(model.max_tokens, 2048), 4096),
-                    extra_body={"temperature": 0},
+                    temperature=0,
                 )
             )
             data = self._parse_json(reply.answer)

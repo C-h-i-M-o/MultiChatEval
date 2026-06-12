@@ -12,9 +12,12 @@ from app.models import (
     ModelConfig,
     ModelProvider,
     ModelResponse,
+    DailyUserTokenUsage,
+    TokenUsageLog,
     User,
     UserComment,
     UserFeedback,
+    UserTokenQuota,
 )
 
 config = context.config

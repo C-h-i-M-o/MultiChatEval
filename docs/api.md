@@ -84,7 +84,7 @@ POST /api/evaluation/tasks
 }
 ```
 
-`modelIds` 使用 `model_configs.id`。如果不传，后端默认选择已启用的 DeepSeek 和 MiniMax；如果这两个模型不可用，则选择前两个已启用模型。
+`modelIds` 使用 `model_configs.id`。如果不传，后端选择前两个已启用且已配置 API Key 的模型。
 
 `visibility` 支持 `public` 和 `private`，默认 `public`。公开任务可被所有登录用户查看，私有任务只对创建者可见。
 
@@ -327,17 +327,22 @@ GET /api/admin/model-configs
     "modelName": "deepseek-v4-flash",
     "baseUrl": "https://api.deepseek.com",
     "enabled": true,
-    "builtin": true,
     "hasApiKey": false,
     "maskedApiKey": "",
     "maxTokens": 1024,
+    "temperature": 0.7,
+    "timeoutSeconds": 60,
+    "notes": "",
+    "currency": "CNY",
     "priceInput": 0,
-    "priceOutput": 0
+    "priceOutput": 0,
+    "priceCacheHit": 0,
+    "priceCacheCreation": 0
   }
 ]
 ```
 
-该接口仅管理员可访问。系统内置模型首次创建时不会读取 `.env` 中的 API Key，因此 `hasApiKey` 默认为 `false`。列表接口不会返回原始 API Key。
+该接口仅管理员可访问。列表接口不会返回原始 API Key。
 
 ## 创建模型配置
 
@@ -356,12 +361,18 @@ POST /api/admin/model-configs
   "apiKey": "sk-example",
   "enabled": true,
   "maxTokens": 1024,
+  "temperature": 0.7,
+  "timeoutSeconds": 60,
+  "notes": "用于日常对比评测",
+  "currency": "USD",
   "priceInput": 0,
-  "priceOutput": 0
+  "priceOutput": 0,
+  "priceCacheHit": 0,
+  "priceCacheCreation": 0
 }
 ```
 
-创建接口用于自定义 OpenAI-compatible 供应商。系统内置供应商由后端自动补齐，不通过该接口创建。
+四类价格的单位均为每 100 万 Token。系统不自动写入供应商预设；前端预设只帮助管理员填写官方兼容地址和资料入口。
 
 ## 更新模型配置
 
@@ -369,7 +380,7 @@ POST /api/admin/model-configs
 PUT /api/admin/model-configs/{modelConfigId}
 ```
 
-请求字段与创建接口一致，均为可选字段。`apiKey` 为空字符串或不传时表示保留原密钥。内置配置可编辑 Base URL、API Key、模型名、展示名和启用状态，但不能删除。
+请求字段与创建接口一致，均为可选字段。`apiKey` 为空字符串或不传时表示保留原密钥。
 
 ## 删除模型配置
 
@@ -377,7 +388,7 @@ PUT /api/admin/model-configs/{modelConfigId}
 DELETE /api/admin/model-configs/{modelConfigId}
 ```
 
-仅自定义配置允许删除。内置 DeepSeek、MiniMax、GLM 只能禁用，不能删除。
+所有模型配置均允许删除；已有回答通过可空外键和参数快照保留历史信息。
 
 ## 测试模型配置连接
 
@@ -416,6 +427,66 @@ POST /api/admin/model-configs/test
 ```
 
 失败时 `success` 为 `false`，`message` 返回失败原因。
+
+## 查询今日 Token 用量
+
+```http
+GET /api/token-usage/me/today
+```
+
+普通用户响应：
+
+```json
+{
+  "usageDate": "2026-06-12",
+  "usedTokens": 24000,
+  "dailyLimit": 100000,
+  "remainingTokens": 76000,
+  "unlimited": false
+}
+```
+
+管理员的 `dailyLimit` 和 `remainingTokens` 为 `null`，`unlimited` 为 `true`。
+
+## 查询管理员用户列表
+
+```http
+GET /api/admin/users
+```
+
+响应：
+
+```json
+[
+  {
+    "id": 7,
+    "username": "test_user",
+    "role": "user",
+    "status": "active",
+    "usageDate": "2026-06-12",
+    "usedTokens": 24000,
+    "dailyLimit": 100000
+  }
+]
+```
+
+匿名占位用户 `id = 0` 不返回。
+
+## 修改用户每日额度
+
+```http
+PUT /api/admin/users/{userId}/quota
+```
+
+请求：
+
+```json
+{
+  "dailyLimit": 200000
+}
+```
+
+`dailyLimit` 必须大于等于 0。仅普通用户可配置额度；管理员账号始终不限额。
 
 ## 查询评测任务
 

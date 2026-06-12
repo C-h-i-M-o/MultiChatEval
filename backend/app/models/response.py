@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -17,7 +17,16 @@ class ModelResponse(Base):
     latency_ms: Mapped[int] = mapped_column(default=0)
     input_tokens: Mapped[int] = mapped_column(default=0)
     output_tokens: Mapped[int] = mapped_column(default=0)
-    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(10, 6), default=0)
+    cache_hit_tokens: Mapped[int] = mapped_column(default=0)
+    cache_creation_tokens: Mapped[int] = mapped_column(default=0)
+    total_tokens: Mapped[int] = mapped_column(default=0)
+    input_cost: Mapped[Decimal] = mapped_column(Numeric(18, 10), default=0)
+    output_cost: Mapped[Decimal] = mapped_column(Numeric(18, 10), default=0)
+    cache_hit_cost: Mapped[Decimal] = mapped_column(Numeric(18, 10), default=0)
+    cache_creation_cost: Mapped[Decimal] = mapped_column(Numeric(18, 10), default=0)
+    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(18, 10), default=0)
+    currency: Mapped[str] = mapped_column(String(3), default="CNY")
+    config_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="success")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -50,7 +50,7 @@
       </div>
       <div>
         <dt>成本</dt>
-        <dd>¥{{ response.estimatedCost }}</dd>
+        <dd><CostDetailsPopover :response="response" /></dd>
       </div>
     </dl>
 
@@ -111,8 +111,8 @@
             <dd>{{ response.latencyMs || 0 }}ms</dd>
           </div>
           <div>
-            <dt>输出</dt>
-            <dd>{{ response.outputTokens || 0 }}</dd>
+            <dt>总 Token</dt>
+            <dd>{{ response.totalTokens || 0 }}</dd>
           </div>
         </dl>
       </div>
@@ -250,8 +250,8 @@
               <dd>{{ response.latencyMs || 0 }}ms</dd>
             </div>
             <div>
-              <dt>输出</dt>
-              <dd>{{ response.outputTokens || 0 }}</dd>
+              <dt>总 Token</dt>
+              <dd>{{ response.totalTokens || 0 }}</dd>
             </div>
           </dl>
         </div>
@@ -372,6 +372,7 @@ import {
   deleteResponseComment,
   listResponseComments
 } from "../utils/api";
+import CostDetailsPopover from "./CostDetailsPopover.vue";
 import MarkdownRenderer from "./MarkdownRenderer.vue";
 import ScoreBar from "./ScoreBar.vue";
 

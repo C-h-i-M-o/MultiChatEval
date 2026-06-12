@@ -49,7 +49,8 @@
           </div>
           <div>
             <dt>成本</dt>
-            <dd>{{ response.pending ? "待估算" : `¥${response.estimatedCost}` }}</dd>
+            <dd v-if="response.pending">待估算</dd>
+            <dd v-else><CostDetailsPopover :response="response" /></dd>
           </div>
         </dl>
 
@@ -140,7 +141,8 @@
           </div>
           <div>
             <dt>成本</dt>
-            <dd>{{ response.pending ? "待估算" : `¥${response.estimatedCost}` }}</dd>
+            <dd v-if="response.pending">待估算</dd>
+            <dd v-else><CostDetailsPopover :response="response" /></dd>
           </div>
         </dl>
 
@@ -193,6 +195,7 @@
 import { gsap } from "gsap";
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
+import CostDetailsPopover from "./CostDetailsPopover.vue";
 import ModelResponseCard from "./ModelResponseCard.vue";
 
 const props = defineProps({

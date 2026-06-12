@@ -121,6 +121,11 @@ export async function listAvailableModels() {
   return response.data;
 }
 
+export async function getTodayTokenUsage() {
+  const response = await api.get("/token-usage/me/today");
+  return response.data;
+}
+
 export async function listModelConfigs() {
   const response = await api.get("/admin/model-configs");
   return response.data;
@@ -143,5 +148,15 @@ export async function deleteModelConfig(id) {
 
 export async function testModelConfig(payload) {
   const response = await api.post("/admin/model-configs/test", payload);
+  return response.data;
+}
+
+export async function listAdminUsers() {
+  const response = await api.get("/admin/users");
+  return response.data;
+}
+
+export async function updateUserQuota(userId, payload) {
+  const response = await api.put(`/admin/users/${userId}/quota`, payload);
   return response.data;
 }

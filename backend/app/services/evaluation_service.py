@@ -23,6 +23,7 @@ from app.schemas.evaluation import (
     CommentListRead,
     CommentRead,
     EvaluationFeedbackRead,
+    ModelCostDetailsRead,
     EvaluationScoreRead,
     EvaluationTaskCreate,
     EvaluationTaskListItemRead,
@@ -35,6 +36,7 @@ from app.schemas.evaluation import (
 from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
 from app.services.model_config_service import RuntimeModelConfig, model_config_service
 from app.services.rule_evaluator import rule_evaluator
+from app.services.token_quota_service import token_quota_service
 
 
 BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手。请基于用户问题直接作答，并遵守以下要求：
@@ -84,6 +86,7 @@ class EvaluationService:
             models=selected_models,
             extra_body=self._thinking_extra_body(payload),
             judge_model=judge_model,
+            user_id=user_id,
         )
         task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
         await self._finish_task_record(db, task_id, task_status)
@@ -127,7 +130,7 @@ class EvaluationService:
         for completed_task in asyncio.as_completed(tasks):
             response = await completed_task
             response = await self._apply_judge_score(payload.prompt, response, judge_model)
-            persisted_response = await self._persist_response(db, task_id, response)
+            persisted_response = await self._persist_response(db, task_id, response, user_id)
             responses.append(persisted_response)
             yield {"type": "model_response", "response": persisted_response}
 
@@ -351,13 +354,14 @@ class EvaluationService:
         models: list[RuntimeModelConfig],
         extra_body: dict[str, object],
         judge_model: RuntimeModelConfig | None,
+        user_id: int,
     ) -> list[ModelResponseRead]:
         tasks = [self._call_model(prompt=prompt, model=model, extra_body=extra_body) for model in models]
         responses = await asyncio.gather(*tasks)
         persisted_responses = []
         for response in responses:
             response = await self._apply_judge_score(prompt, response, judge_model)
-            persisted_responses.append(await self._persist_response(db, task_id, response))
+            persisted_responses.append(await self._persist_response(db, task_id, response, user_id))
         return persisted_responses
 
     async def _call_model(
@@ -372,7 +376,9 @@ class EvaluationService:
             api_key=model.api_key,
             input_price=model.input_price,
             output_price=model.output_price,
-            timeout=settings.model_request_timeout,
+            cache_hit_price=model.cache_hit_price,
+            cache_creation_price=model.cache_creation_price,
+            timeout=model.timeout_seconds,
             extra_body=model.extra_body,
         )
 
@@ -383,12 +389,14 @@ class EvaluationService:
                         prompt=self._model_prompt(prompt),
                         model_name=model.model_name,
                         max_tokens=model.max_tokens,
+                        temperature=model.temperature,
                         extra_body=extra_body,
                     )
                 ),
-                timeout=settings.model_request_timeout + 5,
+                timeout=model.timeout_seconds + 5,
             )
-            estimated_cost = float(client.estimate_cost(reply.usage))
+            cost_details = client.estimate_cost_details(reply.usage)
+            estimated_cost = float(cost_details.total_cost)
             score = rule_evaluator.evaluate(prompt=prompt, answer=reply.answer)
 
             return ModelResponseRead(
@@ -398,13 +406,25 @@ class EvaluationService:
                 provider=model.provider_name,
                 answer=reply.answer,
                 latencyMs=reply.latency_ms,
+                inputTokens=reply.usage.input_tokens,
                 outputTokens=reply.usage.output_tokens,
+                cacheHitTokens=reply.usage.cache_hit_tokens,
+                cacheCreationTokens=reply.usage.cache_creation_tokens,
+                totalTokens=reply.usage.total_tokens,
                 estimatedCost=estimated_cost,
+                currency=model.currency,
+                costDetails=ModelCostDetailsRead(
+                    inputCost=float(cost_details.input_cost),
+                    outputCost=float(cost_details.output_cost),
+                    cacheHitCost=float(cost_details.cache_hit_cost),
+                    cacheCreationCost=float(cost_details.cache_creation_cost),
+                ),
+                configSnapshot=self._config_snapshot(model),
                 status="success",
                 score=EvaluationScoreRead(**score),
             )
         except TimeoutError:
-            answer = f"模型调用超时：{model.display_name} 超过 {settings.model_request_timeout} 秒未返回"
+            answer = f"模型调用超时：{model.display_name} 超过 {model.timeout_seconds} 秒未返回"
             score = rule_evaluator.evaluate(prompt=prompt, answer="")
             return ModelResponseRead(
                 id=model.id,
@@ -413,8 +433,15 @@ class EvaluationService:
                 provider=model.provider_name,
                 answer=answer,
                 latencyMs=0,
+                inputTokens=0,
                 outputTokens=0,
+                cacheHitTokens=0,
+                cacheCreationTokens=0,
+                totalTokens=0,
                 estimatedCost=0,
+                currency=model.currency,
+                costDetails=ModelCostDetailsRead(),
+                configSnapshot=self._config_snapshot(model),
                 status="failed",
                 score=EvaluationScoreRead(**score),
             )
@@ -428,8 +455,15 @@ class EvaluationService:
                 provider=model.provider_name,
                 answer=answer,
                 latencyMs=0,
+                inputTokens=0,
                 outputTokens=0,
+                cacheHitTokens=0,
+                cacheCreationTokens=0,
+                totalTokens=0,
                 estimatedCost=0,
+                currency=model.currency,
+                costDetails=ModelCostDetailsRead(),
+                configSnapshot=self._config_snapshot(model),
                 status="failed",
                 score=EvaluationScoreRead(**score),
             )
@@ -511,6 +545,7 @@ class EvaluationService:
         db: AsyncSession,
         task_id: int,
         response: ModelResponseRead,
+        user_id: int,
     ) -> ModelResponseRead:
         answer_text = response.answer if response.status == "success" else ""
         error_message = None if response.status == "success" else response.answer
@@ -519,14 +554,31 @@ class EvaluationService:
             model_config_id=response.model_config_id,
             answer_text=answer_text,
             latency_ms=response.latency_ms,
-            input_tokens=0,
+            input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
+            cache_hit_tokens=response.cache_hit_tokens,
+            cache_creation_tokens=response.cache_creation_tokens,
+            total_tokens=response.total_tokens,
+            input_cost=Decimal(str(response.cost_details.input_cost)),
+            output_cost=Decimal(str(response.cost_details.output_cost)),
+            cache_hit_cost=Decimal(str(response.cost_details.cache_hit_cost)),
+            cache_creation_cost=Decimal(str(response.cost_details.cache_creation_cost)),
             estimated_cost=Decimal(str(response.estimated_cost)),
+            currency=response.currency,
+            config_snapshot=response.config_snapshot,
             status=response.status,
             error_message=error_message,
         )
         db.add(response_record)
         await db.flush()
+        await token_quota_service.record_usage(
+            db,
+            user_id=user_id,
+            task_id=task_id,
+            response_id=response_record.id,
+            model_config_id=response.model_config_id,
+            total_tokens=response.total_tokens,
+        )
 
         score = response.score
         judge_comment = self._encode_judge_comment(score.judge_comment, score.judge_details)
@@ -553,8 +605,14 @@ class EvaluationService:
             provider=response.provider,
             answer=response.answer,
             latencyMs=response.latency_ms,
+            inputTokens=response.input_tokens,
             outputTokens=response.output_tokens,
+            cacheHitTokens=response.cache_hit_tokens,
+            cacheCreationTokens=response.cache_creation_tokens,
+            totalTokens=response.total_tokens,
             estimatedCost=response.estimated_cost,
+            currency=response.currency,
+            costDetails=response.cost_details,
             status=response.status,
             score=response.score,
             feedback=EvaluationFeedbackRead(),
@@ -597,6 +655,7 @@ class EvaluationService:
     def _serialize_response(self, prompt: str, response: ModelResponse, user_id: int) -> ModelResponseRead:
         model_config = response.model_config
         provider = model_config.provider if model_config is not None else None
+        snapshot = response.config_snapshot or {}
         answer = response.answer_text if response.status == "success" else response.error_message or response.answer_text
         feedback = self._serialize_feedback(response.feedback, user_id)
         score = self._serialize_score(
@@ -609,16 +668,52 @@ class EvaluationService:
         return ModelResponseRead(
             id=response.id,
             modelConfigId=response.model_config_id,
-            modelName=model_config.display_name if model_config is not None else "未知模型",
-            provider=provider.name if provider is not None else "unknown",
+            modelName=(
+                model_config.display_name
+                if model_config is not None
+                else str(snapshot.get("displayName") or snapshot.get("modelName") or "未知模型")
+            ),
+            provider=(
+                provider.name
+                if provider is not None
+                else str(snapshot.get("providerName") or "unknown")
+            ),
             answer=answer,
             latencyMs=response.latency_ms,
+            inputTokens=response.input_tokens,
             outputTokens=response.output_tokens,
+            cacheHitTokens=response.cache_hit_tokens,
+            cacheCreationTokens=response.cache_creation_tokens,
+            totalTokens=response.total_tokens,
             estimatedCost=float(response.estimated_cost),
+            currency=response.currency,
+            costDetails=ModelCostDetailsRead(
+                inputCost=float(response.input_cost),
+                outputCost=float(response.output_cost),
+                cacheHitCost=float(response.cache_hit_cost),
+                cacheCreationCost=float(response.cache_creation_cost),
+            ),
             status=response.status,
             score=score,
             feedback=feedback,
         )
+
+    def _config_snapshot(self, model: RuntimeModelConfig) -> dict[str, object]:
+        return {
+            "providerName": model.provider_name,
+            "displayName": model.display_name,
+            "modelName": model.model_name,
+            "baseUrl": model.base_url,
+            "maxTokens": model.max_tokens,
+            "temperature": model.temperature,
+            "timeoutSeconds": model.timeout_seconds,
+            "notes": model.notes,
+            "currency": model.currency,
+            "priceInput": str(model.input_price),
+            "priceOutput": str(model.output_price),
+            "priceCacheHit": str(model.cache_hit_price),
+            "priceCacheCreation": str(model.cache_creation_price),
+        }
 
     async def _read_response_feedback(
         self,

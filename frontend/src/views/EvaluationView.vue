@@ -16,6 +16,27 @@
       <el-button v-if="authStore.isAdmin" type="primary" @click="router.push('/models')">去配置</el-button>
     </section>
 
+    <section v-loading="tokenUsageLoading" class="token-usage-panel">
+      <div>
+        <p class="panel-label">今日 Token</p>
+        <strong>{{ tokenUsageTitle }}</strong>
+      </div>
+      <dl>
+        <div>
+          <dt>已使用</dt>
+          <dd>{{ formatTokens(tokenUsage?.usedTokens) }}</dd>
+        </div>
+        <div>
+          <dt>剩余</dt>
+          <dd>{{ tokenUsage?.unlimited ? "不限额" : formatTokens(tokenUsage?.remainingTokens) }}</dd>
+        </div>
+        <div>
+          <dt>每日额度</dt>
+          <dd>{{ tokenUsage?.unlimited ? "不限额" : formatTokens(tokenUsage?.dailyLimit) }}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="query-panel">
       <div class="query-header">
         <div>
@@ -78,6 +99,13 @@
       type="warning"
       show-icon
     />
+    <el-alert v-if="tokenUsageErrorMessage" :title="tokenUsageErrorMessage" type="warning" show-icon />
+    <el-alert
+      v-if="quotaExhausted"
+      title="今日 Token 额度已用完，请明日再试或联系管理员调整额度"
+      type="error"
+      show-icon
+    />
 
     <section v-if="store.loading" class="waiting-banner" aria-live="polite">
       <div>
@@ -105,11 +133,10 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
-import ModelResponseCard from "../components/ModelResponseCard.vue";
 import ModelResponseSummaryGrid from "../components/ModelResponseSummaryGrid.vue";
 import { useAuthStore } from "../stores/auth";
 import { useEvaluationStore } from "../stores/evaluation";
-import { listAvailableModels } from "../utils/api";
+import { getTodayTokenUsage, listAvailableModels } from "../utils/api";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -125,11 +152,23 @@ const pendingModelIds = ref([]);
 const modelConfigs = ref([]);
 const modelConfigLoading = ref(false);
 const modelConfigErrorMessage = ref("");
+const tokenUsage = ref(null);
+const tokenUsageLoading = ref(false);
+const tokenUsageErrorMessage = ref("");
 let waitingTimerId = null;
 
 const responses = computed(() => store.task?.responses || []);
 const configuredModelConfigs = computed(() => modelConfigs.value);
 const showModelNotice = computed(() => !modelConfigLoading.value && configuredModelConfigs.value.length === 0);
+const quotaExhausted = computed(() => {
+  return Boolean(tokenUsage.value && !tokenUsage.value.unlimited && tokenUsage.value.remainingTokens <= 0);
+});
+const tokenUsageTitle = computed(() => {
+  if (!tokenUsage.value) {
+    return "正在读取今日额度";
+  }
+  return tokenUsage.value.unlimited ? "管理员账号不限额" : "按北京时间自然日重置";
+});
 const modelNameMap = computed(() => {
   return modelConfigs.value.reduce((names, modelConfig) => {
     names[modelConfig.id] = modelConfig.displayName;
@@ -147,6 +186,7 @@ const canSubmit = computed(() => {
     !store.loading &&
     Boolean(prompt.value.trim()) &&
     selectedModels.value.length > 0 &&
+    !quotaExhausted.value &&
     (!enableJudge.value || Boolean(judgeModelId.value))
   );
 });
@@ -217,6 +257,23 @@ async function loadModelConfigs() {
   }
 }
 
+async function loadTokenUsage() {
+  tokenUsageLoading.value = true;
+  tokenUsageErrorMessage.value = "";
+  try {
+    tokenUsage.value = await getTodayTokenUsage();
+  } catch (error) {
+    tokenUsageErrorMessage.value =
+      error?.response?.data?.detail || error?.message || "今日 Token 用量加载失败";
+  } finally {
+    tokenUsageLoading.value = false;
+  }
+}
+
+function formatTokens(value) {
+  return Number(value || 0).toLocaleString("zh-CN");
+}
+
 async function submitTask() {
   if (!canSubmit.value) {
     return;
@@ -233,6 +290,7 @@ async function submitTask() {
     visibility: visibility.value
   });
   stopWaitingTimer();
+  await loadTokenUsage();
 }
 
 async function handleFeedback({ responseId, feedbackType }) {
@@ -254,6 +312,9 @@ watch(enableJudge, (enabled) => {
   }
 });
 
-onMounted(loadModelConfigs);
+onMounted(() => {
+  loadModelConfigs();
+  loadTokenUsage();
+});
 onBeforeUnmount(stopWaitingTimer);
 </script>
