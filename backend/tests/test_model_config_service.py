@@ -4,8 +4,12 @@ import pytest
 
 from app.core.api_keys import store_api_key
 from app.models.model_config import ModelConfig, ModelProvider
-from app.schemas.model_config import ModelConfigCreate, ModelConfigUpdate
-from app.services.model_config_service import ModelConfigServiceError, model_config_service
+from app.schemas.model_config import ModelConfigCreate, ModelConfigTestRequest, ModelConfigUpdate
+from app.services.model_config_service import (
+    ModelConfigServiceError,
+    RuntimeModelConfig,
+    model_config_service,
+)
 
 
 class FakeDb:
@@ -46,6 +50,12 @@ def make_config(provider_name: str = "custom", config_id: int = 1) -> ModelConfi
         display_name="测试模型",
         price_input=Decimal("0"),
         price_output=Decimal("0"),
+        price_cache_hit=Decimal("0"),
+        price_cache_creation=Decimal("0"),
+        currency="CNY",
+        temperature=Decimal("0.7"),
+        timeout_seconds=60,
+        notes="",
         max_tokens=128,
         enabled=True,
     )
@@ -71,7 +81,8 @@ def test_serialize_config_never_exposes_raw_api_key() -> None:
     assert result.has_api_key is True
     assert result.masked_api_key == "sk-t****1234"
     assert result.masked_api_key != "sk-test-1234"
-    assert result.builtin is True
+    assert result.currency == "CNY"
+    assert result.temperature == 0.7
 
 
 @pytest.mark.asyncio
@@ -82,13 +93,9 @@ async def test_list_available_configs_only_returns_enabled_configs_with_api_key(
     missing_key = make_config(provider_name="minimax", config_id=2)
     missing_key.provider.api_key_encrypted = None
 
-    async def fake_ensure_builtin_configs(_db: FakeDb) -> None:
-        return None
-
     async def fake_list_enabled_model_configs(_db: FakeDb) -> list[ModelConfig]:
         return [configured, missing_key]
 
-    monkeypatch.setattr(model_config_service, "ensure_builtin_configs", fake_ensure_builtin_configs)
     monkeypatch.setattr(model_config_service, "_list_enabled_model_configs", fake_list_enabled_model_configs)
 
     result = await model_config_service.list_available_configs(FakeDb())
@@ -143,7 +150,7 @@ async def test_update_config_can_store_user_api_key(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_builtin_config_cannot_be_deleted(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_official_preset_config_can_be_deleted(monkeypatch: pytest.MonkeyPatch) -> None:
     db = FakeDb()
     config = make_config(provider_name="glm")
 
@@ -152,10 +159,9 @@ async def test_builtin_config_cannot_be_deleted(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(model_config_service, "_get_model_config", fake_get_model_config)
 
-    with pytest.raises(ModelConfigServiceError):
-        await model_config_service.delete_config(db, 1)
+    await model_config_service.delete_config(db, 1)
 
-    assert db.deleted == []
+    assert db.deleted == [config, config.provider]
 
 
 @pytest.mark.asyncio
@@ -164,13 +170,9 @@ async def test_resolve_runtime_models_uses_selected_enabled_config_ids(monkeypat
     custom_config = make_config(provider_name="custom", config_id=4)
     custom_config.display_name = "自定义模型"
 
-    async def fake_ensure_builtin_configs(_db: FakeDb) -> None:
-        return None
-
     async def fake_list_enabled_model_configs(_db: FakeDb) -> list[ModelConfig]:
         return [deepseek_config, custom_config]
 
-    monkeypatch.setattr(model_config_service, "ensure_builtin_configs", fake_ensure_builtin_configs)
     monkeypatch.setattr(model_config_service, "_list_enabled_model_configs", fake_list_enabled_model_configs)
 
     result = await model_config_service.resolve_runtime_models(FakeDb(), [4])
@@ -222,46 +224,45 @@ async def test_create_custom_config_marks_provider_as_plain_key(monkeypatch: pyt
     assert result.provider_name == "custom-provider"
 
 
-@pytest.mark.asyncio
-async def test_ensure_builtin_configs_creates_builtin_without_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    db = FakeDb()
+def test_runtime_config_contains_advanced_parameters() -> None:
+    config = make_config()
+    config.temperature = Decimal("0.35")
+    config.timeout_seconds = 45
+    config.notes = "测试备注"
+    config.price_cache_hit = Decimal("0.5")
+    config.price_cache_creation = Decimal("1.5")
 
-    async def fake_get_provider_by_name(_db: FakeDb, _provider_name: str) -> None:
-        return None
+    runtime = model_config_service._to_runtime_config(config)
 
-    async def fake_get_first_config_by_provider_id(_db: FakeDb, _provider_id: int) -> None:
-        return None
-
-    monkeypatch.setattr(model_config_service, "_get_provider_by_name", fake_get_provider_by_name)
-    monkeypatch.setattr(model_config_service, "_get_first_config_by_provider_id", fake_get_first_config_by_provider_id)
-
-    await model_config_service.ensure_builtin_configs(db)
-
-    providers = [item for item in db.added if isinstance(item, ModelProvider)]
-    assert [provider.name for provider in providers] == ["deepseek", "minimax", "glm"]
-    assert all(provider.api_key_encrypted is None for provider in providers)
-    assert db.committed is True
+    assert runtime.temperature == 0.35
+    assert runtime.timeout_seconds == 45
+    assert runtime.cache_hit_price == Decimal("0.5")
+    assert runtime.cache_creation_price == Decimal("1.5")
 
 
 @pytest.mark.asyncio
-async def test_ensure_builtin_configs_does_not_backfill_missing_builtin_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    db = FakeDb()
-    providers = {
-        "deepseek": make_provider("deepseek", provider_id=1, api_key=None),
-        "minimax": make_provider("minimax", provider_id=2, api_key=None),
-        "glm": make_provider("glm", provider_id=3, api_key=None),
-    }
+async def test_saved_connection_test_reuses_runtime_parameters(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime = model_config_service._to_runtime_config(make_config())
+    runtime = RuntimeModelConfig(
+        **{
+            **runtime.__dict__,
+            "temperature": 0.35,
+            "timeout_seconds": 45,
+            "max_tokens": 2048,
+        }
+    )
 
-    async def fake_get_provider_by_name(_db: FakeDb, provider_name: str) -> ModelProvider | None:
-        return providers[provider_name]
+    async def fake_get_model_config(_db: object, _model_config_id: int) -> ModelConfig:
+        return make_config()
 
-    async def fake_get_first_config_by_provider_id(_db: FakeDb, provider_id: int) -> ModelConfig:
-        return make_config(config_id=provider_id)
+    monkeypatch.setattr(model_config_service, "_get_model_config", fake_get_model_config)
+    monkeypatch.setattr(model_config_service, "_to_runtime_config", lambda _config: runtime)
 
-    monkeypatch.setattr(model_config_service, "_get_provider_by_name", fake_get_provider_by_name)
-    monkeypatch.setattr(model_config_service, "_get_first_config_by_provider_id", fake_get_first_config_by_provider_id)
+    resolved = await model_config_service._resolve_test_config(
+        object(),
+        ModelConfigTestRequest(modelConfigId=runtime.id),
+    )
 
-    await model_config_service.ensure_builtin_configs(db)
-
-    assert all(provider.api_key_encrypted is None for provider in providers.values())
-    assert db.committed is False
+    assert resolved.temperature == 0.35
+    assert resolved.timeout_seconds == 45
+    assert resolved.max_tokens == 2048

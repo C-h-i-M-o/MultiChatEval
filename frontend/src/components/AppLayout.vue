@@ -16,6 +16,9 @@
         <RouterLink v-if="authStore.isAdmin" to="/models" class="nav-item" active-class="active">
           模型配置
         </RouterLink>
+        <RouterLink v-if="authStore.isAdmin" to="/users" class="nav-item" active-class="active">
+          用户额度
+        </RouterLink>
         <RouterLink to="/history" class="nav-item" active-class="active">
           历史任务
         </RouterLink>

@@ -8,6 +8,7 @@ class ModelRequest:
     prompt: str
     model_name: str
     max_tokens: int = 1024
+    temperature: float = 0.7
     extra_body: dict[str, object] = field(default_factory=dict)
 
 
@@ -15,6 +16,24 @@ class ModelRequest:
 class ModelUsage:
     input_tokens: int
     output_tokens: int
+    cache_hit_tokens: int = 0
+    cache_creation_tokens: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens + self.cache_hit_tokens + self.cache_creation_tokens
+
+
+@dataclass(frozen=True)
+class ModelCostDetails:
+    input_cost: Decimal
+    output_cost: Decimal
+    cache_hit_cost: Decimal
+    cache_creation_cost: Decimal
+
+    @property
+    def total_cost(self) -> Decimal:
+        return self.input_cost + self.output_cost + self.cache_hit_cost + self.cache_creation_cost
 
 
 @dataclass(frozen=True)

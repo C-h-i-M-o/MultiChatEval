@@ -54,6 +54,13 @@ class EvaluationFeedbackRead(BaseModel):
     dislike_count: int = Field(default=0, alias="dislikeCount")
 
 
+class ModelCostDetailsRead(BaseModel):
+    input_cost: float = Field(default=0, alias="inputCost")
+    output_cost: float = Field(default=0, alias="outputCost")
+    cache_hit_cost: float = Field(default=0, alias="cacheHitCost")
+    cache_creation_cost: float = Field(default=0, alias="cacheCreationCost")
+
+
 class ModelResponseRead(BaseModel):
     id: int
     model_config_id: int | None = Field(default=None, alias="modelConfigId")
@@ -61,8 +68,15 @@ class ModelResponseRead(BaseModel):
     provider: str
     answer: str
     latency_ms: int = Field(alias="latencyMs")
+    input_tokens: int = Field(default=0, alias="inputTokens")
     output_tokens: int = Field(alias="outputTokens")
+    cache_hit_tokens: int = Field(default=0, alias="cacheHitTokens")
+    cache_creation_tokens: int = Field(default=0, alias="cacheCreationTokens")
+    total_tokens: int = Field(default=0, alias="totalTokens")
     estimated_cost: float = Field(alias="estimatedCost")
+    currency: Literal["CNY", "USD"] = "CNY"
+    cost_details: ModelCostDetailsRead = Field(default_factory=ModelCostDetailsRead, alias="costDetails")
+    config_snapshot: dict[str, object] = Field(default_factory=dict, alias="configSnapshot", exclude=True)
     status: str
     score: EvaluationScoreRead
     feedback: EvaluationFeedbackRead = Field(default_factory=EvaluationFeedbackRead)

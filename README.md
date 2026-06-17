@@ -113,6 +113,8 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
+前端已在 `package.json` 中允许 `esbuild` 和 `vue-demi` 执行必要的依赖构建脚本。若本地升级 pnpm 后遇到 `ERR_PNPM_IGNORED_BUILDS`，请在 `frontend/` 下执行 `pnpm rebuild` 后再启动。
+
 前端默认地址：
 
 ```text
@@ -127,7 +129,7 @@ http://localhost:5173
 2. 普通用户读取管理员已启用且已配置 API Key 的模型。
 3. OpenAI-compatible 适配器并发调用真实模型。
 4. 每个模型返回后立即以模型级渐进结果展示到前端。
-5. 记录回答耗时、输出 token、成本估算和错误状态。
+5. 记录回答四类 Token、总 Token、分项费用、总费用和错误状态。
 6. 执行规则评分，可选启用 LLM Judge，并展示评分条和评分详情。
 7. 支持全局“思考模式”开关。
 8. 将评测任务、模型回答、评分、点赞/点踩和公开评论按登录用户保存到 MySQL，并支持分页查看历史任务。
@@ -136,13 +138,13 @@ http://localhost:5173
 
 当前仍不做逐字 token 流式输出；`/api/evaluation/tasks/stream` 是模型级渐进返回，即一个模型完整回答完成后立刻展示。
 
-v2 后续阶段将继续实现 token 额度、语义分析、反馈统计、模型推荐和运行监控。
+v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示。后续将继续推进语义分析、反馈统计、模型推荐和运行监控。
 
 ## 前端展示能力
 
 当前前端已经支持：
 
-- 使用多路由结构组织页面：`/login` 和 `/register` 为认证页面，`/` 为对比评测，`/models` 为管理员模型配置，`/history` 为历史任务。
+- 使用多路由结构组织页面：`/login` 和 `/register` 为认证页面，`/` 为对比评测，`/models` 为管理员模型配置，`/users` 为管理员用户额度，`/history` 为历史任务。
 - 普通用户不显示模型配置入口，管理员可以维护模型配置。
 - 评测表单支持公开和私有模式，历史任务展示创建者与可见性。
 - 按实际模型名称展示模型选择项和结果卡片，例如 `deepseek-v4-flash`、`MiniMax-M2.5`、`glm-4.7`。
@@ -156,6 +158,8 @@ v2 后续阶段将继续实现 token 额度、语义分析、反馈统计、模�
 - 侧边栏“历史任务”入口支持分页查看历史评测，回答以单列紧凑列表展示，并可加载完整回答和评分详情。
 - Element Plus 使用中文语言配置，历史任务分页容量显示为 `10/页`、`20/页` 或 `50/页`。
 - 回答摘要卡支持点赞、点踩和全文详情弹窗，反馈会真实写入或取消写入 `user_feedback`，并立即更新最终分。
+- 回答卡先展示总费用，悬停或键盘聚焦总费用时展示四类 Token 与分项费用；移动端点击切换。
+- 评测页展示北京时间当日 Token 已用、剩余和每日额度，额度耗尽时禁止创建新任务。
 - 评分详情支持分页查看、发布和删除公开评论，评论独立保存在 `user_comments`，不参与评分。
 - 历史任务时间按北京时间展示；`pending` 任务默认显示“进行中”，创建超过 120 秒后仍未完成才显示为“超时未完成”。
 - 反馈统计占位路由仍保留给后续开发，但 demo-v1 侧边栏不展示该入口。
@@ -163,18 +167,7 @@ v2 后续阶段将继续实现 token 额度、语义分析、反馈统计、模�
 
 ## 真实模型配置
 
-后端当前已支持 OpenAI-compatible 的 `/chat/completions` 调用。系统会内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key。管理员需要在“模型配置”页面维护 API Key，普通用户只使用管理员启用的模型。
-
-```text
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-v4-flash
-
-MINIMAX_BASE_URL=https://api.minimaxi.com/v1
-MINIMAX_MODEL=MiniMax-M2.5
-
-ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-ZHIPU_MODEL=glm-4.7
-```
+后端当前已支持 OpenAI-compatible 的 `/chat/completions` 调用。系统不再自动创建内置模型记录；管理员可从 DeepSeek、MiniMax、GLM、Qwen、Xiaomi MiMo、OpenAI 预设或 OpenAI-compatible 空白模板创建配置，并自行填写 API Key、模型名和官方价格。
 
 如果系统内没有任何已配置 API Key 的模型，管理员会看到配置入口，普通用户会看到联系管理员的提示。
 
@@ -186,11 +179,7 @@ source .venv/bin/activate
 python -m app.scripts.create_admin --username admin
 ```
 
-如果评测问题较长或模型响应较慢，可以在 `.env` 中调大：
-
-```text
-MODEL_REQUEST_TIMEOUT=90
-```
+如果评测问题较长或模型响应较慢，可在管理员模型配置的“高级选项”中调整对应模型的请求超时。
 
 规则评分使用轻量本地多信号评分，不依赖外部语义模型或下载。评分前会排除 `<think>...</think>` 思考内容，仅分析最终回答；原始回答仍会完整保存并在前端折叠展示思考过程。相关性会结合字符 n-gram 相似度、关键词覆盖、意图覆盖、回答聚焦度、显式要求对齐和离题惩罚计算；安全性会结合危险输出控制、拒答质量、高风险领域谨慎性和隐私/凭据保护计算。
 

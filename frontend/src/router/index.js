@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from "vue-router";
 import { pinia } from "../stores";
 import { useAuthStore } from "../stores/auth";
 import AuthView from "../views/AuthView.vue";
+import AdminUsersView from "../views/AdminUsersView.vue";
 import EvaluationView from "../views/EvaluationView.vue";
 import FeedbackStatsView from "../views/FeedbackStatsView.vue";
 import HistoryView from "../views/HistoryView.vue";
@@ -33,6 +34,12 @@ export const router = createRouter({
       path: "/models",
       name: "model-configs",
       component: ModelConfigsView,
+      meta: { requiresAuth: true, requiresAdmin: true }
+    },
+    {
+      path: "/users",
+      name: "admin-users",
+      component: AdminUsersView,
       meta: { requiresAuth: true, requiresAdmin: true }
     },
     {

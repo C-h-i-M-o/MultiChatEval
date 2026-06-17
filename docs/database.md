@@ -36,11 +36,11 @@
 
 ## model_providers
 
-模型供应商表，例如 DeepSeek、MiniMax、Zhipu。
+模型供应商表，保存管理员实际创建的 OpenAI-compatible 供应商。
 
 字段重点：
 
-- `name`：供应商唯一名称。内置供应商固定为 `deepseek`、`minimax`、`glm`。
+- `name`：供应商唯一名称。
 - `base_url`：OpenAI-compatible 接口基础地址，例如 `https://api.deepseek.com`。
 - `api_key_encrypted`：MVP 阶段复用为版本化密钥字段。当前使用 `plain:<api_key>` 明文格式保存，未来可升级为 `enc:v1:<ciphertext>` 加密格式。
 - `enabled`：供应商是否启用。
@@ -56,11 +56,15 @@
 - `provider_id`：关联模型供应商。
 - `model_name`：发送给模型接口的真实模型名。
 - `display_name`：前端展示名。
-- `price_input` / `price_output`：输入和输出 token 单价，当前默认 0。
+- `temperature`：默认温度。
+- `timeout_seconds`：单次请求超时秒数。
+- `notes`：管理员备注。
+- `currency`：价格币种，支持 `CNY` 和 `USD`。
+- `price_input` / `price_output` / `price_cache_hit` / `price_cache_creation`：每 100 万 Token 的四类单价。
 - `max_tokens`：单次回答最大输出 token。
 - `enabled`：该模型配置是否可在评测页选择。
 
-系统启动或查询模型配置时会补齐 DeepSeek、MiniMax、GLM 三个内置配置。内置配置只包含供应商名、Base URL、模型名和展示名，不会从 `.env` 读取 API Key。内置配置可编辑、可禁用，但不可删除。用户新增的自定义配置统一按 OpenAI-compatible 协议调用。
+系统不自动创建供应商数据。前端提供常见官方供应商预设和 OpenAI-compatible 空白模板，所有实际保存的配置均可编辑、禁用或删除。
 
 ## model_responses
 
@@ -70,11 +74,26 @@
 
 - `answer_text`：原始回答
 - `latency_ms`：响应耗时
-- `input_tokens` / `output_tokens`：token 统计
-- `estimated_cost`：费用估算
+- `input_tokens` / `output_tokens` / `cache_hit_tokens` / `cache_creation_tokens` / `total_tokens`：四类与总 Token 统计
+- `input_cost` / `output_cost` / `cache_hit_cost` / `cache_creation_cost`：四类费用
+- `estimated_cost`：四项费用之和
+- `currency`：费用币种
+- `config_snapshot`：调用时的模型参数与价格快照，不含 API Key
 - `status` / `error_message`：调用状态
 
 每个模型调用结束后写入一条回答记录。接口响应中的 `responses[].id` 对应本表主键，`responses[].modelConfigId` 对应 `model_configs.id`。
+
+## user_token_quotas
+
+保存普通用户每日总 Token 上限。每个用户最多一条记录；没有记录时使用默认值 100,000。管理员角色不受额度限制。
+
+## token_usage_logs
+
+记录每个模型回答产生的总 Token，用于审计。字段包含 `user_id`、`task_id`、`response_id`、`model_config_id`、`usage_date` 和 `total_tokens`。
+
+## daily_user_token_usage
+
+按用户和北京时间自然日汇总总 Token。`user_id + usage_date` 唯一，模型回答持久化时原子累加。
 
 ## evaluation_results
 

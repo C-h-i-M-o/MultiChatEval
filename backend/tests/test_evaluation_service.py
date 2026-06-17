@@ -162,7 +162,13 @@ def make_runtime_model(model_id: int, display_name: str) -> RuntimeModelConfig:
         api_key="sk-test",
         input_price=Decimal("0"),
         output_price=Decimal("0"),
+        cache_hit_price=Decimal("0"),
+        cache_creation_price=Decimal("0"),
+        currency="CNY",
         max_tokens=128,
+        temperature=0.7,
+        timeout_seconds=60,
+        notes="",
         extra_body={},
     )
 
@@ -180,8 +186,19 @@ def make_response(
         provider=f"provider-{model_id}",
         answer=f"{model_name} 回答",
         latencyMs=model_id * 100,
+        inputTokens=20,
         outputTokens=10,
+        cacheHitTokens=5,
+        cacheCreationTokens=0,
+        totalTokens=35,
         estimatedCost=0,
+        currency="CNY",
+        costDetails={
+            "inputCost": 0,
+            "outputCost": 0,
+            "cacheHitCost": 0,
+            "cacheCreationCost": 0,
+        },
         status=status,
         score=EvaluationScoreRead(
             relevance=8,
@@ -524,8 +541,14 @@ async def test_stream_task_events_yields_model_responses_in_completion_order(mon
         assert user_id == TEST_USER_ID
         return 101
 
-    async def fake_persist_response(_db: FakeDb, task_id: int, response: ModelResponseRead) -> ModelResponseRead:
+    async def fake_persist_response(
+        _db: FakeDb,
+        task_id: int,
+        response: ModelResponseRead,
+        user_id: int,
+    ) -> ModelResponseRead:
         assert task_id == 101
+        assert user_id == TEST_USER_ID
         return response
 
     async def fake_finish_task_record(_db: FakeDb, task_id: int, status: str) -> None:
@@ -586,7 +609,13 @@ async def test_stream_task_events_keeps_running_when_one_model_fails(monkeypatch
         assert user_id == TEST_USER_ID
         return 102
 
-    async def fake_persist_response(_db: FakeDb, _task_id: int, response: ModelResponseRead) -> ModelResponseRead:
+    async def fake_persist_response(
+        _db: FakeDb,
+        _task_id: int,
+        response: ModelResponseRead,
+        user_id: int,
+    ) -> ModelResponseRead:
+        assert user_id == TEST_USER_ID
         return response
 
     async def fake_finish_task_record(_db: FakeDb, task_id: int, status: str) -> None:
@@ -636,8 +665,14 @@ async def test_create_task_persists_task_responses_and_scores(monkeypatch: pytes
         assert user_id == TEST_USER_ID
         return 200
 
-    async def fake_persist_response(_db: FakeDb, task_id: int, response: ModelResponseRead) -> ModelResponseRead:
+    async def fake_persist_response(
+        _db: FakeDb,
+        task_id: int,
+        response: ModelResponseRead,
+        user_id: int,
+    ) -> ModelResponseRead:
         assert task_id == 200
+        assert user_id == TEST_USER_ID
         persisted_response_ids.append(response.id)
         return response
 
@@ -709,7 +744,13 @@ async def test_create_task_applies_judge_score_when_enabled(monkeypatch: pytest.
         assert user_id == TEST_USER_ID
         return 200
 
-    async def fake_persist_response(_db: FakeDb, _task_id: int, response: ModelResponseRead) -> ModelResponseRead:
+    async def fake_persist_response(
+        _db: FakeDb,
+        _task_id: int,
+        response: ModelResponseRead,
+        user_id: int,
+    ) -> ModelResponseRead:
+        assert user_id == TEST_USER_ID
         persisted_scores.append(response.score)
         return response
 
@@ -769,7 +810,13 @@ async def test_create_task_keeps_rule_score_when_judge_fails(monkeypatch: pytest
         assert user_id == TEST_USER_ID
         return 200
 
-    async def fake_persist_response(_db: FakeDb, _task_id: int, response: ModelResponseRead) -> ModelResponseRead:
+    async def fake_persist_response(
+        _db: FakeDb,
+        _task_id: int,
+        response: ModelResponseRead,
+        user_id: int,
+    ) -> ModelResponseRead:
+        assert user_id == TEST_USER_ID
         return response
 
     async def fake_finish_task_record(_db: FakeDb, _task_id: int, _status: str) -> None:

@@ -82,7 +82,7 @@ MultiChatEval/
 - 规则评分会排除完整或未闭合的 `<think>` 思考内容，仅评价最终回答；原始回答仍完整保存和返回。
 - 当前评测服务已接入真实模型 API，并从数据库中的模型配置动态读取可调用模型。
 - 评测请求发送给模型前，会在用户原始问题前拼接系统内置提示词；数据库、历史任务和接口响应中的 `prompt` 仍保留用户原始问题。
-- 系统内置 DeepSeek、MiniMax、GLM 三个模型配置，但不会从 `.env` 读取 API Key；管理员需要在前端“模型配置”页面维护 API Key。
+- 系统不自动创建内置模型配置；管理员从供应商预设或 OpenAI-compatible 空白模板创建配置并维护 API Key。
 - 评测请求支持全局“思考模式”开关。关闭时所有模型统一发送 `thinking.type=disabled`；开启时统一发送 `thinking.type=enabled`；不传递思考程度参数。
 - 思考模式字段以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。MiniMax 等 OpenAI-compatible 供应商即使收到 `thinking.type=disabled`，也可能仍返回 `<think>` 或 reasoning 内容。
 - `POST /api/evaluation/tasks` 保留一次性返回完整结果。
@@ -181,6 +181,8 @@ pnpm install
 pnpm dev
 ```
 
+前端 `package.json` 通过 `pnpm.onlyBuiltDependencies` 允许 `esbuild` 和 `vue-demi` 执行必要构建脚本；pnpm 10 报 `ERR_PNPM_IGNORED_BUILDS` 时，在 `frontend/` 下执行 `pnpm rebuild`。
+
 默认地址：
 
 ```text
@@ -196,10 +198,6 @@ http://localhost:5173
 ```text
 DATABASE_URL=mysql+aiomysql://multichateval:multichateval@localhost:3306/multichateval
 BACKEND_CORS_ORIGINS=http://localhost:5173
-DEEPSEEK_MODEL=deepseek-v4-flash
-MINIMAX_MODEL=MiniMax-M2.5
-ZHIPU_MODEL=glm-4.7
-MODEL_REQUEST_TIMEOUT=90
 ```
 
 真实模型 API Key 不应提交到 Git。
@@ -260,6 +258,13 @@ MODEL_REQUEST_TIMEOUT=90
 待做：
 
 - 增加反馈统计和模型推荐。
+
+### v2 阶段 2/3 设计
+
+- 管理员从 DeepSeek、MiniMax、GLM、Qwen、Xiaomi MiMo、OpenAI 预设或 OpenAI-compatible 空白模板创建模型配置，不再自动补齐三家内置记录。
+- 模型配置支持温度、最大输出、超时、备注、币种及输入、输出、缓存命中、缓存创建四类每百万 Token 单价。
+- 普通用户默认每日额度为 100,000 总 Token，管理员不限额；额度按北京时间自然日统计。
+- 回答卡片先显示总费用，悬停或聚焦查看四项费用明细。
 
 ### v2 后续路线
 

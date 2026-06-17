@@ -12,19 +12,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = "mysql+aiomysql://multichateval:multichateval@localhost:3306/multichateval"
     backend_cors_origins: str = "http://localhost:5173"
-    model_request_timeout: float = 60
     jwt_secret_key: str = "development-only-change-this-secret-before-production-2026"
     access_token_expire_minutes: int = 480
     auth_cookie_secure: bool = False
-
-    deepseek_base_url: str = "https://api.deepseek.com"
-    deepseek_model: str = "deepseek-v4-flash"
-
-    minimax_base_url: str = "https://api.minimaxi.com/v1"
-    minimax_model: str = "MiniMax-M2.5"
-
-    zhipu_base_url: str = "https://open.bigmodel.cn/api/paas/v4"
-    zhipu_model: str = "glm-4.7"
 
     model_config = SettingsConfigDict(env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 
