@@ -181,6 +181,8 @@ pnpm install
 pnpm dev
 ```
 
+前端 `package.json` 通过 `pnpm.onlyBuiltDependencies` 允许 `esbuild` 和 `vue-demi` 执行必要构建脚本；pnpm 10 报 `ERR_PNPM_IGNORED_BUILDS` 时，在 `frontend/` 下执行 `pnpm rebuild`。
+
 默认地址：
 
 ```text
