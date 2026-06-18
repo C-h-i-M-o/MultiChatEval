@@ -52,7 +52,7 @@ export const router = createRouter({
       path: "/feedback",
       name: "feedback-stats",
       component: FeedbackStatsView,
-      meta: { requiresAuth: true, requiresAdmin: true }
+      meta: { requiresAuth: true }
     },
     {
       path: "/:pathMatch(.*)*",

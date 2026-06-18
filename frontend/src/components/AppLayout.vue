@@ -22,6 +22,9 @@
         <RouterLink to="/history" class="nav-item" active-class="active">
           历史任务
         </RouterLink>
+        <RouterLink to="/feedback" class="nav-item" active-class="active">
+          反馈统计
+        </RouterLink>
       </nav>
 
       <section class="sidebar-user">
