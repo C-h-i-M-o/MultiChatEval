@@ -630,3 +630,114 @@ DELETE /api/evaluation/comments/{commentId}
 ```
 
 只能删除当前用户自己的评论。成功时返回 `204 No Content`；评论不存在或不属于当前用户时返回 404。
+
+## 查询个人反馈统计
+
+```http
+GET /api/feedback-stats/me?range=30d
+```
+
+所有登录用户均可访问。`range` 支持 `7d`、`30d` 和 `all`，默认 `30d`。7 天和 30 天按北京时间自然日计算；评分与调用按回答创建时间统计，点赞、点踩和评论按各自提交时间统计。
+
+`summary` 只统计当前用户创建的公开及私有任务及其回答收到的互动；`myInteractions` 只统计当前用户主动提交的互动。个人接口不返回其他用户身份或全局互动明细。
+
+```json
+{
+  "scope": "personal",
+  "range": "30d",
+  "startAt": "2026-05-20T00:00:00+08:00",
+  "endAt": "2026-06-18T12:00:00+08:00",
+  "summary": {
+    "taskCount": 8,
+    "callCount": 20,
+    "scoredCount": 18,
+    "averageFinalScore": 8.31,
+    "likeCount": 12,
+    "dislikeCount": 3,
+    "likeRate": 0.8,
+    "commentCount": 6
+  },
+  "myInteractions": {
+    "likeCount": 5,
+    "dislikeCount": 1,
+    "commentCount": 2
+  },
+  "models": [
+    {
+      "modelConfigId": 1,
+      "modelName": "DeepSeek Chat",
+      "callCount": 10,
+      "scoredCount": 9,
+      "averageFinalScore": 8.52,
+      "averageRuleScore": 8.4,
+      "averageJudgeScore": 8.7,
+      "likeCount": 7,
+      "dislikeCount": 1,
+      "likeRate": 0.875,
+      "commentCount": 3
+    }
+  ],
+  "trend": [
+    {
+      "date": "2026-06-18",
+      "callCount": 3,
+      "averageFinalScore": 8.6,
+      "likeCount": 2,
+      "dislikeCount": 0,
+      "commentCount": 1
+    }
+  ]
+}
+```
+
+无反馈时 `likeRate` 为 `null`；无有效评分或 Judge 分时对应均分为 `null`。`range=all` 时 `startAt` 为 `null`。
+
+## 查询管理员反馈统计
+
+```http
+GET /api/admin/feedback-stats?range=30d&activityType=all&page=1&pageSize=20
+```
+
+仅管理员可访问，普通用户返回 `403`。查询参数：
+
+- `range`：`7d`、`30d` 或 `all`，默认 `30d`，影响全部统计。
+- `activityType`：`all`、`like`、`dislike` 或 `comment`，默认 `all`，只筛选互动明细。
+- `modelConfigId`：可选模型配置 ID，只筛选互动明细。
+- `page`：明细页码，默认 1。
+- `pageSize`：明细每页数量，范围 1–100，默认 20。
+
+响应的 `summary`、`models` 和 `trend` 与个人接口使用相同统计字段，但覆盖全部公开、私有和历史匿名数据。`activities` 按 `createdAt desc, activityId desc` 分页返回：
+
+```json
+{
+  "scope": "global",
+  "range": "30d",
+  "startAt": "2026-05-20T00:00:00+08:00",
+  "endAt": "2026-06-18T12:00:00+08:00",
+  "summary": {},
+  "models": [],
+  "trend": [],
+  "activities": {
+    "items": [
+      {
+        "activityId": 91,
+        "activityType": "comment",
+        "userId": 7,
+        "username": "demo_user",
+        "taskId": 1001,
+        "responseId": 5001,
+        "modelConfigId": 1,
+        "modelName": "DeepSeek Chat",
+        "prompt": "帮我解释什么是设计模式",
+        "content": "结构清晰，示例也很实用。",
+        "createdAt": "2026-06-18T10:30:00"
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "pageSize": 20
+  }
+}
+```
+
+点赞和点踩明细的 `content` 为 `null`。历史匿名互动的 `userId` 为 0、`username` 为 `anonymous`。本次统计能力直接读取现有持久化数据，不新增数据库表或迁移。

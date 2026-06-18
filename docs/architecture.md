@@ -8,6 +8,7 @@ Vue 前端
 FastAPI API
   ├── Auth / RBAC
   ├── Token Quota Service
+  ├── Feedback Stats Service
   ↓
 Evaluation Service
   ├── Model Adapter Layer
@@ -34,6 +35,7 @@ MySQL
 - 密码使用 Argon2 哈希，登录态使用写入 HttpOnly Cookie 的短期 JWT。
 - `get_current_user` 负责认证，`require_admin` 负责管理员授权。
 - 普通用户通过精简接口读取可评测模型，完整模型配置接口仅管理员可访问。
+- 反馈统计使用个人与管理员双端点：普通用户只能读取本人任务表现与本人互动汇总，管理员端点通过 `require_admin` 返回全局聚合和互动明细。
 - 公开任务对所有登录用户可见；私有任务仅创建者可见。
 - 对无权访问的私有任务或回答返回 404，避免资源枚举。
 
@@ -52,7 +54,7 @@ MySQL
 - `/models` 对应 `frontend/src/views/ModelConfigsView.vue`，仅管理员用于通过供应商预设或空白模板维护 OpenAI-compatible 模型。
 - `/users` 对应管理员用户管理页，用于查看今日 Token 用量并调整普通用户每日额度。
 - `/history` 对应 `frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
-- `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，当前为后续版本保留的反馈统计占位路由，不在 demo-v1 导航中展示。
+- `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，所有登录用户均可进入；页面根据角色展示个人统计或管理员全局统计。
 - Element Plus 在应用入口启用中文语言配置，历史任务分页容量统一显示为 `/页`。
 - 模型选择项从后端模型配置接口动态加载，直接显示具体模型名。
 - `ModelResponseSummaryGrid` 提供 `grid` 和 `list` 两种模式：评测页使用六轨平衡网格，历史任务详情使用单列结构化列表。
@@ -85,3 +87,5 @@ MySQL
 新反馈写入当前登录用户 ID，demo-v1 旧匿名反馈继续保留在 `user_id = 0`。同一用户对同一回答只能保留一个当前反馈，重复点击相同类型会取消，点击另一类型会在点赞和点踩之间切换。没有反馈时最终分等于基础分；存在反馈时，点赞比例映射为 0–10 的反馈分，并以 10% 权重计入 `final_score`。反馈接口返回更新后的反馈状态和评分，前端同步刷新卡片。
 
 公开评论使用独立的 `user_comments` 表和分页接口，不嵌入任务详情响应，避免评论增长导致历史任务载荷持续膨胀。评论支持发布和按归属硬删除，不支持编辑；评论不参与评分。新评论归属当前登录用户，只有作者可以删除。
+
+`FeedbackStatsService` 直接聚合已持久化的任务、回答、评分、点赞、点踩和评论，不建立预聚合表。个人统计按 `evaluation_tasks.user_id` 限定本人任务，同时单独按互动记录的 `user_id` 统计本人操作；管理员统计覆盖公开、私有和历史匿名数据。评分与调用使用回答创建时间，点赞、点踩和评论使用各自创建时间，7 天和 30 天边界按北京时间自然日计算。各数据源分别聚合后再按模型和日期合并，避免多表联接导致重复计数。本阶段没有表结构变化或数据库迁移。

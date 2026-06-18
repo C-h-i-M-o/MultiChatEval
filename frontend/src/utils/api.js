@@ -69,6 +69,18 @@ export async function deleteResponseComment(commentId) {
   await api.delete(`/evaluation/comments/${commentId}`);
 }
 
+export async function getPersonalFeedbackStats(range) {
+  const response = await api.get("/feedback-stats/me", {
+    params: { range }
+  });
+  return response.data;
+}
+
+export async function getAdminFeedbackStats(params) {
+  const response = await api.get("/admin/feedback-stats", { params });
+  return response.data;
+}
+
 export async function streamEvaluationTask(payload, onEvent) {
   const response = await fetch("/api/evaluation/tasks/stream", {
     method: "POST",

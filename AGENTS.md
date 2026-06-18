@@ -12,7 +12,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 当前 `codex/dev-v2` 分支已完成 v2 阶段 1：开放注册、HttpOnly Cookie JWT、普通用户/管理员 RBAC、真实用户数据归属和公开/私有评测。demo-v1 的多模型评测、评分、历史、反馈和评论闭环继续保留。
 
-`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。`/feedback` 占位路由暂时保留供后续开发，但不向 demo-v1 用户展示入口。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。
 
 ## 当前技术栈
 
@@ -75,6 +75,8 @@ MultiChatEval/
     - `GET /api/evaluation/responses/{responseId}/comments`
     - `POST /api/evaluation/responses/{responseId}/comments`
     - `DELETE /api/evaluation/comments/{commentId}`
+    - `GET /api/feedback-stats/me`
+    - `GET /api/admin/feedback-stats`
 - 模型适配器接口：`backend/app/adapters/base.py`
 - OpenAI-compatible 真实调用适配器：`backend/app/adapters/openai_compatible.py`
 - 规则评分器：`backend/app/services/rule_evaluator.py`
@@ -181,7 +183,7 @@ pnpm install
 pnpm dev
 ```
 
-前端通过 `package.json` 和 `frontend/pnpm-workspace.yaml` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；pnpm 10 报 `ERR_PNPM_IGNORED_BUILDS` 时，在 `frontend/` 下执行 `pnpm rebuild`。
+前端通过 `frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；依赖安装统一使用 `pnpm install --frozen-lockfile`。
 
 默认地址：
 
@@ -254,10 +256,11 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 - 点赞/点踩变化会重算并持久化最终分。
 - 全文详情弹窗会展示完整回答、维度分数、权重、命中项明细、当前反馈状态和评分公式。
 - 支持分页查看、发布和硬删除公开评论；同一用户对同一回答的评论数量不受限制。
+- 反馈统计页支持最近 7 天、30 天和全部历史范围，普通用户查看本人评测表现与本人互动，管理员查看全局模型统计、每日趋势和分页互动明细。
 
 待做：
 
-- 增加反馈统计和模型推荐。
+- 增加模型推荐。
 
 ### v2 阶段 2/3 设计
 
@@ -269,7 +272,7 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 ### v2 后续路线
 
 - 用户注册、登录、会话和真实用户反馈归属。
-- 反馈统计看板与基于历史质量、成本和偏好的模型推荐。
+- 基于反馈统计、历史质量、成本和偏好的模型推荐。
 - 评论审核、举报和管理能力。
 - 评测结果导出、分享与可复现报告。
 - 批量评测数据集、回归对比和自定义评分权重。
@@ -344,5 +347,5 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 2. 确认前端能调用后端真实模型接口。
 3. 确认模型级渐进展示和全局思考模式行为正常。
 4. 验证评分结果、点赞/点踩和公开评论均正确持久化到 MySQL。
-5. 增加反馈统计和模型推荐。
+5. 基于已实现反馈统计增加模型推荐。
 6. 验证公开任务跨用户可见、私有任务仅创建者可见。
