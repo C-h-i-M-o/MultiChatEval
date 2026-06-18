@@ -113,7 +113,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-前端已通过 `package.json` 和 `frontend/pnpm-workspace.yaml` 允许 `esbuild`、`vue-demi` 执行必要的依赖构建脚本。若本地升级 pnpm 后遇到 `ERR_PNPM_IGNORED_BUILDS`，请在 `frontend/` 下执行 `pnpm rebuild` 后再启动。
+前端通过 `frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要的依赖构建脚本。依赖安装统一在 `frontend/` 下执行 `pnpm install --frozen-lockfile`。
 
 前端默认地址：
 

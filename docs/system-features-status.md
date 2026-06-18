@@ -631,7 +631,7 @@ final =
 - `scripts/start-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和前端开发服务。
 - 启动脚本会在默认端口被占用时自动向后寻找可用端口，并把实际后端地址传给 Vite 代理。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
-- 前端可通过 `pnpm dev` 启动；`package.json` 和 `frontend/pnpm-workspace.yaml` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
+- 前端可通过 `pnpm dev` 启动；`frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
 - 前端通过 Vite 代理或同源 `/api` 访问后端接口。
 
 ## 8. 测试覆盖

@@ -181,7 +181,7 @@ pnpm install
 pnpm dev
 ```
 
-前端通过 `package.json` 和 `frontend/pnpm-workspace.yaml` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；pnpm 10 报 `ERR_PNPM_IGNORED_BUILDS` 时，在 `frontend/` 下执行 `pnpm rebuild`。
+前端通过 `frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；依赖安装统一使用 `pnpm install --frozen-lockfile`。
 
 默认地址：
 

@@ -20,11 +20,5 @@
     "vite": "^6.0.0",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "vue-demi"
-    ]
   }
 }
