@@ -45,18 +45,18 @@ MySQL
 
 ## 前端展示层
 
-当前前端展示层采用 Vue Router 多路由结构，统一业务布局位于 `frontend/src/components/AppLayout.vue`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。
+当前前端展示层采用 Vue Router 多路由结构，统一业务布局位于 `vue-frontend/src/components/AppLayout.vue`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。
 
 React 重构阶段需要另建前端工程，相关文档统一维护在 `docs/react-rewrite/`。重构优先复刻当前 Vue 前端的已实现页面、路由和接口行为，不改变后端 API、数据库结构、权限模型、评分公式和模型级渐进返回语义。
 
 当前 Vue 展示层包含：
 
-- `/` 对应 `frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
-- `/login` 和 `/register` 对应 `frontend/src/views/AuthView.vue`，用于登录和开放注册。
-- `/models` 对应 `frontend/src/views/ModelConfigsView.vue`，仅管理员用于通过供应商预设或空白模板维护 OpenAI-compatible 模型。
+- `/` 对应 `vue-frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
+- `/login` 和 `/register` 对应 `vue-frontend/src/views/AuthView.vue`，用于登录和开放注册。
+- `/models` 对应 `vue-frontend/src/views/ModelConfigsView.vue`，仅管理员用于通过供应商预设或空白模板维护 OpenAI-compatible 模型。
 - `/users` 对应管理员用户管理页，用于查看今日 Token 用量并调整普通用户每日额度。
-- `/history` 对应 `frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
-- `/feedback` 对应 `frontend/src/views/FeedbackStatsView.vue`，所有登录用户均可进入；页面根据角色展示个人统计或管理员全局统计。
+- `/history` 对应 `vue-frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
+- `/feedback` 对应 `vue-frontend/src/views/FeedbackStatsView.vue`，所有登录用户均可进入；页面根据角色展示个人统计或管理员全局统计。
 - Element Plus 在应用入口启用中文语言配置，历史任务分页容量统一显示为 `/页`。
 - 模型选择项从后端模型配置接口动态加载，直接显示具体模型名。
 - `ModelResponseSummaryGrid` 提供 `grid` 和 `list` 两种模式：评测页使用六轨平衡网格，历史任务详情使用单列结构化列表。

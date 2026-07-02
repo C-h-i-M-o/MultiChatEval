@@ -37,11 +37,12 @@ def test_start_local_installs_locked_dependencies_and_checks_services() -> None:
 
     assert 'pip install -e ".[dev]"' in script
     assert "pnpm install --frozen-lockfile" in script
+    assert 'FRONTEND_DIR="${PROJECT_ROOT}/vue-frontend"' in script
     assert 'require_command lsof "请先安装 lsof。"' in script
     assert 'require_command curl "请先安装 curl。"' in script
     assert "docker compose version" in script
     assert 'wait_for_url "后端服务"' in script
-    assert 'wait_for_url "前端服务"' in script
+    assert 'wait_for_url "Vue 前端服务"' in script
 
 
 def test_comment_migration_supports_latest_init_schema() -> None:

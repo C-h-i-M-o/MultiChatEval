@@ -18,7 +18,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现页面和交互，不借重构扩大后端功能范围。
 
-当前 React 重构阶段二已落地：`react-frontend/` 已提供 React 19 + TypeScript + Vite 工程、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局和按角色导航。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目。Vue 前端仍保留在 `frontend/` 并可按原方式启动。
+当前 React 重构阶段三核心工作台已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航和 `/` 评测工作台。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。公开评论交互尚未迁移到 React，随阶段四历史任务详情继续处理。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目。Vue 前端已移动到 `vue-frontend/` 并可按原方式启动。
 
 ## 2. 前端功能
 
@@ -39,7 +39,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/`
 
-入口文件：`frontend/src/views/EvaluationView.vue`
+入口文件：`vue-frontend/src/views/EvaluationView.vue`
 
 已实现能力：
 
@@ -63,7 +63,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/models`
 
-入口文件：`frontend/src/views/ModelConfigsView.vue`
+入口文件：`vue-frontend/src/views/ModelConfigsView.vue`
 
 已实现能力：
 
@@ -138,7 +138,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/history`
 
-入口文件：`frontend/src/views/HistoryView.vue`
+入口文件：`vue-frontend/src/views/HistoryView.vue`
 
 已实现能力：
 
@@ -161,7 +161,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/feedback`
 
-入口文件：`frontend/src/views/FeedbackStatsView.vue`
+入口文件：`vue-frontend/src/views/FeedbackStatsView.vue`
 
 已实现能力：
 
@@ -181,7 +181,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 状态：已实现
 
-入口文件：`frontend/src/components/MarkdownRenderer.vue`
+入口文件：`vue-frontend/src/components/MarkdownRenderer.vue`
 
 已实现能力：
 
@@ -199,11 +199,11 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 相关文件：
 
-- `frontend/src/components/AppLayout.vue`
-- `frontend/src/components/ModelResponseCard.vue`
-- `frontend/src/components/ModelResponseSummaryGrid.vue`
-- `frontend/src/router/index.js`
-- `frontend/src/styles/main.css`
+- `vue-frontend/src/components/AppLayout.vue`
+- `vue-frontend/src/components/ModelResponseCard.vue`
+- `vue-frontend/src/components/ModelResponseSummaryGrid.vue`
+- `vue-frontend/src/router/index.js`
+- `vue-frontend/src/styles/main.css`
 
 已实现能力：
 
@@ -662,8 +662,8 @@ final =
 - `scripts/start-react-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和 React 前端开发服务。
 - 启动脚本会在默认端口被占用时自动向后寻找可用端口，并把实际后端地址传给 Vite 代理。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
-- 前端可通过 `pnpm dev` 启动；`frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
-- React 前端可在 `react-frontend/` 下通过 `pnpm dev` 启动，默认端口为 `5174`。
+- 前端可通过 `pnpm dev` 启动；`vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
+- React 前端可在 `frontend/` 下通过 `pnpm dev` 启动，默认端口为 `5174`。
 - 前端通过 Vite 代理或同源 `/api` 访问后端接口。
 
 ## 8. 测试覆盖
@@ -677,7 +677,7 @@ final =
 - 评测服务测试覆盖同步创建、模型级渐进返回、单模型失败隔离、评分持久化、Judge 合成、反馈重算和评论操作。
 - 模型配置、API Key、启动脚本、迁移兼容和 LLM Judge 解析均有对应单元测试。
 - 规则评分器测试覆盖空回答、排除完整或未闭合的 `<think>` 思考内容、相关性、格式和安全性等主要规则。
-- React 阶段一/二结构、启动脚本、API 客户端、导航权限和构建链路已有测试覆盖。
+- React 阶段一/二/三结构、启动脚本、API 客户端、导航权限、评测 NDJSON 解析、回答内容处理、反馈状态合并和构建链路已有测试覆盖。
 
 当前缺口：
 
@@ -725,10 +725,10 @@ final =
 v2 新功能开发已结束。后续建议按以下顺序推进 React 前端重构：
 
 1. 以 `docs/react-rewrite/` 为当前 React 重构文档入口。
-2. 已完成：新建 `react-frontend/` React 前端工程，保留现有 `frontend/` Vue 前端可运行。
+2. 已完成：`frontend/` 为 React 主前端工程，原 Vue 前端移动到 `vue-frontend/` 并继续可运行。
 3. 已完成：明确 React 技术栈、目录结构、路由方案、API 封装和样式方案，并建立基础测试、构建和一键启动脚本。
 4. 已完成：复用现有 FastAPI 接口，迁移登录、注册、退出和基础业务布局。
-5. 下一步：迁移评测工作台，重点验证模型级 NDJSON 渐进返回、Markdown 渲染、思考过程折叠和反馈操作。
-6. 迁移管理员模型配置、用户额度、历史任务和反馈统计页面。
+5. 已完成阶段三核心工作台：迁移评测表单、模型级 NDJSON 渐进返回、Markdown 渲染、思考过程折叠和点赞/点踩反馈操作。
+6. 下一步：迁移管理员模型配置、用户额度、历史任务、公开评论交互和反馈统计页面。
 7. 建立 React 前端的构建、测试和验收命令，并与现有 Vue 前端在迁移期并行维护。
 8. 迁移完成后再决定是否保留 Vue 前端作为历史实现或移除。

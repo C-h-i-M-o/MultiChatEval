@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-REACT_DIR = PROJECT_ROOT / "react-frontend"
+REACT_DIR = PROJECT_ROOT / "frontend"
 SCRIPT_PATH = PROJECT_ROOT / "scripts" / "start-react-local.sh"
 
 
@@ -60,7 +60,7 @@ def test_react_frontend_exposes_phase1_health_and_auth_recovery() -> None:
 def test_start_react_local_script_uses_react_frontend_without_touching_vue_frontend() -> None:
     script = SCRIPT_PATH.read_text()
 
-    assert 'REACT_FRONTEND_DIR="${PROJECT_ROOT}/react-frontend"' in script
+    assert 'REACT_FRONTEND_DIR="${PROJECT_ROOT}/frontend"' in script
     assert 'REACT_FRONTEND_PORT="${REACT_FRONTEND_PORT:-5174}"' in script
     assert "prepare_react_frontend" in script
     assert '(cd "${REACT_FRONTEND_DIR}" && pnpm install --frozen-lockfile)' in script
@@ -68,4 +68,5 @@ def test_start_react_local_script_uses_react_frontend_without_touching_vue_front
     assert 'VITE_DEV_PORT="${REACT_FRONTEND_PORT}"' in script
     assert 'pnpm dev --host "${REACT_FRONTEND_HOST}" --port "${REACT_FRONTEND_PORT}" --strictPort' in script
     assert 'wait_for_url "React 前端服务"' in script
-    assert 'FRONTEND_DIR="${PROJECT_ROOT}/frontend"' not in script
+    assert 'FRONTEND_DIR="${PROJECT_ROOT}/vue-frontend"' not in script
+    assert 'REACT_FRONTEND_DIR="${PROJECT_ROOT}/react-frontend"' not in script

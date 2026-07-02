@@ -30,7 +30,7 @@
 
 落地结果：
 
-- React 前端目录为 `react-frontend/`。
+- React 前端目录为 `frontend/`。
 - 技术栈为 React 19、TypeScript、Vite、React Router 和 Vitest。
 - `pnpm test` 覆盖阶段一 API 客户端。
 - `pnpm build` 可完成 TypeScript 严格检查和 Vite 生产构建。
@@ -56,17 +56,26 @@
 - `/`、`/history`、`/feedback` 为登录后可访问路由；`/models` 与 `/users` 仅管理员可见且可访问。
 - 当前业务页为阶段二占位壳，评测工作台真实迁移进入阶段三。
 
-### 阶段 3：评测工作台
+### 阶段 3：评测工作台（核心迁移已完成）
 
 - 迁移模型列表加载、问题输入、公开/私有选择、LLM Judge 开关和全局思考模式开关。
 - 迁移 `POST /api/evaluation/tasks/stream` 的 NDJSON 读取和模型级渐进展示。
-- 迁移 Markdown 渲染、DOMPurify 清洗、`<think>` 折叠和反馈操作。
+- 迁移 Markdown 渲染、DOMPurify 清洗、`<think>` 折叠和点赞/点踩反馈操作。
 
 验收标准：
 
 - 多模型评测可以按模型完成顺序渐进展示。
 - 单个模型失败不影响其他模型展示。
-- 回答详情、评分、点赞/点踩和公开评论行为与 Vue 版本一致。
+- 回答详情、评分和点赞/点踩行为与 Vue 版本核心路径一致。
+
+落地结果：
+
+- `/` 已从阶段占位壳替换为 React 评测工作台。
+- API 客户端新增 `GET /api/models/available`、`GET /api/token-usage/me/today`、`POST /api/evaluation/tasks/stream` 和 `POST /api/evaluation/responses/{responseId}/feedback`。
+- React 工作台已支持可用模型加载、默认模型选择、今日 Token 用量展示、公开/私有评测、思考模式、LLM 评审模型选择和模型级等待卡片。
+- NDJSON 读取使用 `ReadableStream`、`TextDecoder` 和按行缓冲解析；`model_response` 会替换对应模型等待卡片，其他模型继续等待。
+- 回答卡片已支持摘要、关键指标、成本、三项评分条、全文展开、Markdown 安全渲染、`<think>` 折叠、评分命中项和点赞/点踩反馈。
+- 公开评论分页、发布和删除暂未在 React 工作台迁移，随阶段四历史任务详情和统一回答详情一起迁移。
 
 ### 阶段 4：管理与历史页面
 

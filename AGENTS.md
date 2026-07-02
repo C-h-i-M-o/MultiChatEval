@@ -18,7 +18,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
 - 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 重构目标前端：React 19、TypeScript、Vite、React Router，独立目录 `react-frontend/` 并复用现有后端 API
+- 重构目标前端：React 19、TypeScript、Vite、React Router，独立目录 `frontend/` 并复用现有后端 API
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -30,8 +30,8 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 ```text
 MultiChatEval/
   backend/        FastAPI 后端服务
-  frontend/       现有 Vue 3 + JavaScript 前端应用，React 重构期间继续保留
-  react-frontend/ React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航和基础布局
+  frontend/       React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航、基础布局和评测工作台
+  vue-frontend/   原 Vue 3 + JavaScript 前端应用，React 重构期间继续保留为可运行基线
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -100,8 +100,8 @@ MultiChatEval/
 ### 前端
 
 - Vue 3 + JavaScript + Vite 基础项目
-- 登录页和注册页：`frontend/src/views/AuthView.vue`
-- 主页面：`frontend/src/views/EvaluationView.vue`
+- 登录页和注册页：`vue-frontend/src/views/AuthView.vue`
+- 主页面：`vue-frontend/src/views/EvaluationView.vue`
 - 功能骨架：
     - 输入问题
     - 按已启用且已配置 API Key 的模型配置选择模型
@@ -123,12 +123,12 @@ MultiChatEval/
     - 评分详情支持分页查看、发布和删除公开评论
 	    - 根据用户角色控制模型配置导航和页面访问
 	- 桌面端侧边栏固定在可视区域内，"默认流程"保持在侧栏底部；移动端恢复普通流式布局
-- 状态管理：`frontend/src/stores/evaluation.js`
-- API 封装：`frontend/src/utils/api.js`
+- 状态管理：`vue-frontend/src/stores/evaluation.js`
+- API 封装：`vue-frontend/src/utils/api.js`
 
 ### React 重构前端
 
-- 独立目录：`react-frontend/`
+- 独立目录：`frontend/`
 - 技术栈：React 19、TypeScript、Vite、React Router、Vitest
 - 阶段一已完成：
     - 独立依赖、测试、构建和开发服务命令
@@ -141,7 +141,12 @@ MultiChatEval/
     - 受保护业务路由和公开认证路由
     - 普通用户与管理员导航可见性隔离
     - `/models` 与 `/users` 管理员入口保护
-    - 业务页面仍为占位壳，评测工作台迁移属于阶段三
+- 阶段三核心工作台已完成：
+    - `/` 已迁移为 React 评测工作台
+    - 支持模型列表、今日 Token、公开/私有评测、思考模式和 LLM 评审
+    - 支持 `POST /api/evaluation/tasks/stream` 的模型级 NDJSON 渐进展示
+    - 支持 Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈
+    - 公开评论交互尚未迁移到 React，随阶段四历史任务详情继续处理
 
 ### 数据库与文档
 
@@ -173,7 +178,7 @@ React 重构版本使用：
 ./scripts/start-react-local.sh
 ```
 
-该脚本会启动同一套 MySQL 和 FastAPI 后端，并启动 `react-frontend/`。默认 React 前端地址为 `http://127.0.0.1:5174`；如端口占用，会自动向后寻找可用端口。
+该脚本会启动同一套 MySQL 和 FastAPI 后端，并启动 `frontend/`。默认 React 前端地址为 `http://127.0.0.1:5174`；如端口占用，会自动向后寻找可用端口。
 
 ### 1. 启动 MySQL
 
@@ -203,15 +208,15 @@ http://localhost:8000
 http://localhost:8000/api/health
 ```
 
-### 3. 启动前端
+### 3. 启动 Vue 前端基线
 
 ```bash
-cd frontend
+cd vue-frontend
 pnpm install
 pnpm dev
 ```
 
-前端通过 `frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；依赖安装统一使用 `pnpm install --frozen-lockfile`。
+Vue 前端通过 `vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；依赖安装统一使用 `pnpm install --frozen-lockfile`。
 
 默认地址：
 
@@ -227,7 +232,7 @@ http://localhost:5173
 
 ```text
 DATABASE_URL=mysql+aiomysql://multichateval:multichateval@localhost:3306/multichateval
-BACKEND_CORS_ORIGINS=http://localhost:5173
+BACKEND_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
 ```
 
 真实模型 API Key 不应提交到 Git。
@@ -370,7 +375,7 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 8. `docs/react-rewrite/plan.md`
 9. `docs/react-rewrite/architecture.md`
 10. `backend/app/services/evaluation_service.py`
-11. `frontend/src/views/EvaluationView.vue`
+11. `vue-frontend/src/views/EvaluationView.vue`
 
 优先推进的任务是：
 

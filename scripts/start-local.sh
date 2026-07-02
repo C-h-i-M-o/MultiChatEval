@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
-FRONTEND_DIR="${PROJECT_ROOT}/frontend"
+FRONTEND_DIR="${PROJECT_ROOT}/vue-frontend"
 LOG_DIR="${PROJECT_ROOT}/logs"
 PYTHON_BIN="${PYTHON_BIN:-/opt/anaconda3/bin/python}"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
@@ -117,7 +117,7 @@ prepare_backend() {
 }
 
 prepare_frontend() {
-  log "按锁文件校验并安装前端依赖..."
+  log "按锁文件校验并安装 Vue 前端依赖..."
   (cd "${FRONTEND_DIR}" && pnpm install --frozen-lockfile)
 }
 
@@ -136,11 +136,11 @@ start_backend() {
 }
 
 start_frontend() {
-  log "启动前端：http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+  log "启动 Vue 前端：http://${FRONTEND_HOST}:${FRONTEND_PORT}"
   (
     cd "${FRONTEND_DIR}"
     VITE_BACKEND_TARGET="http://${BACKEND_HOST}:${BACKEND_PORT}" pnpm dev --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" --strictPort
-  ) >"${LOG_DIR}/frontend.log" 2>&1 &
+  ) >"${LOG_DIR}/vue-frontend.log" 2>&1 &
   FRONTEND_PID="$!"
 }
 
@@ -163,8 +163,8 @@ wait_for_url() {
 }
 
 watch_processes() {
-  log "本地项目已启动。日志目录：${LOG_DIR}"
-  log "按 Ctrl+C 停止后端和前端开发服务。"
+  log "Vue 版本本地项目已启动。日志目录：${LOG_DIR}"
+  log "按 Ctrl+C 停止后端和 Vue 前端开发服务。"
 
   while true; do
     if ! kill -0 "${BACKEND_PID}" >/dev/null 2>&1; then
@@ -173,7 +173,7 @@ watch_processes() {
     fi
 
     if ! kill -0 "${FRONTEND_PID}" >/dev/null 2>&1; then
-      warn "前端服务已退出，请查看 ${LOG_DIR}/frontend.log。"
+      warn "Vue 前端服务已退出，请查看 ${LOG_DIR}/vue-frontend.log。"
       exit 1
     fi
 
@@ -209,7 +209,7 @@ main() {
   start_backend
   wait_for_url "后端服务" "http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
   start_frontend
-  wait_for_url "前端服务" "http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+  wait_for_url "Vue 前端服务" "http://${FRONTEND_HOST}:${FRONTEND_PORT}"
   watch_processes
 }
 

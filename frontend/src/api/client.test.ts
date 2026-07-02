@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { ApiError, getCurrentUser, getHealthStatus, loginUser, logoutUser, registerUser } from "./client";
+import {
+  ApiError,
+  getCurrentUser,
+  getHealthStatus,
+  loginUser,
+  logoutUser,
+  registerUser,
+  streamEvaluationTask,
+  submitResponseFeedback
+} from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -106,6 +115,82 @@ describe("React 阶段二认证 API 客户端", () => {
       headers: {
         Accept: "application/json"
       }
+    });
+  });
+});
+
+describe("React 阶段三评测 API 客户端", () => {
+  test("按 NDJSON 分片顺序推送模型级事件", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('{"type":"task_started","taskId":7,"prompt":"问题","status":"running"}\n{"type":"model_'));
+        controller.enqueue(
+          encoder.encode(
+            'response","response":{"id":11,"modelConfigId":2,"modelName":"DeepSeek","provider":"deepseek","answer":"答案","latencyMs":1200,"inputTokens":3,"outputTokens":4,"cacheHitTokens":0,"cacheCreationTokens":0,"totalTokens":7,"estimatedCost":0.01,"currency":"CNY","costDetails":{"inputCost":0,"outputCost":0.01,"cacheHitCost":0,"cacheCreationCost":0},"status":"success","score":{"relevance":9,"completeness":8,"clarity":8,"format":7,"safety":10,"final":8.5,"details":{},"ruleFinal":8.5,"judgeFinal":null,"baseFinal":8.5,"feedbackScore":null,"judgeComment":null,"judgeDetails":{}},"feedback":{"liked":false,"likeCount":0,"disliked":false,"dislikeCount":0}}}\n'
+          )
+        );
+        controller.close();
+      }
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(stream, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const events: unknown[] = [];
+
+    await streamEvaluationTask(
+      {
+        prompt: "问题",
+        modelIds: [2],
+        enableJudge: false,
+        judgeModelId: null,
+        enableThinking: true,
+        visibility: "public"
+      },
+      (event) => events.push(event)
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/evaluation/tasks/stream", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/x-ndjson",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        prompt: "问题",
+        modelIds: [2],
+        enableJudge: false,
+        judgeModelId: null,
+        enableThinking: true,
+        visibility: "public"
+      })
+    });
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ type: "task_started", taskId: 7 });
+    expect(events[1]).toMatchObject({ type: "model_response", response: { id: 11, modelName: "DeepSeek" } });
+  });
+
+  test("提交反馈使用后端 feedbackType 字段", async () => {
+    const result = {
+      responseId: 11,
+      feedbackType: "like",
+      active: true,
+      feedback: { liked: true, likeCount: 1, disliked: false, dislikeCount: 0 },
+      score: { relevance: 9, completeness: 8, clarity: 8, format: 7, safety: 10, final: 8.6, details: {} }
+    };
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(result));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(submitResponseFeedback(11, "like")).resolves.toEqual(result);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/evaluation/responses/11/feedback", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ feedbackType: "like" })
     });
   });
 });

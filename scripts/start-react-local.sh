@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
-REACT_FRONTEND_DIR="${PROJECT_ROOT}/react-frontend"
+REACT_FRONTEND_DIR="${PROJECT_ROOT}/frontend"
 LOG_DIR="${PROJECT_ROOT}/logs"
 PYTHON_BIN="${PYTHON_BIN:-/opt/anaconda3/bin/python}"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
@@ -140,7 +140,7 @@ start_react_frontend() {
   (
     cd "${REACT_FRONTEND_DIR}"
     VITE_BACKEND_TARGET="http://${BACKEND_HOST}:${BACKEND_PORT}" VITE_DEV_PORT="${REACT_FRONTEND_PORT}" pnpm dev --host "${REACT_FRONTEND_HOST}" --port "${REACT_FRONTEND_PORT}" --strictPort
-  ) >"${LOG_DIR}/react-frontend.log" 2>&1 &
+  ) >"${LOG_DIR}/frontend.log" 2>&1 &
   REACT_FRONTEND_PID="$!"
 }
 
@@ -173,7 +173,7 @@ watch_processes() {
     fi
 
     if ! kill -0 "${REACT_FRONTEND_PID}" >/dev/null 2>&1; then
-      warn "React 前端服务已退出，请查看 ${LOG_DIR}/react-frontend.log。"
+      warn "React 前端服务已退出，请查看 ${LOG_DIR}/frontend.log。"
       exit 1
     fi
 

@@ -1,3 +1,5 @@
+import type { EvaluationStreamEvent, FeedbackToggleResult } from "../features/evaluation/types";
+
 export interface HealthStatus {
   status: "ok";
 }
@@ -15,6 +17,38 @@ export interface UserProfile {
 export interface AuthCredentials {
   username: string;
   password: string;
+}
+
+export interface AvailableModel {
+  id: number;
+  providerName: string;
+  displayName: string;
+  modelName: string;
+}
+
+export interface TokenUsage {
+  usageDate: string;
+  usedTokens: number;
+  dailyLimit: number | null;
+  remainingTokens: number | null;
+  unlimited: boolean;
+}
+
+export type EvaluationVisibility = "public" | "private";
+
+export interface EvaluationTaskPayload {
+  prompt: string;
+  modelIds: number[];
+  enableJudge: boolean;
+  judgeModelId: number | null;
+  enableThinking: boolean;
+  visibility: EvaluationVisibility;
+}
+
+export type FeedbackType = "like" | "dislike";
+
+export interface FeedbackPayload {
+  feedbackType: FeedbackType;
 }
 
 export class ApiError extends Error {
@@ -131,4 +165,78 @@ export async function registerUser(credentials: AuthCredentials): Promise<UserPr
 
 export async function logoutUser(): Promise<void> {
   await postJson<void>("/api/auth/logout");
+}
+
+export async function listAvailableModels(): Promise<AvailableModel[]> {
+  return fetchJson<AvailableModel[]>("/api/models/available");
+}
+
+export async function getTodayTokenUsage(): Promise<TokenUsage> {
+  return fetchJson<TokenUsage>("/api/token-usage/me/today");
+}
+
+export async function submitResponseFeedback(
+  responseId: number,
+  feedbackType: FeedbackType
+): Promise<FeedbackToggleResult> {
+  return postJson<FeedbackToggleResult>(`/api/evaluation/responses/${responseId}/feedback`, {
+    feedbackType
+  } satisfies FeedbackPayload);
+}
+
+export async function streamEvaluationTask(
+  payload: EvaluationTaskPayload,
+  onEvent: (event: EvaluationStreamEvent) => void
+): Promise<void> {
+  const response = await fetch("/api/evaluation/tasks/stream", {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/x-ndjson",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message || "评测任务创建失败");
+  }
+
+  if (!response.body) {
+    throw new Error("当前浏览器不支持渐进式读取模型结果");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const result = await reader.read();
+    if (result.done) {
+      break;
+    }
+
+    buffer += decoder.decode(result.value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      emitStreamLine(line, onEvent);
+    }
+  }
+
+  buffer += decoder.decode();
+  emitStreamLine(buffer, onEvent);
+}
+
+function emitStreamLine(
+  line: string,
+  onEvent: (event: EvaluationStreamEvent) => void
+): void {
+  const trimmedLine = line.trim();
+  if (!trimmedLine) {
+    return;
+  }
+  onEvent(JSON.parse(trimmedLine) as EvaluationStreamEvent);
 }

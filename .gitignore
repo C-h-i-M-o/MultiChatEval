@@ -20,9 +20,9 @@ backend/*.egg-info/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-react-frontend/node_modules/
-react-frontend/dist/
-react-frontend/.vite/
+vue-frontend/node_modules/
+vue-frontend/dist/
+vue-frontend/.vite/
 .pnpm-store/
 
 # 数据与日志

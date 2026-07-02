@@ -4,14 +4,14 @@
 
 当前边界：
 
-- 保留现有 `frontend/` Vue 前端作为可运行基线。
-- React 技术栈前端位于 `react-frontend/`，不直接替换现有 Vue 代码。
+- 保留原 `vue-frontend/` Vue 前端作为可运行基线。
+- React 技术栈主前端位于 `frontend/`，不删除现有 Vue 基线。
 - 复用现有 FastAPI API、MySQL 数据结构、认证权限模型、评分逻辑和模型级 NDJSON 渐进返回语义。
 - 不借 React 重构继续开发 v2 已冻结的新功能，例如语义分析、模型推荐、运行监控、评论审核、导出和批量评测。
 
 阶段一已完成：
 
-- `react-frontend/` 使用 React 19、TypeScript、Vite、React Router 和 Vitest。
+- `frontend/` 使用 React 19、TypeScript、Vite、React Router 和 Vitest。
 - React 前端已接入 `/api/health` 与 `/api/auth/me`，用于系统健康检查和登录态恢复。
 - 新增 `scripts/start-react-local.sh`，可一键启动 MySQL、FastAPI 后端和 React 前端。
 
@@ -20,6 +20,12 @@
 - React 前端已接入登录、注册、退出和当前用户恢复。
 - 已实现受保护业务路由、公开认证路由、基础业务布局和按角色导航。
 - 管理员入口 `/models` 与 `/users` 已在前端隐藏并保护；页面内容仍是占位壳，具体业务迁移留到后续阶段。
+
+阶段三核心工作台已完成：
+
+- `/` 已迁移为 React 评测工作台，支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审和模型级 NDJSON 渐进展示。
+- 回答卡片支持 Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。
+- 公开评论分页、发布和删除暂未迁移到 React，随阶段四历史任务详情继续处理。
 
 ## 文档索引
 

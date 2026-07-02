@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-当前 **v2 版本开发已经结束并冻结**，后续不再继续推进语义分析、模型推荐、运行监控等新功能。现有 Vue 前端和 FastAPI 后端作为可运行基线保留，当前新的开发任务是：在保留现有 `frontend/` Vue 前端的基础上，新建 React 技术栈前端并逐步完成同等功能迁移。
+当前 **v2 版本开发已经结束并冻结**，后续不再继续推进语义分析、模型推荐、运行监控等新功能。现有 Vue 前端和 FastAPI 后端作为可运行基线保留，当前新的开发任务是：在保留现有 `vue-frontend/` Vue 前端的基础上，将 `frontend/` 作为 React 技术栈主前端并逐步完成同等功能迁移。
 
 v2 已完成并保留的账号体系与权限控制能力：
 
@@ -30,7 +30,7 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
 - 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 新重构前端：React 19、TypeScript、Vite、React Router，保留 Vue 前端的基础上在 `react-frontend/` 单独维护
+- 当前主前端：React 19、TypeScript、Vite、React Router，位于 `frontend/`
 - 数据库：MySQL 8
 - 本地环境：Docker Compose
 
@@ -39,8 +39,8 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 ```text
 MultiChatEval/
   backend/        FastAPI 后端服务
-  frontend/       现有 Vue 3 + JavaScript 前端应用，重构期间继续保留
-  react-frontend/ React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航和基础布局
+  frontend/       React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航、基础布局和评测工作台
+  vue-frontend/   原 Vue 3 + JavaScript 前端应用，重构期间继续保留为可运行基线
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -84,7 +84,7 @@ React 版本脚本同样会准备 `.env`、MySQL、后端虚拟环境、数据�
 - Node.js 与 pnpm。
 - macOS 自带的 `curl` 和 `lsof`。
 
-Vue 版本脚本会按 `backend/pyproject.toml` 和 `frontend/pnpm-lock.yaml` 校验依赖；React 版本脚本会按 `backend/pyproject.toml` 和 `react-frontend/pnpm-lock.yaml` 校验依赖。两个脚本都会在前后端真实可访问后才提示启动完成。
+Vue 版本脚本会按 `backend/pyproject.toml` 和 `vue-frontend/pnpm-lock.yaml` 校验依赖；React 版本脚本会按 `backend/pyproject.toml` 和 `frontend/pnpm-lock.yaml` 校验依赖。两个脚本都会在前后端真实可访问后才提示启动完成。
 
 如果默认端口已被占用，脚本会自动向后寻找可用端口，并把实际后端地址同步给 Vite 代理。也可以通过 `BACKEND_PORT=8001 FRONTEND_PORT=5174 ./scripts/start-local.sh` 指定起始端口。
 
@@ -118,26 +118,26 @@ uvicorn app.main:app --reload
 http://localhost:8000
 ```
 
-### 3. 启动前端
+### 3. 启动 Vue 前端基线
 
 ```bash
-cd frontend
+cd vue-frontend
 pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-前端通过 `frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要的依赖构建脚本。依赖安装统一在 `frontend/` 下执行 `pnpm install --frozen-lockfile`。
+Vue 前端通过 `vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要的依赖构建脚本。依赖安装统一在 `vue-frontend/` 下执行 `pnpm install --frozen-lockfile`。
 
-前端默认地址：
+Vue 前端默认地址：
 
 ```text
 http://localhost:5173
 ```
 
-React 重构前端可单独启动：
+React 主前端可单独启动：
 
 ```bash
-cd react-frontend
+cd frontend
 pnpm install --frozen-lockfile
 pnpm dev
 ```
@@ -166,7 +166,7 @@ http://localhost:5174
 
 当前仍不做逐字 token 流式输出；`/api/evaluation/tasks/stream` 是模型级渐进返回，即一个模型完整回答完成后立刻展示。
 
-v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示；反馈统计页也已形成角色隔离的可运行闭环。v2 到此结束，未实现的语义分析、模型推荐和运行监控不再继续开发。下一阶段工作聚焦 React 前端重构。
+v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示；反馈统计页也已形成角色隔离的可运行闭环。v2 到此结束，未实现的语义分析、模型推荐和运行监控不再继续开发。下一阶段工作聚焦 React 前端重构。目前 React 版本已完成认证、角色导航和评测工作台核心迁移；管理员模型配置、用户额度、历史任务、公开评论交互和反馈统计仍按后续阶段迁移。
 
 ## 前端展示能力
 

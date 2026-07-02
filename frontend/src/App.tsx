@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./features/auth/AuthContext";
 import { AppLayout } from "./layout/AppLayout";
 import { AuthPage } from "./pages/AuthPage";
+import { EvaluationPage } from "./pages/EvaluationPage";
 import { PlaceholderPage } from "./pages/PlaceholderPage";
 import { ProtectedRoute, PublicOnlyRoute } from "./routes/RouteGuards";
 
@@ -34,15 +35,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route
-            index
-            element={
-              <PlaceholderPage
-                title="评测工作台"
-                description="阶段二已接入认证与布局，评测表单和模型级渐进展示会在阶段三迁移。"
-              />
-            }
-          />
+          <Route index element={<EvaluationPage />} />
           <Route
             path="models"
             element={
