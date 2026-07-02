@@ -6,7 +6,9 @@
 
 ## 当前状态
 
-当前分支正在开发 **v2**。阶段 1 的账号体系与权限控制已经完成：
+当前 **v2 版本开发已经结束并冻结**，后续不再继续推进语义分析、模型推荐、运行监控等新功能。现有 Vue 前端和 FastAPI 后端作为可运行基线保留，当前新的开发任务是：在保留现有 `frontend/` Vue 前端的基础上，新建 React 技术栈前端并逐步完成同等功能迁移。
+
+v2 已完成并保留的账号体系与权限控制能力：
 
 - 开放注册、登录、退出和 HttpOnly Cookie JWT 登录态。
 - 普通用户与管理员角色隔离，模型配置仅管理员可维护。
@@ -22,12 +24,13 @@ demo-v1 的核心评测能力继续保留：
 - 点赞/点踩反馈计分、公开评论和历史任务查询。
 - MySQL 持久化、Alembic 迁移和一键启动脚本。
 
-v2 已提供按角色分流的反馈统计：普通用户查看个人评测表现和本人互动，管理员查看全局模型质量、趋势与互动明细。
+v2 已提供按角色分流的反馈统计：普通用户查看个人评测表现和本人互动，管理员查看全局模型质量、趋势与互动明细。未实现的 v2 后续规划只作为历史记录保留，不再作为当前开发目标。
 
 ## 技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
+- 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
+- 新重构前端：React 技术栈，后续在保留 Vue 前端的基础上单独新建
 - 数据库：MySQL 8
 - 本地环境：Docker Compose
 
@@ -36,7 +39,7 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 ```text
 MultiChatEval/
   backend/        FastAPI 后端服务
-  frontend/       Vue 3 + JavaScript 前端应用
+  frontend/       现有 Vue 3 + JavaScript 前端应用，重构期间继续保留
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -47,12 +50,13 @@ MultiChatEval/
 
 ## 文档入口
 
-- `docs/system-features-status.md`：系统功能、实现状态和后续优先级。
+- `docs/system-features-status.md`：系统功能、实现状态和 React 重构优先级。
+- `docs/README.md`：文档目录说明，区分当前权威文档、React 重构文档和 v2 历史归档。
 - `docs/architecture.md`：系统架构和核心流程。
 - `docs/api.md`：后端接口说明。
 - `docs/database.md`：数据库表结构说明。
-- `docs/v2-development-plan.md`：v2 云端多用户版本的开发顺序、流程和验收标准。
-- `docs/v2-stage1-auth-rbac-design.md`：阶段 1 账号、权限和任务可见性设计。
+- `docs/react-rewrite/`：当前 React 前端重构文档。
+- `docs/legacy-v2/`：v2 历史开发文档归档；v2 已冻结，不再继续推进后续阶段。
 
 ## 快速开始
 
@@ -139,11 +143,11 @@ http://localhost:5173
 
 当前仍不做逐字 token 流式输出；`/api/evaluation/tasks/stream` 是模型级渐进返回，即一个模型完整回答完成后立刻展示。
 
-v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示；反馈统计页也已形成角色隔离的可运行闭环。后续将继续推进语义分析、模型推荐和运行监控。
+v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示；反馈统计页也已形成角色隔离的可运行闭环。v2 到此结束，未实现的语义分析、模型推荐和运行监控不再继续开发。下一阶段工作聚焦 React 前端重构。
 
 ## 前端展示能力
 
-当前前端已经支持：
+当前 Vue 前端已经支持：
 
 - 使用多路由结构组织页面：`/login` 和 `/register` 为认证页面，`/` 为对比评测，`/models` 为管理员模型配置，`/users` 为管理员用户额度，`/history` 为历史任务，`/feedback` 为按角色分流的反馈统计。
 - 普通用户不显示模型配置入口，管理员可以维护模型配置。

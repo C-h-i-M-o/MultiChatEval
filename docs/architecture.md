@@ -1,9 +1,9 @@
 # 系统架构说明
 
-MultiChatEval 采用前后端分离架构：
+MultiChatEval 采用前后端分离架构。当前已实现前端为 Vue，v2 已冻结；后续 React 重构会在保留现有 Vue 前端的基础上新建 React 前端，并复用同一套 FastAPI API、MySQL 数据结构和评分逻辑。
 
 ```text
-Vue 前端
+Vue 前端（现有基线，React 重构期间保留）
   ↓
 FastAPI API
   ├── Auth / RBAC
@@ -45,9 +45,11 @@ MySQL
 
 ## 前端展示层
 
-前端展示层采用 Vue Router 多路由结构，统一业务布局位于 `frontend/src/components/AppLayout.vue`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。
+当前前端展示层采用 Vue Router 多路由结构，统一业务布局位于 `frontend/src/components/AppLayout.vue`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。
 
-当前展示层包含：
+React 重构阶段需要另建前端工程，相关文档统一维护在 `docs/react-rewrite/`。重构优先复刻当前 Vue 前端的已实现页面、路由和接口行为，不改变后端 API、数据库结构、权限模型、评分公式和模型级渐进返回语义。
+
+当前 Vue 展示层包含：
 
 - `/` 对应 `frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
 - `/login` 和 `/register` 对应 `frontend/src/views/AuthView.vue`，用于登录和开放注册。
