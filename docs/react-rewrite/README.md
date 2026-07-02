@@ -15,6 +15,12 @@
 - React 前端已接入 `/api/health` 与 `/api/auth/me`，用于系统健康检查和登录态恢复。
 - 新增 `scripts/start-react-local.sh`，可一键启动 MySQL、FastAPI 后端和 React 前端。
 
+阶段二已完成：
+
+- React 前端已接入登录、注册、退出和当前用户恢复。
+- 已实现受保护业务路由、公开认证路由、基础业务布局和按角色导航。
+- 管理员入口 `/models` 与 `/users` 已在前端隐藏并保护；页面内容仍是占位壳，具体业务迁移留到后续阶段。
+
 ## 文档索引
 
 - `plan.md`：React 重构阶段计划、迁移顺序和验收标准。

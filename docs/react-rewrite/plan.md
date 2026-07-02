@@ -36,7 +36,7 @@
 - `pnpm build` 可完成 TypeScript 严格检查和 Vite 生产构建。
 - `scripts/start-react-local.sh` 可启动 React 版本全栈项目。
 
-### 阶段 2：认证与基础布局
+### 阶段 2：认证与基础布局（已完成）
 
 - 迁移登录、注册、退出和当前用户恢复。
 - 实现业务布局和基于角色的导航可见性。
@@ -47,6 +47,14 @@
 - 普通用户和管理员登录后看到正确导航。
 - 未登录访问业务页会进入认证流程。
 - 管理员专属入口不会对普通用户展示。
+
+落地结果：
+
+- API 客户端新增 `POST /api/auth/login`、`POST /api/auth/register` 和 `POST /api/auth/logout`。
+- `AuthProvider` 负责 HttpOnly Cookie 登录态恢复、登录、注册和退出。
+- `/login` 与 `/register` 为公开认证路由，已登录用户会回到工作台。
+- `/`、`/history`、`/feedback` 为登录后可访问路由；`/models` 与 `/users` 仅管理员可见且可访问。
+- 当前业务页为阶段二占位壳，评测工作台真实迁移进入阶段三。
 
 ### 阶段 3：评测工作台
 

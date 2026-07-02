@@ -13,6 +13,7 @@ import { ElMessage } from "element-plus";
 
 import ModelConfigPanel from "../components/ModelConfigPanel.vue";
 import { listModelConfigs } from "../utils/api";
+import { getApiErrorMessage } from "../utils/errors";
 
 const modelConfigs = ref([]);
 const modelConfigLoading = ref(false);
@@ -23,7 +24,7 @@ async function loadModelConfigs() {
   try {
     modelConfigs.value = await listModelConfigs();
   } catch (error) {
-    ElMessage.error(error?.message || "模型配置加载失败");
+    ElMessage.error(getApiErrorMessage(error, "模型配置加载失败"));
   } finally {
     modelConfigLoading.value = false;
   }

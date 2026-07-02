@@ -40,7 +40,7 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 MultiChatEval/
   backend/        FastAPI 后端服务
   frontend/       现有 Vue 3 + JavaScript 前端应用，重构期间继续保留
-  react-frontend/ React 19 + TypeScript + Vite 前端应用，阶段一已接入健康检查和登录态恢复
+  react-frontend/ React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航和基础布局
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本

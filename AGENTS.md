@@ -31,7 +31,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 MultiChatEval/
   backend/        FastAPI 后端服务
   frontend/       现有 Vue 3 + JavaScript 前端应用，React 重构期间继续保留
-  react-frontend/ React 19 + TypeScript + Vite 前端应用，阶段一已接入健康检查和登录态恢复
+  react-frontend/ React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航和基础布局
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -136,7 +136,12 @@ MultiChatEval/
     - 类型化 API 客户端
     - 应用启动后调用 `GET /api/health`
     - 应用启动后调用 `GET /api/auth/me` 恢复 HttpOnly Cookie 登录态
-    - 未登录时保留阶段提示，不在阶段一实现登录页迁移
+- 阶段二已完成：
+    - 登录、注册、退出和当前用户恢复
+    - 受保护业务路由和公开认证路由
+    - 普通用户与管理员导航可见性隔离
+    - `/models` 与 `/users` 管理员入口保护
+    - 业务页面仍为占位壳，评测工作台迁移属于阶段三
 
 ### 数据库与文档
 

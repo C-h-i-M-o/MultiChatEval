@@ -13,8 +13,15 @@ function formatValidationError(detail) {
     return "";
   }
 
-  const issue = detail[0];
-  const field = issue?.loc?.at(-1);
+  const messages = detail
+    .map((issue) => formatValidationIssue(issue))
+    .filter(Boolean);
+
+  return messages.join("；");
+}
+
+function formatValidationIssue(issue) {
+  const field = Array.isArray(issue?.loc) ? issue.loc.at(-1) : null;
   const fieldName = FIELD_NAMES[field] || "输入内容";
   const limits = FIELD_LENGTHS[field];
 
@@ -24,7 +31,7 @@ function formatValidationError(detail) {
   if (issue?.type === "string_too_long") {
     return `${fieldName}长度不能超过 ${issue?.ctx?.max_length || limits?.max || "规定"} 位`;
   }
-  return `${fieldName}格式不正确`;
+  return typeof issue?.msg === "string" && issue.msg.trim() ? issue.msg : `${fieldName}格式不正确`;
 }
 
 export function getApiErrorMessage(error, fallbackMessage) {
@@ -38,5 +45,9 @@ export function getApiErrorMessage(error, fallbackMessage) {
     return validationMessage;
   }
 
-  return error?.message || fallbackMessage;
+  if (detail && typeof detail === "object" && typeof detail.msg === "string") {
+    return formatValidationIssue(detail);
+  }
+
+  return typeof error?.message === "string" && error.message.trim() ? error.message : fallbackMessage;
 }

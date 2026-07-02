@@ -31,16 +31,20 @@ FastAPI API
 MySQL
 ```
 
-当前阶段一目录：
+当前阶段二目录：
 
 ```text
 react-frontend/
   src/
-    api/client.ts              类型化 API 客户端
-    features/auth/auth.ts      登录态错误识别
-    App.tsx                    阶段一应用壳和联调状态
+    api/client.ts              类型化 API 客户端和认证请求
+    features/auth/             登录态恢复、认证上下文和错误识别
+    features/navigation/       导航项和路由访问判断
+    layout/AppLayout.tsx       登录后业务布局
+    pages/                     登录注册页和阶段占位页
+    routes/RouteGuards.tsx     公开路由和受保护路由
+    App.tsx                    路由声明
     main.tsx                   React 挂载与 BrowserRouter
-    styles.css                 阶段一页面样式
+    styles.css                 认证页和基础布局样式
   vite.config.ts               Vite React 插件与 /api 开发代理
   package.json                 pnpm 脚本和依赖
 ```
@@ -51,7 +55,10 @@ react-frontend/
 
 1. React 应用启动后请求 `GET /api/auth/me`。
 2. 后端通过 HttpOnly Cookie JWT 恢复用户。
-3. 阶段一仅展示登录态恢复结果；阶段二再迁移登录、注册、退出、角色导航和受保护路由。
+3. 未登录用户访问业务页会跳转到 `/login?redirect=...`。
+4. 登录或注册成功后，前端跳回原始业务路径或默认工作台。
+5. 已登录用户访问 `/login` 或 `/register` 会回到工作台。
+6. 普通用户无法看到或访问 `/models`、`/users` 管理员入口。
 
 ### 模型级渐进评测
 

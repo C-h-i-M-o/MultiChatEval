@@ -112,6 +112,7 @@ import { ElMessage } from "element-plus";
 
 import ModelResponseSummaryGrid from "../components/ModelResponseSummaryGrid.vue";
 import { useEvaluationStore } from "../stores/evaluation";
+import { getApiErrorMessage } from "../utils/errors";
 
 const store = useEvaluationStore();
 const HISTORY_PENDING_TIMEOUT_MS = 120 * 1000;
@@ -174,7 +175,7 @@ async function handleFeedback({ responseId, feedbackType }) {
       ElMessage.success("已取消反馈");
     }
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "用户反馈提交失败");
+    ElMessage.error(getApiErrorMessage(error, "用户反馈提交失败"));
   }
 }
 

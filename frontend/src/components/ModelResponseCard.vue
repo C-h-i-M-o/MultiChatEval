@@ -375,6 +375,7 @@ import {
 import CostDetailsPopover from "./CostDetailsPopover.vue";
 import MarkdownRenderer from "./MarkdownRenderer.vue";
 import ScoreBar from "./ScoreBar.vue";
+import { getApiErrorMessage } from "../utils/errors";
 
 const props = defineProps({
   response: {
@@ -538,7 +539,7 @@ async function loadComments(page = commentPage.value) {
     commentTotal.value = result.total;
     commentPage.value = result.page;
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "评论加载失败");
+    ElMessage.error(getApiErrorMessage(error, "评论加载失败"));
   } finally {
     commentsLoading.value = false;
   }
@@ -556,7 +557,7 @@ async function submitComment() {
     await loadComments(1);
     ElMessage.success("评论已发布");
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "评论发布失败");
+    ElMessage.error(getApiErrorMessage(error, "评论发布失败"));
   } finally {
     commentSubmitting.value = false;
   }
@@ -581,7 +582,7 @@ async function removeComment(comment) {
     await loadComments(Math.min(commentPage.value, lastPage));
     ElMessage.success("评论已删除");
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "评论删除失败");
+    ElMessage.error(getApiErrorMessage(error, "评论删除失败"));
   } finally {
     deletingCommentIds.value = deletingCommentIds.value.filter((id) => id !== comment.id);
   }

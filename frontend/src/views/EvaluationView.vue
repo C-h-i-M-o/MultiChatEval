@@ -137,6 +137,7 @@ import ModelResponseSummaryGrid from "../components/ModelResponseSummaryGrid.vue
 import { useAuthStore } from "../stores/auth";
 import { useEvaluationStore } from "../stores/evaluation";
 import { getTodayTokenUsage, listAvailableModels } from "../utils/api";
+import { getApiErrorMessage } from "../utils/errors";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -251,7 +252,7 @@ async function loadModelConfigs() {
     modelConfigs.value = await listAvailableModels();
     selectDefaultModels();
   } catch (error) {
-    modelConfigErrorMessage.value = error?.message || "模型配置加载失败";
+    modelConfigErrorMessage.value = getApiErrorMessage(error, "模型配置加载失败");
   } finally {
     modelConfigLoading.value = false;
   }
@@ -263,8 +264,7 @@ async function loadTokenUsage() {
   try {
     tokenUsage.value = await getTodayTokenUsage();
   } catch (error) {
-    tokenUsageErrorMessage.value =
-      error?.response?.data?.detail || error?.message || "今日 Token 用量加载失败";
+    tokenUsageErrorMessage.value = getApiErrorMessage(error, "今日 Token 用量加载失败");
   } finally {
     tokenUsageLoading.value = false;
   }
@@ -302,7 +302,7 @@ async function handleFeedback({ responseId, feedbackType }) {
       ElMessage.success("已取消反馈");
     }
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "用户反馈提交失败");
+    ElMessage.error(getApiErrorMessage(error, "用户反馈提交失败"));
   }
 }
 

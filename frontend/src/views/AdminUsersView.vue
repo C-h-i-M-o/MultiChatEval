@@ -75,6 +75,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 
 import { listAdminUsers, updateUserQuota } from "../utils/api";
+import { getApiErrorMessage } from "../utils/errors";
 
 const users = ref([]);
 const loading = ref(false);
@@ -94,7 +95,7 @@ async function loadUsers() {
       }
     });
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "用户额度加载失败");
+    ElMessage.error(getApiErrorMessage(error, "用户额度加载失败"));
   } finally {
     loading.value = false;
   }
@@ -108,7 +109,7 @@ async function saveQuota(user) {
     draftLimits[updated.id] = updated.dailyLimit;
     ElMessage.success("每日额度已更新");
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "额度更新失败");
+    ElMessage.error(getApiErrorMessage(error, "额度更新失败"));
   } finally {
     savingIds.value = savingIds.value.filter((id) => id !== user.id);
   }

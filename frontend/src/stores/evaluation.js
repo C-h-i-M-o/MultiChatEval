@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 
 import { getEvaluationTask, listEvaluationTasks, streamEvaluationTask, submitResponseFeedback } from "../utils/api";
+import { getApiErrorMessage } from "../utils/errors";
 
 export const useEvaluationStore = defineStore("evaluation", {
   state: () => ({
@@ -58,7 +59,7 @@ export const useEvaluationStore = defineStore("evaluation", {
           }
         });
       } catch (error) {
-        this.errorMessage = error?.message || "评测任务创建失败";
+        this.errorMessage = getApiErrorMessage(error, "评测任务创建失败");
       } finally {
         this.loading = false;
       }
@@ -74,7 +75,7 @@ export const useEvaluationStore = defineStore("evaluation", {
         this.historyPage = result.page;
         this.historyPageSize = result.pageSize;
       } catch (error) {
-        this.historyErrorMessage = error?.message || "历史任务加载失败";
+        this.historyErrorMessage = getApiErrorMessage(error, "历史任务加载失败");
       } finally {
         this.historyLoading = false;
       }
@@ -86,7 +87,7 @@ export const useEvaluationStore = defineStore("evaluation", {
       try {
         this.selectedHistoryTask = await getEvaluationTask(taskId);
       } catch (error) {
-        this.historyErrorMessage = error?.message || "历史任务详情加载失败";
+        this.historyErrorMessage = getApiErrorMessage(error, "历史任务详情加载失败");
       } finally {
         this.historyDetailLoading = false;
       }

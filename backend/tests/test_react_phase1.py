@@ -38,15 +38,23 @@ def test_react_frontend_exposes_phase1_health_and_auth_recovery() -> None:
     app_source = (REACT_DIR / "src" / "App.tsx").read_text()
     api_source = (REACT_DIR / "src" / "api" / "client.ts").read_text()
     auth_source = (REACT_DIR / "src" / "features" / "auth" / "auth.ts").read_text()
+    auth_context_source = (REACT_DIR / "src" / "features" / "auth" / "AuthContext.tsx").read_text()
+    route_guard_source = (REACT_DIR / "src" / "routes" / "RouteGuards.tsx").read_text()
 
     assert "getHealthStatus" in api_source
     assert 'fetchJson<HealthStatus>("/api/health")' in api_source
     assert "getCurrentUser" in api_source
     assert 'fetchJson<UserProfile>("/api/auth/me")' in api_source
+    assert 'postJson<UserProfile>("/api/auth/login", credentials)' in api_source
+    assert 'postJson<UserProfile>("/api/auth/register", credentials)' in api_source
+    assert 'postJson<void>("/api/auth/logout")' in api_source
     assert "credentials: \"include\"" in api_source
     assert "isUnauthorizedError" in auth_source
-    assert "登录态恢复" in app_source
-    assert "系统健康检查" in app_source
+    assert "AuthProvider" in app_source
+    assert "ProtectedRoute" in app_source
+    assert "PublicOnlyRoute" in app_source
+    assert "getCurrentUser" in auth_context_source
+    assert "正在恢复登录态" in route_guard_source
 
 
 def test_start_react_local_script_uses_react_frontend_without_touching_vue_frontend() -> None:

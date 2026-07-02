@@ -201,6 +201,7 @@ import { ElMessage } from "element-plus";
 
 import { useAuthStore } from "../stores/auth";
 import { getAdminFeedbackStats, getPersonalFeedbackStats } from "../utils/api";
+import { getApiErrorMessage } from "../utils/errors";
 import {
   activityRowKey,
   activityTypeLabel,
@@ -234,7 +235,7 @@ async function loadStats() {
       : await getPersonalFeedbackStats(rangeName.value);
   } catch (error) {
     stats.value = null;
-    ElMessage.error(error?.response?.data?.detail || error?.message || "反馈统计加载失败");
+    ElMessage.error(getApiErrorMessage(error, "反馈统计加载失败"));
   } finally {
     loading.value = false;
   }

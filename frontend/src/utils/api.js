@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { getApiErrorMessage } from "./errors";
+
 const api = axios.create({
   baseURL: "/api",
   timeout: 120000,
@@ -93,7 +95,7 @@ export async function streamEvaluationTask(payload, onEvent) {
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
-    throw new Error(errorBody?.detail || "评测任务创建失败");
+    throw new Error(getApiErrorMessage({ response: { data: errorBody } }, "评测任务创建失败"));
   }
 
   if (!response.body) {

@@ -243,6 +243,7 @@ import {
   visibleProviderPresets
 } from "../utils/providerPresets";
 import { createModelConfig, deleteModelConfig, testModelConfig, updateModelConfig } from "../utils/api";
+import { getApiErrorMessage } from "../utils/errors";
 
 defineProps({
   configs: {
@@ -400,7 +401,7 @@ async function saveConfig() {
     dialogVisible.value = false;
     emit("refresh");
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "模型配置保存失败");
+    ElMessage.error(getApiErrorMessage(error, "模型配置保存失败"));
   } finally {
     saving.value = false;
   }
@@ -412,7 +413,7 @@ async function toggleEnabled(config, enabled) {
     ElMessage.success(enabled ? "模型已启用" : "模型已禁用");
     emit("refresh");
   } catch (error) {
-    ElMessage.error(error?.response?.data?.detail || error?.message || "启用状态更新失败");
+    ElMessage.error(getApiErrorMessage(error, "启用状态更新失败"));
     emit("refresh");
   }
 }
@@ -425,7 +426,7 @@ async function testSavedConfig(config) {
       ? ElMessage.success(`${result.message}，耗时 ${result.latencyMs}ms`)
       : ElMessage.error(result.message);
   } catch (error) {
-    ElMessage.error(error?.message || "连接测试失败");
+    ElMessage.error(getApiErrorMessage(error, "连接测试失败"));
   } finally {
     testingId.value = null;
   }
@@ -446,7 +447,7 @@ async function testDraftConfig() {
       ? ElMessage.success(`${result.message}，耗时 ${result.latencyMs}ms`)
       : ElMessage.error(result.message);
   } catch (error) {
-    ElMessage.error(error?.message || "连接测试失败");
+    ElMessage.error(getApiErrorMessage(error, "连接测试失败"));
   } finally {
     testingDraft.value = false;
   }
@@ -468,7 +469,7 @@ async function confirmDelete(config) {
     emit("refresh");
   } catch (error) {
     if (error !== "cancel" && error !== "close") {
-      ElMessage.error(error?.response?.data?.detail || error?.message || "模型配置删除失败");
+      ElMessage.error(getApiErrorMessage(error, "模型配置删除失败"));
     }
   }
 }
