@@ -30,7 +30,7 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
 - 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 新重构前端：React 技术栈，后续在保留 Vue 前端的基础上单独新建
+- 新重构前端：React 19、TypeScript、Vite、React Router，保留 Vue 前端的基础上在 `react-frontend/` 单独维护
 - 数据库：MySQL 8
 - 本地环境：Docker Compose
 
@@ -40,6 +40,7 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 MultiChatEval/
   backend/        FastAPI 后端服务
   frontend/       现有 Vue 3 + JavaScript 前端应用，重构期间继续保留
+  react-frontend/ React 19 + TypeScript + Vite 前端应用，阶段一已接入健康检查和登录态恢复
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -66,7 +67,15 @@ MultiChatEval/
 ./scripts/start-local.sh
 ```
 
-脚本会自动检查 `.env`、启动 MySQL、准备后端虚拟环境、安装后端和前端依赖、执行 Alembic 数据库迁移，并同时启动后端与前端开发服务。按 `Ctrl+C` 可以停止本次启动的后端和前端进程。
+脚本会自动检查 `.env`、启动 MySQL、准备后端虚拟环境、安装后端和 Vue 前端依赖、执行 Alembic 数据库迁移，并同时启动后端与 Vue 前端开发服务。按 `Ctrl+C` 可以停止本次启动的后端和前端进程。
+
+如果要启动 React 重构版本，使用：
+
+```bash
+./scripts/start-react-local.sh
+```
+
+React 版本脚本同样会准备 `.env`、MySQL、后端虚拟环境、数据库迁移和 React 前端依赖，并默认启动后端 `http://127.0.0.1:8000` 与 React 前端 `http://127.0.0.1:5174`。可通过 `BACKEND_PORT=8001 REACT_FRONTEND_PORT=5175 ./scripts/start-react-local.sh` 指定起始端口。
 
 运行前请确保已经安装并启动：
 
@@ -75,7 +84,7 @@ MultiChatEval/
 - Node.js 与 pnpm。
 - macOS 自带的 `curl` 和 `lsof`。
 
-脚本会按 `backend/pyproject.toml` 和 `frontend/pnpm-lock.yaml` 校验依赖，并在前后端真实可访问后才提示启动完成。
+Vue 版本脚本会按 `backend/pyproject.toml` 和 `frontend/pnpm-lock.yaml` 校验依赖；React 版本脚本会按 `backend/pyproject.toml` 和 `react-frontend/pnpm-lock.yaml` 校验依赖。两个脚本都会在前后端真实可访问后才提示启动完成。
 
 如果默认端口已被占用，脚本会自动向后寻找可用端口，并把实际后端地址同步给 Vite 代理。也可以通过 `BACKEND_PORT=8001 FRONTEND_PORT=5174 ./scripts/start-local.sh` 指定起始端口。
 
@@ -123,6 +132,20 @@ pnpm dev
 
 ```text
 http://localhost:5173
+```
+
+React 重构前端可单独启动：
+
+```bash
+cd react-frontend
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+React 前端默认地址：
+
+```text
+http://localhost:5174
 ```
 
 ## 当前能力

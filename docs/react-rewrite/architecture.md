@@ -1,6 +1,6 @@
 # React 前端架构草案
 
-最后更新：2026-07-02
+最后更新：2026-07-03
 
 ## 架构原则
 
@@ -31,13 +31,27 @@ FastAPI API
 MySQL
 ```
 
+当前阶段一目录：
+
+```text
+react-frontend/
+  src/
+    api/client.ts              类型化 API 客户端
+    features/auth/auth.ts      登录态错误识别
+    App.tsx                    阶段一应用壳和联调状态
+    main.tsx                   React 挂载与 BrowserRouter
+    styles.css                 阶段一页面样式
+  vite.config.ts               Vite React 插件与 /api 开发代理
+  package.json                 pnpm 脚本和依赖
+```
+
 ## 数据流
 
 ### 认证
 
 1. React 应用启动后请求 `GET /api/auth/me`。
 2. 后端通过 HttpOnly Cookie JWT 恢复用户。
-3. 前端根据用户角色控制路由访问和导航显示。
+3. 阶段一仅展示登录态恢复结果；阶段二再迁移登录、注册、退出、角色导航和受保护路由。
 
 ### 模型级渐进评测
 

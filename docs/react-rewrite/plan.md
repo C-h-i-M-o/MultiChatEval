@@ -1,6 +1,6 @@
 # React 前端重构计划
 
-最后更新：2026-07-02
+最后更新：2026-07-03
 
 ## 目标
 
@@ -15,17 +15,26 @@
 
 ## 阶段计划
 
-### 阶段 1：React 工程初始化
+### 阶段 1：React 工程初始化（已完成）
 
 - 新建独立 React 前端目录。
 - 明确包管理、构建命令、路由方案、状态管理、API 封装和样式方案。
 - 接入基础登录态恢复、错误提示和开发代理。
+- 新增 React 版本一键全栈启动脚本。
 
 验收标准：
 
 - React 前端可以独立安装依赖、启动开发服务和完成构建。
 - Vue 前端仍可按原方式启动。
 - React 前端可以调用 `/api/health` 和 `/api/auth/me`。
+
+落地结果：
+
+- React 前端目录为 `react-frontend/`。
+- 技术栈为 React 19、TypeScript、Vite、React Router 和 Vitest。
+- `pnpm test` 覆盖阶段一 API 客户端。
+- `pnpm build` 可完成 TypeScript 严格检查和 Vite 生产构建。
+- `scripts/start-react-local.sh` 可启动 React 版本全栈项目。
 
 ### 阶段 2：认证与基础布局
 

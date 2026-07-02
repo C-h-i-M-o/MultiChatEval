@@ -18,7 +18,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
 - 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 重构目标前端：React 技术栈，后续新建独立前端框架并复用现有后端 API
+- 重构目标前端：React 19、TypeScript、Vite、React Router，独立目录 `react-frontend/` 并复用现有后端 API
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -31,6 +31,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 MultiChatEval/
   backend/        FastAPI 后端服务
   frontend/       现有 Vue 3 + JavaScript 前端应用，React 重构期间继续保留
+  react-frontend/ React 19 + TypeScript + Vite 前端应用，阶段一已接入健康检查和登录态恢复
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -125,6 +126,18 @@ MultiChatEval/
 - 状态管理：`frontend/src/stores/evaluation.js`
 - API 封装：`frontend/src/utils/api.js`
 
+### React 重构前端
+
+- 独立目录：`react-frontend/`
+- 技术栈：React 19、TypeScript、Vite、React Router、Vitest
+- 阶段一已完成：
+    - 独立依赖、测试、构建和开发服务命令
+    - Vite `/api` 开发代理，默认代理到 FastAPI 后端
+    - 类型化 API 客户端
+    - 应用启动后调用 `GET /api/health`
+    - 应用启动后调用 `GET /api/auth/me` 恢复 HttpOnly Cookie 登录态
+    - 未登录时保留阶段提示，不在阶段一实现登录页迁移
+
 ### 数据库与文档
 
 - MySQL Docker Compose：`docker-compose.yml`
@@ -147,7 +160,15 @@ MultiChatEval/
 ./scripts/start-local.sh
 ```
 
-脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和前端依赖、执行 Alembic 数据库迁移，并同时启动后端与前端开发服务。按 `Ctrl+C` 可停止本次启动的服务。
+脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和 Vue 前端依赖、执行 Alembic 数据库迁移，并同时启动后端与 Vue 前端开发服务。按 `Ctrl+C` 可停止本次启动的服务。
+
+React 重构版本使用：
+
+```bash
+./scripts/start-react-local.sh
+```
+
+该脚本会启动同一套 MySQL 和 FastAPI 后端，并启动 `react-frontend/`。默认 React 前端地址为 `http://127.0.0.1:5174`；如端口占用，会自动向后寻找可用端口。
 
 ### 1. 启动 MySQL
 

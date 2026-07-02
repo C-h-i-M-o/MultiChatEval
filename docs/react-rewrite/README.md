@@ -5,9 +5,15 @@
 当前边界：
 
 - 保留现有 `frontend/` Vue 前端作为可运行基线。
-- 新建 React 技术栈前端，不直接替换现有 Vue 代码。
+- React 技术栈前端位于 `react-frontend/`，不直接替换现有 Vue 代码。
 - 复用现有 FastAPI API、MySQL 数据结构、认证权限模型、评分逻辑和模型级 NDJSON 渐进返回语义。
 - 不借 React 重构继续开发 v2 已冻结的新功能，例如语义分析、模型推荐、运行监控、评论审核、导出和批量评测。
+
+阶段一已完成：
+
+- `react-frontend/` 使用 React 19、TypeScript、Vite、React Router 和 Vitest。
+- React 前端已接入 `/api/health` 与 `/api/auth/me`，用于系统健康检查和登录态恢复。
+- 新增 `scripts/start-react-local.sh`，可一键启动 MySQL、FastAPI 后端和 React 前端。
 
 ## 文档索引
 

@@ -1,6 +1,6 @@
 # 系统功能与实现状态
 
-最后更新：2026-06-27
+最后更新：2026-07-03
 
 当前版本：**v2 已结束并冻结**。demo-v1 核心评测闭环保持可用，账号体系、权限控制、公开/私有评测、管理员模型配置、Token 额度和反馈统计等已实现能力继续保留。后续不再继续开发 v2 新功能，当前重点转为 React 前端重构。
 
@@ -17,6 +17,8 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 当前版本优先保证多模型、规则评分、LLM Judge、模型级渐进展示、历史任务查询和用户反馈的完整链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口；哪个模型完整回答先完成，前端就先展示哪个模型。评测任务、回答、评分、点赞/点踩和公开评论会写入 MySQL，并可在历史任务页继续查看和操作。
 
 React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现页面和交互，不借重构扩大后端功能范围。
+
+当前 React 重构阶段一已落地：`react-frontend/` 已提供 React 19 + TypeScript + Vite 工程、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查和登录态恢复；`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目。Vue 前端仍保留在 `frontend/` 并可按原方式启动。
 
 ## 2. 前端功能
 
@@ -657,9 +659,11 @@ final =
 
 - `docker-compose.yml` 提供 MySQL 服务。
 - `scripts/start-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和前端开发服务。
+- `scripts/start-react-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和 React 前端开发服务。
 - 启动脚本会在默认端口被占用时自动向后寻找可用端口，并把实际后端地址传给 Vite 代理。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
 - 前端可通过 `pnpm dev` 启动；`frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
+- React 前端可在 `react-frontend/` 下通过 `pnpm dev` 启动，默认端口为 `5174`。
 - 前端通过 Vite 代理或同源 `/api` 访问后端接口。
 
 ## 8. 测试覆盖
@@ -673,6 +677,7 @@ final =
 - 评测服务测试覆盖同步创建、模型级渐进返回、单模型失败隔离、评分持久化、Judge 合成、反馈重算和评论操作。
 - 模型配置、API Key、启动脚本、迁移兼容和 LLM Judge 解析均有对应单元测试。
 - 规则评分器测试覆盖空回答、排除完整或未闭合的 `<think>` 思考内容、相关性、格式和安全性等主要规则。
+- React 阶段一结构、启动脚本、API 客户端和构建链路已有测试覆盖。
 
 当前缺口：
 
@@ -720,9 +725,9 @@ final =
 v2 新功能开发已结束。后续建议按以下顺序推进 React 前端重构：
 
 1. 以 `docs/react-rewrite/` 为当前 React 重构文档入口。
-2. 新建 React 前端工程，保留现有 `frontend/` Vue 前端可运行。
-3. 明确 React 技术栈、目录结构、路由方案、状态管理、API 封装和样式方案。
-4. 复用现有 FastAPI 接口，先迁移登录、注册和登录态恢复。
+2. 已完成：新建 `react-frontend/` React 前端工程，保留现有 `frontend/` Vue 前端可运行。
+3. 已完成：明确 React 技术栈、目录结构、路由方案、API 封装和样式方案，并建立基础测试、构建和一键启动脚本。
+4. 下一步：复用现有 FastAPI 接口，迁移登录、注册、退出和基础业务布局。
 5. 迁移评测工作台，重点验证模型级 NDJSON 渐进返回、Markdown 渲染、思考过程折叠和反馈操作。
 6. 迁移管理员模型配置、用户额度、历史任务和反馈统计页面。
 7. 建立 React 前端的构建、测试和验收命令，并与现有 Vue 前端在迁移期并行维护。
