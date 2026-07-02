@@ -6,30 +6,31 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 一句话定位：
 
-> 多模型对话质量评估与智能推荐平台。
+> 多模型对话质量评估与对比平台。
 
 ## 当前版本状态
 
-当前 `codex/dev-v2` 分支已完成 v2 阶段 1：开放注册、HttpOnly Cookie JWT、普通用户/管理员 RBAC、真实用户数据归属和公开/私有评测。demo-v1 的多模型评测、评分、历史、反馈和评论闭环继续保留。
+当前 **v2 版本开发已经结束并冻结**。开放注册、HttpOnly Cookie JWT、普通用户/管理员 RBAC、真实用户数据归属、公开/私有评测、管理员模型配置、Token 额度、反馈统计等已实现能力继续保留；语义分析、模型推荐、运行监控等未完成的 v2 后续功能不再继续开发。
 
-`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。当前新的主要任务是在保留现有 Vue 前端的基础上，新建 React 技术栈前端并逐步重构同等业务能力。
 
 ## 当前技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
+- 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
+- 重构目标前端：React 技术栈，后续新建独立前端框架并复用现有后端 API
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
 
-注意：项目要求前端使用 JavaScript，不使用 TypeScript。
+注意：现有 Vue 前端使用 JavaScript，不使用 TypeScript。React 重构阶段的语言和工程约定以后续 React 设计文档为准。
 
 ## 目录结构
 
 ```text
 MultiChatEval/
   backend/        FastAPI 后端服务
-  frontend/       Vue 3 + JavaScript 前端应用
+  frontend/       现有 Vue 3 + JavaScript 前端应用，React 重构期间继续保留
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -130,12 +131,13 @@ MultiChatEval/
 - 初始化 SQL：`docker/mysql/init/001_schema.sql`
 - Alembic 基础配置：`backend/alembic.ini`
 - 文档：
+    - `docs/README.md`
     - `docs/architecture.md`
     - `docs/database.md`
     - `docs/api.md`
     - `docs/open-source-reuse.md`
-    - `docs/v2-development-plan.md`
-    - `docs/v2-stage1-auth-rbac-design.md`
+    - `docs/react-rewrite/`
+    - `docs/legacy-v2/`
 
 ## 本地运行方式
 
@@ -204,7 +206,7 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 
 真实模型 API Key 不应提交到 Git。
 
-## 当前实现状态与后续路线
+## 当前实现状态与 React 重构方向
 
 ### 已跑通主流程
 
@@ -232,9 +234,9 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 - LLM Judge 输出结构化 JSON，评分、理由和明细会持久化；有效 Judge 分以 40% 权重计入基础分。
 - 点赞比例映射为反馈分，并以 10% 权重计入最终分；没有反馈时最终分保持基础分。
 
-待做：
+冻结说明：
 
-- 增加语言一致性评分。
+- v2 不再继续增加语言一致性评分。
 
 ### LLM Judge
 
@@ -245,7 +247,7 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 - 解析评分、优点、缺点、改进建议和推荐理由。
 - 将有效 LLM Judge 分以 40% 权重纳入基础分。
 
-### 用户反馈与推荐
+### 用户反馈
 
 已实现：
 
@@ -258,9 +260,9 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 - 支持分页查看、发布和硬删除公开评论；同一用户对同一回答的评论数量不受限制。
 - 反馈统计页支持最近 7 天、30 天和全部历史范围，普通用户查看本人评测表现与本人互动，管理员查看全局模型统计、每日趋势和分页互动明细。
 
-待做：
+冻结说明：
 
-- 增加模型推荐。
+- v2 不再继续增加模型推荐。
 
 ### v2 阶段 2/3 设计
 
@@ -269,14 +271,12 @@ BACKEND_CORS_ORIGINS=http://localhost:5173
 - 普通用户默认每日额度为 100,000 总 Token，管理员不限额；额度按北京时间自然日统计。
 - 回答卡片先显示总费用，悬停或聚焦查看四项费用明细。
 
-### v2 后续路线
+### v2 冻结与 React 重构方向
 
-- 用户注册、登录、会话和真实用户反馈归属。
-- 基于反馈统计、历史质量、成本和偏好的模型推荐。
-- 评论审核、举报和管理能力。
-- 评测结果导出、分享与可复现报告。
-- 批量评测数据集、回归对比和自定义评分权重。
-- 服务健康监控、调用失败分析和成本趋势统计。
+- v2 后续新功能开发到此结束。
+- 未完成的模型推荐、语言一致性评分、评论审核、结果导出、批量评测和运行监控只作为历史规划保留，不再作为当前开发目标。
+- 当前任务是保留现有 Vue 前端，另建 React 技术栈前端，优先迁移登录、评测工作台、历史任务、模型配置、用户额度和反馈统计等已实现页面。
+- React 重构应复用现有后端 API、数据库结构和评分逻辑，不借重构扩大后端功能范围。
 
 ## 当前评分公式
 
@@ -309,7 +309,8 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 ## 开发约定
 
 - 全程使用中文交流、中文注释和中文文档。
-- 前端使用 JavaScript，不使用 TypeScript。
+- 现有 Vue 前端使用 JavaScript，不使用 TypeScript。
+- React 重构阶段需要先补充设计文档，明确目录、技术栈、路由、状态管理、API 封装和验收标准后再编码。
 - 前端包管理优先使用 pnpm。
 - 后端尽量补充类型标注。
 - 不要把 API Key、数据库密码等真实敏感信息提交到仓库。
@@ -334,12 +335,16 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 新的 AI 或开发者接手时，建议按以下顺序阅读：
 
 1. `README.md`
-2. `docs/architecture.md`
-3. `docs/database.md`
-4. `docs/api.md`
-5. `docs/system-features-status.md`
-6. `backend/app/services/evaluation_service.py`
-7. `frontend/src/views/EvaluationView.vue`
+2. `docs/README.md`
+3. `docs/architecture.md`
+4. `docs/database.md`
+5. `docs/api.md`
+6. `docs/system-features-status.md`
+7. `docs/react-rewrite/README.md`
+8. `docs/react-rewrite/plan.md`
+9. `docs/react-rewrite/architecture.md`
+10. `backend/app/services/evaluation_service.py`
+11. `frontend/src/views/EvaluationView.vue`
 
 优先推进的任务是：
 
@@ -347,5 +352,6 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 2. 确认前端能调用后端真实模型接口。
 3. 确认模型级渐进展示和全局思考模式行为正常。
 4. 验证评分结果、点赞/点踩和公开评论均正确持久化到 MySQL。
-5. 基于已实现反馈统计增加模型推荐。
-6. 验证公开任务跨用户可见、私有任务仅创建者可见。
+5. 新建 React 前端框架并复用现有后端 API。
+6. 按现有 Vue 页面逐步迁移 React 页面，迁移期间保持 Vue 前端可运行。
+7. 验证公开任务跨用户可见、私有任务仅创建者可见。
