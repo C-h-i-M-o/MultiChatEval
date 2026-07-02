@@ -4,12 +4,14 @@ import { isPendingResponse } from "../features/evaluation/evaluation";
 import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
 import { toAnswerPreview } from "../features/evaluation/content";
 import { MarkdownRenderer } from "./MarkdownRenderer";
+import { CommentPanel } from "./CommentPanel";
 import { formatScore, ScoreBar } from "./ScoreBar";
 
 interface ModelResponseCardProps {
   response: DisplayModelResponse;
   elapsedSeconds: number;
   feedbackSubmitting: boolean;
+  showComments?: boolean;
   onFeedback: (responseId: number, feedbackType: FeedbackToggleResult["feedbackType"]) => void;
 }
 
@@ -25,6 +27,7 @@ export function ModelResponseCard({
   response,
   elapsedSeconds,
   feedbackSubmitting,
+  showComments = false,
   onFeedback
 }: ModelResponseCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -137,6 +140,7 @@ export function ModelResponseCard({
               <p>{score.judgeComment}</p>
             </article>
           ) : null}
+          {showComments ? <CommentPanel responseId={response.id} /> : null}
         </section>
       ) : null}
     </article>

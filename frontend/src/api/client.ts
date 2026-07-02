@@ -1,4 +1,11 @@
-import type { EvaluationStreamEvent, FeedbackToggleResult } from "../features/evaluation/types";
+import type {
+  CommentListRead,
+  CommentRead,
+  EvaluationStreamEvent,
+  EvaluationTaskListRead,
+  EvaluationTaskRead,
+  FeedbackToggleResult
+} from "../features/evaluation/types";
 
 export interface HealthStatus {
   status: "ok";
@@ -49,6 +56,143 @@ export type FeedbackType = "like" | "dislike";
 
 export interface FeedbackPayload {
   feedbackType: FeedbackType;
+}
+
+export type FeedbackStatsRange = "7d" | "30d" | "all";
+export type FeedbackActivityType = "all" | "like" | "dislike" | "comment";
+
+export interface ModelConfigPayload {
+  providerName?: string;
+  displayName?: string;
+  modelName?: string;
+  baseUrl?: string;
+  apiKey?: string | null;
+  enabled?: boolean;
+  maxTokens?: number;
+  temperature?: number;
+  timeoutSeconds?: number;
+  notes?: string;
+  currency?: "CNY" | "USD";
+  priceInput?: number;
+  priceOutput?: number;
+  priceCacheHit?: number;
+  priceCacheCreation?: number;
+}
+
+export interface ModelConfig extends Required<Omit<ModelConfigPayload, "apiKey">> {
+  id: number;
+  hasApiKey: boolean;
+  maskedApiKey: string;
+}
+
+export interface ModelConfigTestPayload {
+  modelConfigId?: number;
+  providerName?: string;
+  modelName?: string;
+  baseUrl?: string;
+  apiKey?: string | null;
+  maxTokens?: number;
+  temperature?: number;
+  timeoutSeconds?: number;
+}
+
+export interface ModelConfigTestResult {
+  success: boolean;
+  message: string;
+  latencyMs: number;
+}
+
+export interface AdminUserUsage {
+  id: number;
+  username: string;
+  role: UserRole;
+  status: UserStatus;
+  usageDate: string;
+  usedTokens: number;
+  dailyLimit: number | null;
+}
+
+export interface FeedbackStatsSummary {
+  taskCount: number;
+  callCount: number;
+  scoredCount: number;
+  averageFinalScore: number | null;
+  likeCount: number;
+  dislikeCount: number;
+  likeRate: number | null;
+  commentCount: number;
+}
+
+export interface FeedbackInteractionSummary {
+  likeCount: number;
+  dislikeCount: number;
+  commentCount: number;
+}
+
+export interface FeedbackModelStats {
+  modelConfigId: number | null;
+  modelName: string;
+  callCount: number;
+  scoredCount: number;
+  averageFinalScore: number | null;
+  averageRuleScore: number | null;
+  averageJudgeScore: number | null;
+  likeCount: number;
+  dislikeCount: number;
+  likeRate: number | null;
+  commentCount: number;
+}
+
+export interface FeedbackTrendPoint {
+  date: string;
+  callCount: number;
+  averageFinalScore: number | null;
+  likeCount: number;
+  dislikeCount: number;
+  commentCount: number;
+}
+
+export interface FeedbackActivity {
+  activityId: number;
+  activityType: Exclude<FeedbackActivityType, "all">;
+  userId: number;
+  username: string;
+  taskId: number;
+  responseId: number;
+  modelConfigId: number | null;
+  modelName: string;
+  prompt: string;
+  content: string | null;
+  createdAt: string;
+}
+
+export interface FeedbackActivityList {
+  items: FeedbackActivity[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface PersonalFeedbackStats {
+  scope: "personal";
+  range: FeedbackStatsRange;
+  startAt: string | null;
+  endAt: string;
+  summary: FeedbackStatsSummary;
+  myInteractions: FeedbackInteractionSummary;
+  models: FeedbackModelStats[];
+  trend: FeedbackTrendPoint[];
+}
+
+export interface AdminFeedbackStats {
+  scope: "global";
+  range: FeedbackStatsRange;
+  startAt: string | null;
+  endAt: string;
+  summary: FeedbackStatsSummary;
+  models: FeedbackModelStats[];
+  trend: FeedbackTrendPoint[];
+  activities: FeedbackActivityList;
 }
 
 export class ApiError extends Error {
@@ -104,6 +248,21 @@ async function postJson<T>(url: string, payload?: unknown): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+async function deleteJson(url: string): Promise<void> {
+  const response = await fetch(url, {
+    method: "DELETE",
+    credentials: "include",
+    headers: {
+      Accept: "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
 }
 
 async function readErrorMessage(response: Response): Promise<string> {
@@ -175,6 +334,19 @@ export async function getTodayTokenUsage(): Promise<TokenUsage> {
   return fetchJson<TokenUsage>("/api/token-usage/me/today");
 }
 
+export async function listEvaluationTasks(params: { page: number; pageSize: number }): Promise<EvaluationTaskListRead> {
+  return fetchJson<EvaluationTaskListRead>(
+    `/api/evaluation/tasks?${new URLSearchParams({
+      page: String(params.page),
+      pageSize: String(params.pageSize)
+    }).toString()}`
+  );
+}
+
+export async function getEvaluationTask(taskId: number): Promise<EvaluationTaskRead> {
+  return fetchJson<EvaluationTaskRead>(`/api/evaluation/tasks/${taskId}`);
+}
+
 export async function submitResponseFeedback(
   responseId: number,
   feedbackType: FeedbackType
@@ -182,6 +354,107 @@ export async function submitResponseFeedback(
   return postJson<FeedbackToggleResult>(`/api/evaluation/responses/${responseId}/feedback`, {
     feedbackType
   } satisfies FeedbackPayload);
+}
+
+export async function listResponseComments(
+  responseId: number,
+  params: { page: number; pageSize: number }
+): Promise<CommentListRead> {
+  return fetchJson<CommentListRead>(
+    `/api/evaluation/responses/${responseId}/comments?${new URLSearchParams({
+      page: String(params.page),
+      pageSize: String(params.pageSize)
+    }).toString()}`
+  );
+}
+
+export async function createResponseComment(responseId: number, content: string): Promise<CommentRead> {
+  return postJson<CommentRead>(`/api/evaluation/responses/${responseId}/comments`, { content });
+}
+
+export async function deleteResponseComment(commentId: number): Promise<void> {
+  await deleteJson(`/api/evaluation/comments/${commentId}`);
+}
+
+export async function listModelConfigs(): Promise<ModelConfig[]> {
+  return fetchJson<ModelConfig[]>("/api/admin/model-configs");
+}
+
+export async function createModelConfig(payload: ModelConfigPayload): Promise<ModelConfig> {
+  return postJson<ModelConfig>("/api/admin/model-configs", payload);
+}
+
+export async function updateModelConfig(id: number, payload: ModelConfigPayload): Promise<ModelConfig> {
+  const response = await fetch(`/api/admin/model-configs/${id}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return response.json() as Promise<ModelConfig>;
+}
+
+export async function deleteModelConfig(id: number): Promise<void> {
+  await deleteJson(`/api/admin/model-configs/${id}`);
+}
+
+export async function testModelConfig(payload: ModelConfigTestPayload): Promise<ModelConfigTestResult> {
+  return postJson<ModelConfigTestResult>("/api/admin/model-configs/test", payload);
+}
+
+export async function listAdminUsers(): Promise<AdminUserUsage[]> {
+  return fetchJson<AdminUserUsage[]>("/api/admin/users");
+}
+
+export async function updateUserQuota(userId: number, dailyLimit: number): Promise<AdminUserUsage> {
+  const response = await fetch(`/api/admin/users/${userId}/quota`, {
+    method: "PUT",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ dailyLimit })
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return response.json() as Promise<AdminUserUsage>;
+}
+
+export async function getPersonalFeedbackStats(range: FeedbackStatsRange): Promise<PersonalFeedbackStats> {
+  return fetchJson<PersonalFeedbackStats>(`/api/feedback-stats/me?range=${range}`);
+}
+
+export async function getAdminFeedbackStats(params: {
+  range: FeedbackStatsRange;
+  activityType: FeedbackActivityType;
+  modelConfigId?: number | null;
+  page: number;
+  pageSize: number;
+}): Promise<AdminFeedbackStats> {
+  const searchParams = new URLSearchParams({
+    range: params.range,
+    activityType: params.activityType
+  });
+  if (params.modelConfigId) {
+    searchParams.set("modelConfigId", String(params.modelConfigId));
+  }
+  searchParams.set("page", String(params.page));
+  searchParams.set("pageSize", String(params.pageSize));
+  return fetchJson<AdminFeedbackStats>(`/api/admin/feedback-stats?${searchParams.toString()}`);
 }
 
 export async function streamEvaluationTask(

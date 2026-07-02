@@ -79,6 +79,42 @@ export interface EvaluationTaskRead {
   responses: ModelResponse[];
 }
 
+export interface EvaluationTaskListItem {
+  taskId: number;
+  status: string;
+  prompt: string;
+  createdAt: string;
+  completedAt?: string | null;
+  responseCount: number;
+  ownerId?: number | null;
+  ownerUsername: string;
+  visibility: EvaluationVisibility;
+}
+
+export interface EvaluationTaskListRead {
+  items: EvaluationTaskListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CommentRead {
+  id: number;
+  responseId: number;
+  userId: number;
+  username: string;
+  content: string;
+  createdAt: string;
+  canDelete: boolean;
+}
+
+export interface CommentListRead {
+  items: CommentRead[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export type EvaluationStreamEvent =
   | {
       type: "task_started";

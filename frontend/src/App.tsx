@@ -4,7 +4,10 @@ import { AuthProvider } from "./features/auth/AuthContext";
 import { AppLayout } from "./layout/AppLayout";
 import { AuthPage } from "./pages/AuthPage";
 import { EvaluationPage } from "./pages/EvaluationPage";
-import { PlaceholderPage } from "./pages/PlaceholderPage";
+import { HistoryPage } from "./pages/HistoryPage";
+import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { FeedbackStatsPage } from "./pages/FeedbackStatsPage";
+import { ModelConfigsPage } from "./pages/ModelConfigsPage";
 import { ProtectedRoute, PublicOnlyRoute } from "./routes/RouteGuards";
 
 function App() {
@@ -36,26 +39,10 @@ function App() {
           }
         >
           <Route index element={<EvaluationPage />} />
-          <Route
-            path="models"
-            element={
-              <PlaceholderPage title="模型配置" description="管理员入口已受角色保护，具体配置表单会在后续阶段迁移。" />
-            }
-          />
-          <Route
-            path="users"
-            element={
-              <PlaceholderPage title="用户额度" description="管理员入口已受角色保护，额度管理页面会在后续阶段迁移。" />
-            }
-          />
-          <Route
-            path="history"
-            element={<PlaceholderPage title="历史任务" description="历史任务分页和详情会在后续阶段迁移。" />}
-          />
-          <Route
-            path="feedback"
-            element={<PlaceholderPage title="反馈统计" description="角色分流统计视图会在后续阶段迁移。" />}
-          />
+          <Route path="models" element={<ModelConfigsPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="history" element={<HistoryPage />} />
+          <Route path="feedback" element={<FeedbackStatsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

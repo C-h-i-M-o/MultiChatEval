@@ -2,13 +2,27 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   ApiError,
+  createModelConfig,
   getCurrentUser,
+  getAdminFeedbackStats,
   getHealthStatus,
+  getEvaluationTask,
+  getPersonalFeedbackStats,
+  listEvaluationTasks,
+  listAdminUsers,
+  listModelConfigs,
+  listResponseComments,
   loginUser,
   logoutUser,
+  createResponseComment,
+  deleteModelConfig,
+  deleteResponseComment,
   registerUser,
   streamEvaluationTask,
-  submitResponseFeedback
+  submitResponseFeedback,
+  testModelConfig,
+  updateModelConfig,
+  updateUserQuota
 } from "./client";
 
 afterEach(() => {
@@ -192,5 +206,237 @@ describe("React 阶段三评测 API 客户端", () => {
       },
       body: JSON.stringify({ feedbackType: "like" })
     });
+  });
+});
+
+describe("React 阶段四历史与评论 API 客户端", () => {
+  test("分页读取历史任务时使用后端 pageSize 参数", async () => {
+    const payload = {
+      items: [
+        {
+          taskId: 9,
+          status: "completed",
+          prompt: "历史问题",
+          createdAt: "2026-07-03T04:00:00",
+          completedAt: "2026-07-03T04:01:00",
+          responseCount: 2,
+          ownerId: 1,
+          ownerUsername: "demo",
+          visibility: "public"
+        }
+      ],
+      total: 1,
+      page: 2,
+      pageSize: 20
+    };
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(payload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listEvaluationTasks({ page: 2, pageSize: 20 })).resolves.toEqual(payload);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/evaluation/tasks?page=2&pageSize=20", {
+      credentials: "include",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+  });
+
+  test("读取历史任务详情", async () => {
+    const task = {
+      taskId: 9,
+      status: "completed",
+      prompt: "历史问题",
+      ownerUsername: "demo",
+      visibility: "public",
+      responses: []
+    };
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse(task));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getEvaluationTask(9)).resolves.toEqual(task);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/evaluation/tasks/9", {
+      credentials: "include",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+  });
+
+  test("评论查询、发布和删除使用既有后端接口", async () => {
+    const commentList = {
+      items: [
+        {
+          id: 3,
+          responseId: 11,
+          userId: 1,
+          username: "demo",
+          content: "这个回答更完整",
+          createdAt: "2026-07-03T04:02:00",
+          canDelete: true
+        }
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 10
+    };
+    const createdComment = commentList.items[0];
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockJsonResponse(commentList))
+      .mockResolvedValueOnce(mockJsonResponse(createdComment, { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listResponseComments(11, { page: 1, pageSize: 10 })).resolves.toEqual(commentList);
+    await expect(createResponseComment(11, "这个回答更完整")).resolves.toEqual(createdComment);
+    await expect(deleteResponseComment(3)).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/evaluation/responses/11/comments?page=1&pageSize=10", {
+      credentials: "include",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/evaluation/responses/11/comments", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ content: "这个回答更完整" })
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/evaluation/comments/3", {
+      method: "DELETE",
+      credentials: "include",
+      headers: {
+        Accept: "application/json"
+      }
+    });
+  });
+});
+
+describe("React 阶段四管理员 API 客户端", () => {
+  const modelConfig = {
+    id: 5,
+    providerName: "deepseek",
+    displayName: "DeepSeek",
+    modelName: "deepseek-chat",
+    baseUrl: "https://api.deepseek.com",
+    enabled: true,
+    hasApiKey: true,
+    maskedApiKey: "sk-***",
+    maxTokens: 1024,
+    temperature: 0.7,
+    timeoutSeconds: 60,
+    notes: "",
+    currency: "CNY" as const,
+    priceInput: 1,
+    priceOutput: 2,
+    priceCacheHit: 0,
+    priceCacheCreation: 0
+  };
+
+  test("模型配置列表、创建、更新、删除和测试使用管理员接口", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockJsonResponse([modelConfig]))
+      .mockResolvedValueOnce(mockJsonResponse(modelConfig, { status: 201 }))
+      .mockResolvedValueOnce(mockJsonResponse({ ...modelConfig, enabled: false }))
+      .mockResolvedValueOnce(mockJsonResponse({ success: true, message: "连接成功", latencyMs: 88 }))
+      .mockResolvedValueOnce(mockJsonResponse({ status: "deleted" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listModelConfigs()).resolves.toEqual([modelConfig]);
+    await expect(createModelConfig(modelConfig)).resolves.toEqual(modelConfig);
+    await expect(updateModelConfig(5, { enabled: false })).resolves.toMatchObject({ enabled: false });
+    await expect(testModelConfig({ modelConfigId: 5 })).resolves.toEqual({
+      success: true,
+      message: "连接成功",
+      latencyMs: 88
+    });
+    await expect(deleteModelConfig(5)).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/admin/model-configs", {
+      credentials: "include",
+      headers: { Accept: "application/json" }
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/admin/model-configs/5", {
+      method: "PUT",
+      credentials: "include",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: false })
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/admin/model-configs/5", {
+      method: "DELETE",
+      credentials: "include",
+      headers: { Accept: "application/json" }
+    });
+  });
+
+  test("用户额度列表和保存使用管理员接口", async () => {
+    const user = {
+      id: 2,
+      username: "demo",
+      role: "user",
+      status: "active",
+      usageDate: "2026-07-03",
+      usedTokens: 1200,
+      dailyLimit: 100000
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(mockJsonResponse([user])).mockResolvedValueOnce(mockJsonResponse({
+      ...user,
+      dailyLimit: 80000
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listAdminUsers()).resolves.toEqual([user]);
+    await expect(updateUserQuota(2, 80000)).resolves.toMatchObject({ dailyLimit: 80000 });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/admin/users/2/quota", {
+      method: "PUT",
+      credentials: "include",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ dailyLimit: 80000 })
+    });
+  });
+
+  test("反馈统计按用户角色接口读取", async () => {
+    const stats = {
+      scope: "personal",
+      range: "30d",
+      startAt: null,
+      endAt: "2026-07-03T04:00:00",
+      summary: { taskCount: 1, callCount: 2, scoredCount: 2, averageFinalScore: 8, likeCount: 1, dislikeCount: 0, likeRate: 1, commentCount: 1 },
+      myInteractions: { likeCount: 1, dislikeCount: 0, commentCount: 1 },
+      models: [],
+      trend: []
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(mockJsonResponse(stats)).mockResolvedValueOnce(mockJsonResponse({
+      ...stats,
+      scope: "global",
+      activities: { items: [], total: 0, page: 1, pageSize: 20 }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getPersonalFeedbackStats("30d")).resolves.toEqual(stats);
+    await expect(
+      getAdminFeedbackStats({ range: "7d", activityType: "comment", modelConfigId: 5, page: 2, pageSize: 10 })
+    ).resolves.toMatchObject({ scope: "global" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/feedback-stats/me?range=30d", {
+      credentials: "include",
+      headers: { Accept: "application/json" }
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/admin/feedback-stats?range=7d&activityType=comment&modelConfigId=5&page=2&pageSize=10",
+      {
+        credentials: "include",
+        headers: { Accept: "application/json" }
+      }
+    );
   });
 });
