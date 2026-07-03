@@ -18,8 +18,11 @@ function App() {
       locale={zhCN}
       theme={{
         token: {
-          colorPrimary: "#1e4a2e",
-          borderRadius: 8,
+          colorPrimary: "#16616a",
+          colorSuccess: "#7fa36a",
+          colorWarning: "#e5b85d",
+          colorError: "#bc442b",
+          borderRadius: 10,
           fontFamily: "Avenir Next, Helvetica Neue, Helvetica, Arial, sans-serif"
         }
       }}

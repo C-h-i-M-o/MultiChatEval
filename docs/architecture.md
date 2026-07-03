@@ -1,9 +1,9 @@
 # 系统架构说明
 
-MultiChatEval 采用前后端分离架构。当前已实现前端为 Vue，v2 已冻结；后续 React 重构会在保留现有 Vue 前端的基础上新建 React 前端，并复用同一套 FastAPI API、MySQL 数据结构和评分逻辑。
+MultiChatEval 采用前后端分离架构。当前主前端为 `frontend/` React 19 + TypeScript + Vite 应用，已完成对原 Vue 前端的功能替代；`vue-frontend/` 仅作为历史版本保留。v2 已冻结，后续新功能和样式维护默认在 React 前端推进，并复用同一套 FastAPI API、MySQL 数据结构和评分逻辑。
 
 ```text
-Vue 前端（现有基线，React 重构期间保留）
+React 前端（当前主前端）
   ↓
 FastAPI API
   ├── Auth / RBAC
@@ -45,29 +45,27 @@ MySQL
 
 ## 前端展示层
 
-当前前端展示层采用 Vue Router 多路由结构，统一业务布局位于 `vue-frontend/src/components/AppLayout.vue`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。
+当前前端展示层采用 React Router 多路由结构，统一业务布局位于 `frontend/src/layout/AppLayout.tsx`。登录和注册页面使用独立布局；业务导航根据当前用户角色显示。React 替代 Vue 的阶段文档保留在 `docs/react-rewrite/`，后续功能状态以本文档和 `docs/system-features-status.md` 为准。
 
-React 重构阶段需要另建前端工程，相关文档统一维护在 `docs/react-rewrite/`。重构优先复刻当前 Vue 前端的已实现页面、路由和接口行为，不改变后端 API、数据库结构、权限模型、评分公式和模型级渐进返回语义。
+当前 React 展示层包含：
 
-当前 Vue 展示层包含：
-
-- `/` 对应 `vue-frontend/src/views/EvaluationView.vue`，用于完成问题输入、模型选择、任务提交和结果对比。
-- `/login` 和 `/register` 对应 `vue-frontend/src/views/AuthView.vue`，用于登录和开放注册。
-- `/models` 对应 `vue-frontend/src/views/ModelConfigsView.vue`，仅管理员用于通过供应商预设或空白模板维护 OpenAI-compatible 模型。
-- `/users` 对应管理员用户管理页，用于查看今日 Token 用量并调整普通用户每日额度。
-- `/history` 对应 `vue-frontend/src/views/HistoryView.vue`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
-- `/feedback` 对应 `vue-frontend/src/views/FeedbackStatsView.vue`，所有登录用户均可进入；页面根据角色展示个人统计或管理员全局统计。
-- Element Plus 在应用入口启用中文语言配置，历史任务分页容量统一显示为 `/页`。
+- `/` 对应 `frontend/src/pages/EvaluationPage.tsx`，用于完成问题输入、模型选择、任务提交和结果对比。
+- `/login` 和 `/register` 对应 `frontend/src/pages/AuthPage.tsx`，用于登录和开放注册。
+- `/models` 对应 `frontend/src/pages/ModelConfigsPage.tsx`，仅管理员用于通过供应商预设或空白模板维护 OpenAI-compatible 模型。
+- `/users` 对应 `frontend/src/pages/AdminUsersPage.tsx`，用于查看今日 Token 用量并调整普通用户每日额度。
+- `/history` 对应 `frontend/src/pages/HistoryPage.tsx`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
+- `/feedback` 对应 `frontend/src/pages/FeedbackStatsPage.tsx`，所有登录用户均可进入；页面根据角色展示个人统计或管理员全局统计。
+- Ant Design 在应用入口启用中文语言配置，历史任务和反馈统计分页使用中文交互。
 - 模型选择项从后端模型配置接口动态加载，直接显示具体模型名。
-- `ModelResponseSummaryGrid` 提供 `grid` 和 `list` 两种模式：评测页使用六轨平衡网格，历史任务详情使用单列结构化列表。
+- 评测结果和历史详情复用 `frontend/src/components/ModelResponseCard.tsx` 展示模型回答、评分和反馈操作。
 - 评测页四个模型固定为两行两列，五至九个模型采用平衡分行并保证每行铺满；容器查询会根据结果区实际宽度降为两列或单列。
 - 摘要卡或列表行展示模型名称、调用状态、最终分、耗时、输出 Token、总费用和回答预览；总费用悬停或聚焦时展示四项明细。
-- GSAP 负责结果卡片或列表行进入、等待卡替换、评分条补间和详情弹窗动效；组件卸载时清理动画上下文，并根据 `prefers-reduced-motion` 降低动画强度。
-- 桌面端侧边栏使用 sticky 和视口高度约束，“默认流程”通过自动外边距保持在侧栏底部；移动端恢复普通文档流。
-- `ModelResponseCard` 负责详情弹窗中的完整回答、指标、评分条、点赞/点踩、评分明细和公开评论展示。
+- GSAP 动画集中封装在 `frontend/src/animations/pageMotion.ts`，负责页面入场、等待卡替换、回答卡片和详情弹窗动效；组件卸载时清理动画上下文，并根据 `prefers-reduced-motion` 降低动画强度。
+- 桌面端侧边栏固定在可视区域内；移动端使用深色抽屉导航，保持与桌面端一致的品牌底色和高对比文字。
+- `ModelResponseCard` 负责完整回答弹窗中的 Markdown、指标、评分条、点赞/点踩、评分明细和公开评论展示。
 - 模型调用期间展示等待卡片、耗时计数和占位动画；单个模型完成后立即替换为真实回答卡片。
 - 评测表单提供全局“思考模式”开关，所有已选模型使用相同开关状态，不提供思考程度选择。
-- `MarkdownRenderer` 负责将模型输出渲染为安全的 HTML。
+- `frontend/src/components/MarkdownRenderer.tsx` 负责将模型输出渲染为安全的 HTML。
 - `MarkdownRenderer` 会把 `<think>...</think>` 中的内容折叠为“思考过程”，让最终回答更清晰。
 
 ## 模型调用层

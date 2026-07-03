@@ -4,14 +4,14 @@
 
 ## 架构原则
 
-React 前端是现有 Vue 前端的并行重构版本。它复用现有后端能力，不引入新的后端业务范围。
+React 前端已经成为当前主前端。它复用现有后端能力，不引入新的后端业务范围；原 Vue 前端仅作为历史版本保留。
 
 核心原则：
 
 - API 优先复用：以 `docs/api.md` 为接口边界。
 - 数据结构不变：以 `docs/database.md` 为持久化边界。
-- 行为对齐 Vue：以现有 `vue-frontend/` 页面为交互基线。
-- 渐进迁移：React 与 Vue 在迁移期并行存在。
+- 行为对齐历史版本：核心业务路径与原 `vue-frontend/` 页面保持一致。
+- 主前端明确：后续新功能和样式维护默认在 `frontend/` 推进。
 - 最小新增依赖：只引入 React 工程必要依赖，避免为未实现功能提前选型。
 
 ## 建议模块边界
@@ -37,6 +37,8 @@ MySQL
 frontend/
   src/
     api/client.ts              类型化 API 客户端、认证请求、评测流、管理页和反馈统计请求
+    animations/                GSAP 页面入场、结果卡片和弹窗动画封装
+    assets/                    React 前端品牌图标与静态视觉资产
     components/                Markdown 渲染、评分条、回答卡片、评论面板和组件库弹窗
     features/auth/             登录态恢复、认证上下文和错误识别
     features/evaluation/       评测类型、NDJSON 状态合并和回答内容处理
@@ -87,9 +89,13 @@ React 渲染
 
 `<think>...</think>` 和未闭合 `<think>` 内容需要折叠为思考过程，正式回答单独展示。
 
+## 视觉与动效
+
+React 前端保留原 Vue 版本的深色侧栏、浅色网格背景和金色品牌强调，并通过 `frontend/src/assets/logo.png` 统一登录页、侧栏和 favicon 的品牌图标。GSAP 动画集中封装在 `frontend/src/animations/`，用于页面入场、模型回答卡片渐进展示和完整回答弹窗；实现必须提供 `prefers-reduced-motion` 降级，避免影响减少动态效果偏好的用户。
+
 ## 路由建议
 
-React 路由应覆盖现有 Vue 路由能力：
+React 路由已经覆盖原 Vue 路由能力：
 
 - `/login`：登录。
 - `/register`：注册。
@@ -107,5 +113,5 @@ React 路由应覆盖现有 Vue 路由能力：
 - 点赞、点踩和评分详情与后端状态一致。
 - 公开评论交互已随历史任务详情迁移。
 - 管理员页面不对普通用户暴露。
-- React 重构不改变后端接口、数据库表和评分公式。
+- React 替代过程不改变后端接口、数据库表和评分公式。
 - 阶段五收尾验收以 `docs/react-rewrite/acceptance.md` 和 `scripts/verify-react-rewrite.sh` 为准。

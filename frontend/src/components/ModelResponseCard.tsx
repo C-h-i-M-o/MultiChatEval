@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button, Modal, Space } from "antd";
 
+import { animateModalIn } from "../animations/pageMotion";
 import { isPendingResponse } from "../features/evaluation/evaluation";
 import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
 import { toAnswerPreview } from "../features/evaluation/content";
@@ -32,6 +33,7 @@ export function ModelResponseCard({
   onFeedback
 }: ModelResponseCardProps) {
   const [detailVisible, setDetailVisible] = useState(false);
+  const detailRef = useRef<HTMLElement | null>(null);
 
   if (isPendingResponse(response)) {
     return (
@@ -100,8 +102,13 @@ export function ModelResponseCard({
         width="min(860px, 94vw)"
         footer={null}
         onCancel={() => setDetailVisible(false)}
+        afterOpenChange={(open) => {
+          if (open) {
+            animateModalIn(detailRef.current);
+          }
+        }}
       >
-        <section className="response-detail-modal">
+        <section ref={detailRef} className="response-detail-modal">
           <MarkdownRenderer content={response.answer} />
           <div className="score-detail-list">
             {dimensionLabels.map((dimension) => {

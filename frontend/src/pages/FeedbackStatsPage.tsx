@@ -105,19 +105,19 @@ export function FeedbackStatsPage() {
       </header>
       {stats ? (
         <>
-          <Row gutter={[12, 12]}>
+          <div className="feedback-kpi-row">
             <Kpi title="评测任务" value={stats.summary.taskCount} suffix="项" />
             <Kpi title="平均最终分" value={formatScore(stats.summary.averageFinalScore)} suffix="" />
             <Kpi title="模型调用" value={stats.summary.callCount} suffix="次" />
             <Kpi title="点赞率" value={formatRate(stats.summary.likeRate)} suffix="" />
             <Kpi title="评论" value={stats.summary.commentCount} suffix="条" />
-          </Row>
+          </div>
           {"myInteractions" in stats ? (
-            <Row gutter={[12, 12]}>
+            <div className="feedback-kpi-row feedback-kpi-row-compact">
               <Kpi title="我点过赞" value={stats.myInteractions.likeCount} suffix="次" />
               <Kpi title="我点过踩" value={stats.myInteractions.dislikeCount} suffix="次" />
               <Kpi title="我发过评论" value={stats.myInteractions.commentCount} suffix="条" />
-            </Row>
+            </div>
           ) : null}
           <Card title="每日反馈脉冲" className="feedback-section">
             {stats.trend.length > 0 ? <TrendChart points={stats.trend} /> : <p className="empty-note">当前范围内暂无趋势数据。</p>}
@@ -191,9 +191,7 @@ export function FeedbackStatsPage() {
 
 function Kpi({ title, value, suffix }: { title: string; value: number | string; suffix: string }) {
   return (
-    <Col xs={24} sm={12} lg={6} xl={5}>
-      <Card><Statistic title={title} value={value} suffix={suffix} /></Card>
-    </Col>
+    <Card><Statistic title={title} value={value} suffix={suffix} /></Card>
   );
 }
 
@@ -207,17 +205,17 @@ function TrendChart({ points }: { points: FeedbackTrendPoint[] }) {
     <div className="feedback-chart">
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data} margin={{ top: 12, right: 18, bottom: 12, left: 0 }}>
-          <CartesianGrid stroke="#e7dfd2" strokeDasharray="4 4" />
+          <CartesianGrid stroke="#e2dccf" strokeDasharray="4 4" />
           <XAxis dataKey="label" />
           <YAxis yAxisId="count" allowDecimals={false} />
           <YAxis yAxisId="score" orientation="right" domain={[0, 10]} />
           <Tooltip />
           <Legend />
-          <Bar yAxisId="count" dataKey="callCount" name="调用" fill="#1e4a2e" radius={[6, 6, 0, 0]} />
-          <Bar yAxisId="count" dataKey="likeCount" name="点赞" fill="#8aa66d" radius={[6, 6, 0, 0]} />
+          <Bar yAxisId="count" dataKey="callCount" name="调用" fill="#16616a" radius={[6, 6, 0, 0]} />
+          <Bar yAxisId="count" dataKey="likeCount" name="点赞" fill="#7fa36a" radius={[6, 6, 0, 0]} />
           <Bar yAxisId="count" dataKey="dislikeCount" name="点踩" fill="#bc442b" radius={[6, 6, 0, 0]} />
-          <Bar yAxisId="count" dataKey="commentCount" name="评论" fill="#b98021" radius={[6, 6, 0, 0]} />
-          <Line yAxisId="score" type="monotone" dataKey="averageFinalScore" name="平均最终分" stroke="#122015" strokeWidth={2} dot />
+          <Bar yAxisId="count" dataKey="commentCount" name="评论" fill="#e5b85d" radius={[6, 6, 0, 0]} />
+          <Line yAxisId="score" type="monotone" dataKey="averageFinalScore" name="平均最终分" stroke="#17232a" strokeWidth={2} dot />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

@@ -4,14 +4,14 @@
 
 ## 目标
 
-在保留现有 Vue 前端可运行的前提下，新建 React 技术栈前端，并逐步迁移当前已实现业务页面。重构目标是为面试和后续维护提供 React 工程证据链，不扩大后端功能范围。
+React 技术栈前端已经完成对原 Vue 前端的功能替代。本文档保留阶段计划、迁移顺序和落地结果，作为后续维护与面试说明的工程证据链；后续新功能和样式优化默认在 `frontend/` React 主前端推进。
 
 ## 非目标
 
 - 不继续开发 v2 已冻结的新功能。
 - 不重写后端 API、数据库结构、评分公式或权限模型。
 - 不把模型级 NDJSON 渐进返回改成逐字 Token 流式输出。
-- 不在迁移初期删除现有 Vue 前端。
+- 不删除 `vue-frontend/` 历史版本，除非后续单独任务明确要求。
 
 ## 阶段计划
 
@@ -20,21 +20,21 @@
 - 新建独立 React 前端目录。
 - 明确包管理、构建命令、路由方案、状态管理、API 封装和样式方案。
 - 接入基础登录态恢复、错误提示和开发代理。
-- 新增 React 版本一键全栈启动脚本。
+- 新增 React 主前端一键全栈启动脚本。
 
 验收标准：
 
 - React 前端可以独立安装依赖、启动开发服务和完成构建。
-- Vue 前端仍可按原方式启动。
+- Vue 前端仍可作为历史版本启动。
 - React 前端可以调用 `/api/health` 和 `/api/auth/me`。
 
 落地结果：
 
 - React 前端目录为 `frontend/`。
-- 技术栈为 React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design 和 Recharts。
+- 技术栈为 React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design、Recharts 和 GSAP。
 - `pnpm test` 覆盖阶段一 API 客户端。
 - `pnpm build` 可完成 TypeScript 严格检查和 Vite 生产构建。
-- `scripts/start-react-local.sh` 可启动 React 版本全栈项目。
+- `scripts/start-local.sh` 可启动 React 主前端全栈项目。
 
 ### 阶段 2：认证与基础布局（已完成）
 
@@ -104,16 +104,16 @@
 
 - 建立 React 前端构建、基础测试和手工验收清单。
 - 对比 Vue 与 React 的核心业务路径。
-- 决定 Vue 前端继续保留为历史实现，还是在后续单独任务中移除。
+- 确认 Vue 前端继续作为历史版本保留，是否移除留待后续单独任务决策。
 
 验收标准：
 
 - React 前端核心路径通过本地验证。
 - 文档、启动方式和验收命令同步。
-- 是否移除 Vue 前端有明确单独决策，不在本阶段默认执行。
+- Vue 前端保留为历史版本，是否移除不在本阶段默认执行。
 
 已落地内容：
 
-- 新增 `docs/react-rewrite/acceptance.md`，记录自动验收命令、React 手工核心路径和 Vue 基线保留决策。
+- 新增 `docs/react-rewrite/acceptance.md`，记录自动验收命令、React 手工核心路径和 Vue 历史版本保留决策。
 - 新增 `scripts/verify-react-rewrite.sh`，统一执行后端测试、React 测试、React 构建、Vue 测试、Vue 构建和 `git diff --check`。
-- 明确阶段五不删除 `vue-frontend/`，Vue 前端继续作为可运行历史基线保留。
+- 明确阶段五不删除 `vue-frontend/`，Vue 前端继续作为历史版本保留。

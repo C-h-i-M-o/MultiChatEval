@@ -2,7 +2,7 @@
 
 最后更新：2026-07-03
 
-当前版本：**v2 已结束并冻结**。demo-v1 核心评测闭环保持可用，账号体系、权限控制、公开/私有评测、管理员模型配置、Token 额度和反馈统计等已实现能力继续保留。后续不再继续开发 v2 新功能，当前重点转为 React 前端重构。
+当前版本：**v2 已结束并冻结**。demo-v1 核心评测闭环保持可用，账号体系、权限控制、公开/私有评测、管理员模型配置、Token 额度和反馈统计等已实现能力继续保留。React 前端已经完成对原 Vue 前端的功能替代，后续新功能和样式维护默认使用 `frontend/`。
 
 本文档根据当前代码实现梳理 MultiChatEval 的系统功能、模块边界和完成情况。状态说明：
 
@@ -16,9 +16,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 当前版本优先保证多模型、规则评分、LLM Judge、模型级渐进展示、历史任务查询和用户反馈的完整链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口；哪个模型完整回答先完成，前端就先展示哪个模型。评测任务、回答、评分、点赞/点踩和公开评论会写入 MySQL，并可在历史任务页继续查看和操作。
 
-React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现页面和交互，不借重构扩大后端功能范围。
-
-当前 React 重构阶段五已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Tailwind CSS、Ant Design、Recharts、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 并行验收。Vue 前端已移动到 `vue-frontend/` 并在本阶段继续作为可运行基线保留。
+当前 React 主前端已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Tailwind CSS、Ant Design、Recharts、GSAP、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。React 前端已补充品牌 logo、深色侧栏、主题色层和遵循减少动态效果偏好的 GSAP 页面/卡片/弹窗动画。`scripts/start-local.sh` 可一键启动 React 主前端全栈项目，`scripts/start-local-vue.sh` 可启动历史 Vue 版本，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 验收。
 
 ## 2. 前端功能
 
@@ -39,7 +37,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/`
 
-入口文件：`vue-frontend/src/views/EvaluationView.vue`
+入口文件：`frontend/src/pages/EvaluationPage.tsx`
 
 已实现能力：
 
@@ -63,7 +61,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/models`
 
-入口文件：`vue-frontend/src/views/ModelConfigsView.vue`
+入口文件：`frontend/src/pages/ModelConfigsPage.tsx`
 
 已实现能力：
 
@@ -138,14 +136,14 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/history`
 
-入口文件：`vue-frontend/src/views/HistoryView.vue`
+入口文件：`frontend/src/pages/HistoryPage.tsx`
 
 已实现能力：
 
 - 侧边栏“历史任务”可进入历史任务页。
 - 进入历史页时分页加载最近评测任务。
 - 支持切换页码和每页 10/20/50 条。
-- Element Plus 使用中文语言配置，分页容量显示为 `10/页`、`20/页` 或 `50/页`。
+- Ant Design 使用中文语言配置，分页容量和页码控件使用中文交互。
 - 点击历史任务后加载完整回答和评分详情。
 - 历史任务详情使用单列紧凑列表，每行展示模型摘要、关键指标、反馈操作和全文入口，不使用多列卡片。
 - 历史任务详情页可以继续对回答点赞或点踩。
@@ -161,7 +159,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 入口路径：`/feedback`
 
-入口文件：`vue-frontend/src/views/FeedbackStatsView.vue`
+入口文件：`frontend/src/pages/FeedbackStatsPage.tsx`
 
 已实现能力：
 
@@ -170,7 +168,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 - 管理员查看全局汇总、按模型表现、每日趋势以及分页互动明细。
 - 管理员明细支持按点赞、点踩、评论和模型筛选。
 - 支持最近 7 天、30 天和全部历史范围；日期边界按北京时间自然日计算。
-- 页面提供加载态、空状态、刷新和响应式布局，不新增图表依赖。
+- 页面提供加载态、空状态、刷新、响应式布局和 Recharts 交互图表。
 
 当前限制：
 
@@ -181,7 +179,7 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 状态：已实现
 
-入口文件：`vue-frontend/src/components/MarkdownRenderer.vue`
+入口文件：`frontend/src/components/MarkdownRenderer.tsx`
 
 已实现能力：
 
@@ -199,11 +197,12 @@ React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现
 
 相关文件：
 
-- `vue-frontend/src/components/AppLayout.vue`
-- `vue-frontend/src/components/ModelResponseCard.vue`
-- `vue-frontend/src/components/ModelResponseSummaryGrid.vue`
-- `vue-frontend/src/router/index.js`
-- `vue-frontend/src/styles/main.css`
+- `frontend/src/layout/AppLayout.tsx`
+- `frontend/src/components/ModelResponseCard.tsx`
+- `frontend/src/components/MarkdownRenderer.tsx`
+- `frontend/src/routes/RouteGuards.tsx`
+- `frontend/src/animations/pageMotion.ts`
+- `frontend/src/styles.css`
 
 已实现能力：
 
@@ -658,13 +657,13 @@ final =
 已有能力：
 
 - `docker-compose.yml` 提供 MySQL 服务。
-- `scripts/start-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和前端开发服务。
-- `scripts/start-react-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和 React 前端开发服务。
+- `scripts/start-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和 React 主前端开发服务。
+- `scripts/start-local-vue.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和历史 Vue 前端开发服务。
 - `scripts/verify-react-rewrite.sh` 可统一执行后端测试、React 测试、React 构建、Vue 测试、Vue 构建和 `git diff --check`。
 - 启动脚本会在默认端口被占用时自动向后寻找可用端口，并把实际后端地址传给 Vite 代理。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
-- 前端可通过 `pnpm dev` 启动；`vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
 - React 前端可在 `frontend/` 下通过 `pnpm dev` 启动，默认端口为 `5174`；`frontend/pnpm-workspace.yaml` 固定 `picomatch@4.0.4`，避免新版 pnpm minimum release age 策略拦截刚发布的传递依赖。
+- 历史 Vue 前端可在 `vue-frontend/` 下通过 `pnpm dev` 启动；`vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
 - 前端通过 Vite 代理或同源 `/api` 访问后端接口。
 
 ## 8. 测试覆盖
@@ -721,16 +720,13 @@ final =
 
 该链路未实现，且 v2 冻结后不再继续开发。
 
-## 10. React 重构优先级建议
+## 10. 后续前端维护建议
 
-v2 新功能开发已结束。后续建议按以下顺序推进 React 前端重构：
+v2 新功能开发已结束，React 已完成对原 Vue 前端的功能替代。后续建议：
 
-1. 以 `docs/react-rewrite/` 为当前 React 重构文档入口。
-2. 已完成：`frontend/` 为 React 主前端工程，原 Vue 前端移动到 `vue-frontend/` 并继续可运行。
-3. 已完成：明确 React 技术栈、目录结构、路由方案、API 封装和样式方案，并建立基础测试、构建和一键启动脚本。
-4. 已完成：复用现有 FastAPI 接口，迁移登录、注册、退出和基础业务布局。
-5. 已完成阶段三核心工作台：迁移评测表单、模型级 NDJSON 渐进返回、Markdown 渲染、思考过程折叠和点赞/点踩反馈操作。
-6. 已完成阶段四：迁移历史任务分页、详情加载、反馈评论交互、管理员模型配置、用户额度和反馈统计页面。
-7. 已完成阶段五：建立 React 前端构建、测试和手工验收清单，并与 Vue 基线做核心路径对照。
-8. 已完成：建立 `scripts/verify-react-rewrite.sh`，并与现有 Vue 前端在迁移期并行维护。
-9. 后续如要移除 Vue 前端，需要单独任务决策；阶段五默认继续保留 `vue-frontend/`。
+1. 后续新功能、样式优化和交互修复默认修改 `frontend/`。
+2. `vue-frontend/` 仅作为历史版本保留，默认不再承接新功能。
+3. 启动 React 主前端使用 `./scripts/start-local.sh`。
+4. 启动历史 Vue 版本使用 `./scripts/start-local-vue.sh`。
+5. React 主前端验收继续使用 `scripts/verify-react-rewrite.sh`，该脚本仍会检查 Vue 历史版本是否被无意破坏。
+6. 后续如要移除 Vue 前端，需要单独任务决策。

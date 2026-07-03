@@ -96,9 +96,18 @@ export function AdminUsersPage() {
         <Button loading={loading} onClick={() => void loadUsers()}>刷新</Button>
       </header>
       <div className="quota-summary-grid">
-        <Card><Statistic title="普通用户" value={normalUserCount} /></Card>
-        <Card><Statistic title="今日总用量" value={totalUsedTokens} groupSeparator="," suffix="Token" /></Card>
-        <Card><p className="m-0 text-[#667167] leading-7">额度按北京时间自然日统计。管理员账号不受每日 Token 上限限制。</p></Card>
+        <Card className="quota-summary-card quota-summary-card-users">
+          <span className="quota-summary-icon">U</span>
+          <Statistic title="普通用户" value={normalUserCount} />
+        </Card>
+        <Card className="quota-summary-card quota-summary-card-tokens">
+          <span className="quota-summary-icon">T</span>
+          <Statistic title="今日总用量" value={totalUsedTokens} groupSeparator="," suffix="Token" />
+        </Card>
+        <Card className="quota-summary-card quota-summary-card-note">
+          <span className="quota-summary-icon">Q</span>
+          <p className="m-0 leading-7">额度按北京时间自然日统计。管理员账号不受每日 Token 上限限制。</p>
+        </Card>
       </div>
       <Card className="admin-table-panel" styles={{ body: { padding: 0 } }}>
         <Table rowKey="id" columns={columns} dataSource={users} loading={loading} pagination={false} />

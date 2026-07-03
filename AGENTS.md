@@ -12,26 +12,26 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 当前 **v2 版本开发已经结束并冻结**。开放注册、HttpOnly Cookie JWT、普通用户/管理员 RBAC、真实用户数据归属、公开/私有评测、管理员模型配置、Token 额度、反馈统计等已实现能力继续保留；语义分析、模型推荐、运行监控等未完成的 v2 后续功能不再继续开发。
 
-`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。当前新的主要任务是在保留现有 Vue 前端的基础上，新建 React 技术栈前端并逐步重构同等业务能力。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。React 前端已经完成对原 Vue 前端的功能替代，后续开发统一使用 `frontend/` React 技术栈；`vue-frontend/` 仅作为历史版本保留。
 
 ## 当前技术栈
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
-- 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 重构目标前端：React 19、TypeScript、Vite、React Router、Tailwind CSS、Ant Design、Recharts，独立目录 `frontend/` 并复用现有后端 API
+- 当前主前端：React 19、TypeScript、Vite、React Router、Tailwind CSS、Ant Design、Recharts、GSAP，独立目录 `frontend/` 并复用现有后端 API
+- 历史前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP，位于 `vue-frontend/`，后续不再作为主要开发目标
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
 
-注意：现有 Vue 前端使用 JavaScript，不使用 TypeScript。React 重构阶段的语言和工程约定以后续 React 设计文档为准。
+注意：当前主前端使用 React + TypeScript。历史 Vue 前端使用 JavaScript，不作为后续新功能开发目标。
 
 ## 目录结构
 
 ```text
 MultiChatEval/
   backend/        FastAPI 后端服务
-  frontend/       React 19 + TypeScript + Vite 前端应用，已接入认证、角色导航、基础布局和评测工作台
-  vue-frontend/   原 Vue 3 + JavaScript 前端应用，React 重构期间继续保留为可运行基线
+  frontend/       React 19 + TypeScript + Vite 主前端应用，已完成原 Vue 功能替代
+  vue-frontend/   原 Vue 3 + JavaScript 前端应用，仅作为历史版本保留
   docker/         MySQL 初始化脚本
   docs/           架构、接口、数据库和开源复用说明
   scripts/        本地启动与维护脚本
@@ -97,66 +97,25 @@ MultiChatEval/
 - 评测任务支持 `public` 和 `private`；公开任务对所有登录用户可见，私有任务只对创建者可见。
 - 反馈和评论归属当前登录用户，用户只能删除自己的评论。
 
-### 前端
-
-- Vue 3 + JavaScript + Vite 基础项目
-- 登录页和注册页：`vue-frontend/src/views/AuthView.vue`
-- 主页面：`vue-frontend/src/views/EvaluationView.vue`
-- 功能骨架：
-    - 输入问题
-    - 按已启用且已配置 API Key 的模型配置选择模型
-    - 启用或关闭 LLM 评审开关
-    - 展示多模型回答摘要卡和全文详情弹窗
-    - 展示耗时、输出长度、成本和评分条
-    - 当系统内没有可用模型时，管理员可进入模型配置，普通用户会看到联系管理员提示
-    - 支持公开和私有评测选择
-- 前端展示增强：
-    - 请求期间显示等待卡片、耗时计数和完成进度
-    - 模型完成即展示，避免等待最慢模型后才统一呈现
-    - 对比评测回答使用平衡摘要网格，四个模型固定两行两列，五至九个模型自动铺满每一行
-    - 使用 GSAP 实现结果进入、等待卡替换、评分条和详情弹窗动画，并适配减少动态效果偏好
-    - 支持全局“思考模式”开关
-    - `MarkdownRenderer` 支持 Markdown 回答渲染
-    - `<think>...</think>` 内容折叠为“思考过程”
-- 侧边栏“历史任务”入口支持分页查看历史评测，回答使用单列紧凑列表并可加载详情
-    - Element Plus 使用中文语言配置，分页容量后缀显示为 `/页`
-    - 评分详情支持分页查看、发布和删除公开评论
-	    - 根据用户角色控制模型配置导航和页面访问
-	- 桌面端侧边栏固定在可视区域内，"默认流程"保持在侧栏底部；移动端恢复普通流式布局
-- 状态管理：`vue-frontend/src/stores/evaluation.js`
-- API 封装：`vue-frontend/src/utils/api.js`
-
-### React 重构前端
+### React 主前端
 
 - 独立目录：`frontend/`
-- 技术栈：React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design、Recharts
-- 阶段一已完成：
-    - 独立依赖、测试、构建和开发服务命令
-    - Vite `/api` 开发代理，默认代理到 FastAPI 后端
-    - 类型化 API 客户端
-    - 应用启动后调用 `GET /api/health`
-    - 应用启动后调用 `GET /api/auth/me` 恢复 HttpOnly Cookie 登录态
-- 阶段二已完成：
-    - 登录、注册、退出和当前用户恢复
-    - 受保护业务路由和公开认证路由
-    - 普通用户与管理员导航可见性隔离
-    - `/models` 与 `/users` 管理员入口保护
-- 阶段三核心工作台已完成：
-    - `/` 已迁移为 React 评测工作台
-    - 支持模型列表、今日 Token、公开/私有评测、思考模式和 LLM 评审
-    - 支持 `POST /api/evaluation/tasks/stream` 的模型级 NDJSON 渐进展示
-    - 支持 Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈
-- 阶段四已完成：
-    - `/history` 已迁移为 React 历史任务页面
-    - 支持历史任务分页、详情加载、状态标记、超时提示和公开/私有标记
-    - 历史详情支持点赞/点踩、完整回答、评分详情和公开评论分页、发布、删除
-    - `/models` 已迁移为管理员模型配置页面，支持列表、新增、编辑、启用/禁用、删除和连接测试
-    - `/users` 已迁移为管理员用户额度页面，支持查看今日 Token 用量并调整普通用户每日额度
-    - `/feedback` 已迁移为按角色分流的反馈统计页面
-- 阶段五已完成：
-    - `docs/react-rewrite/acceptance.md` 记录自动验收、手工核心路径和 Vue 基线保留决策
-    - `scripts/verify-react-rewrite.sh` 可执行后端测试、React 测试、React 构建、Vue 测试、Vue 构建和 `git diff --check`
-    - `vue-frontend/` 本阶段继续保留，是否移除需后续单独决策
+- 技术栈：React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design、Recharts、GSAP
+- 已完成对原 Vue 前端的功能替代：
+    - 登录、注册、退出和 HttpOnly Cookie 登录态恢复。
+    - 受保护业务路由、公开认证路由、基础业务布局和按角色导航。
+    - `/` 评测工作台：模型列表、今日 Token、公开/私有评测、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。
+    - `/history` 历史任务：分页、详情加载、状态标记、超时提示、公开/私有标记、反馈操作和公开评论分页、发布、删除。
+    - `/models` 管理员模型配置：列表、新增、编辑、启用/禁用、删除和连接测试。
+    - `/users` 管理员用户额度：查看今日 Token 用量并调整普通用户每日额度。
+    - `/feedback` 反馈统计：普通用户个人统计，管理员全局模型表现、每日趋势和互动明细。
+    - 品牌 logo、深色侧栏、主题色层、移动端深色导航抽屉和 GSAP 页面/卡片/弹窗动画。
+
+### Vue 历史前端
+
+- 目录：`vue-frontend/`
+- 技术栈：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
+- 该目录仅作为历史版本保留，用于必要时回看旧实现；后续新功能和样式优化默认不再修改 Vue 前端。
 
 ### 数据库与文档
 
@@ -180,15 +139,15 @@ MultiChatEval/
 ./scripts/start-local.sh
 ```
 
-脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和 Vue 前端依赖、执行 Alembic 数据库迁移，并同时启动后端与 Vue 前端开发服务。按 `Ctrl+C` 可停止本次启动的服务。
+脚本会检查 `.env`、启动 MySQL、准备后端虚拟环境和 React 前端依赖、执行 Alembic 数据库迁移，并同时启动后端与 React 主前端开发服务。默认 React 前端地址为 `http://127.0.0.1:5174`；如端口占用，会自动向后寻找可用端口。按 `Ctrl+C` 可停止本次启动的服务。
 
-React 重构版本使用：
+历史 Vue 版本使用带 Vue 后缀的启动脚本：
 
 ```bash
-./scripts/start-react-local.sh
+./scripts/start-local-vue.sh
 ```
 
-该脚本会启动同一套 MySQL 和 FastAPI 后端，并启动 `frontend/`。默认 React 前端地址为 `http://127.0.0.1:5174`；如端口占用，会自动向后寻找可用端口。
+该脚本会启动同一套 MySQL 和 FastAPI 后端，并启动 `vue-frontend/`。
 
 ### 1. 启动 MySQL
 
@@ -218,15 +177,29 @@ http://localhost:8000
 http://localhost:8000/api/health
 ```
 
-### 3. 启动 Vue 前端基线
+### 3. 启动 React 主前端
 
 ```bash
-cd vue-frontend
-pnpm install
+cd frontend
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Vue 前端通过 `vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要构建脚本；依赖安装统一使用 `pnpm install --frozen-lockfile`。
+默认地址：
+
+```text
+http://localhost:5174
+```
+
+### 4. 启动 Vue 历史前端
+
+```bash
+cd vue-frontend
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Vue 前端通过 `vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 允许 `esbuild`、`vue-demi` 执行必要构建脚本。该目录仅作为历史版本保留。
 
 默认地址：
 
@@ -247,7 +220,7 @@ BACKEND_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://127.0.0.
 
 真实模型 API Key 不应提交到 Git。
 
-## 当前实现状态与 React 重构方向
+## 当前实现状态与 React 前端维护方向
 
 ### 已跑通主流程
 
@@ -312,12 +285,12 @@ BACKEND_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://127.0.0.
 - 普通用户默认每日额度为 100,000 总 Token，管理员不限额；额度按北京时间自然日统计。
 - 回答卡片先显示总费用，悬停或聚焦查看四项费用明细。
 
-### v2 冻结与 React 重构方向
+### v2 冻结与 React 前端方向
 
 - v2 后续新功能开发到此结束。
 - 未完成的模型推荐、语言一致性评分、评论审核、结果导出、批量评测和运行监控只作为历史规划保留，不再作为当前开发目标。
-- 当前任务是保留现有 Vue 前端，另建 React 技术栈前端，优先迁移登录、评测工作台、历史任务、模型配置、用户额度和反馈统计等已实现页面。
-- React 重构应复用现有后端 API、数据库结构和评分逻辑，不借重构扩大后端功能范围。
+- React 前端已经完成对原 Vue 前端的功能替代，后续新功能、样式优化和维护工作默认使用 `frontend/`。
+- `vue-frontend/` 仅作为历史版本保留；如需移除或继续维护，需要单独任务决策。
 
 ## 当前评分公式
 
@@ -350,8 +323,8 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 ## 开发约定
 
 - 全程使用中文交流、中文注释和中文文档。
-- 现有 Vue 前端使用 JavaScript，不使用 TypeScript。
-- React 重构阶段需要先补充设计文档，明确目录、技术栈、路由、状态管理、API 封装和验收标准后再编码。
+- 当前主前端使用 React + TypeScript。
+- 历史 Vue 前端使用 JavaScript，不使用 TypeScript，默认不再承接新功能开发。
 - 前端包管理优先使用 pnpm。
 - React 前端使用 `frontend/pnpm-workspace.yaml` 固定 `picomatch@4.0.4`，避免新版 pnpm minimum release age 策略拦截刚发布的传递依赖。
 - 后端尽量补充类型标注。
@@ -386,15 +359,14 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 8. `docs/react-rewrite/plan.md`
 9. `docs/react-rewrite/architecture.md`
 10. `backend/app/services/evaluation_service.py`
-11. `vue-frontend/src/views/EvaluationView.vue`
+11. `frontend/src/pages/EvaluationPage.tsx`
 
 优先推进的任务是：
 
-1. 安装依赖并启动前后端。
-2. 确认前端能调用后端真实模型接口。
+1. 安装依赖并启动前后端，默认使用 `./scripts/start-local.sh`。
+2. 确认 React 主前端能调用后端真实模型接口。
 3. 确认模型级渐进展示和全局思考模式行为正常。
 4. 验证评分结果、点赞/点踩和公开评论均正确持久化到 MySQL。
-5. 新建 React 前端框架并复用现有后端 API。
-6. 按现有 Vue 页面逐步迁移 React 页面，迁移期间保持 Vue 前端可运行。
-7. 验证公开任务跨用户可见、私有任务仅创建者可见。
-8. React 重构收尾验收可运行 `./scripts/verify-react-rewrite.sh`。
+5. 验证公开任务跨用户可见、私有任务仅创建者可见。
+6. React 主前端收尾验收可运行 `./scripts/verify-react-rewrite.sh`。
+7. 如需查看旧实现，可使用 `./scripts/start-local-vue.sh` 启动历史 Vue 前端。

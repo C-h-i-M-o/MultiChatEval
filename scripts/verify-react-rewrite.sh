@@ -22,7 +22,7 @@ run_in() {
 }
 
 if [ ! -x "$ROOT_DIR/backend/.venv/bin/pytest" ]; then
-  printf "后端虚拟环境不存在或未安装 pytest，请先运行 ./scripts/start-react-local.sh 或手动准备 backend/.venv。\n" >&2
+  printf "后端虚拟环境不存在或未安装 pytest，请先运行 ./scripts/start-local.sh 或手动准备 backend/.venv。\n" >&2
   exit 1
 fi
 

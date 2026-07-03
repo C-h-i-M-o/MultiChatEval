@@ -1,7 +1,9 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
+import { useAuthMotion } from "../animations/pageMotion";
+import logoUrl from "../assets/logo.png";
 import { useAuth } from "../features/auth/AuthContext";
 
 export function AuthPage({ mode }: { mode: "login" | "register" }) {
@@ -11,7 +13,9 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
   const isRegister = mode === "register";
+  useAuthMotion(cardRef);
 
   const redirectPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -47,9 +51,9 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
 
   return (
     <main className="auth-shell">
-      <section className="auth-card">
+      <section ref={cardRef} className="auth-card">
         <div className="auth-brand">
-          <span className="brand-mark">M</span>
+          <img className="brand-logo auth-logo" src={logoUrl} alt="MultiChatEval 标志" />
           <div>
             <p className="eyebrow">MultiChatEval React</p>
             <h1>{isRegister ? "注册账号" : "登录系统"}</h1>

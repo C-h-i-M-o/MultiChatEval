@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MenuFoldOutlined, MenuOutlined, PoweroffOutlined } from "@ant-design/icons";
 import { Button, Drawer } from "antd";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
+import logoUrl from "../assets/logo.png";
+import { useWorkspaceMotion } from "../animations/pageMotion";
 import { useAuth } from "../features/auth/AuthContext";
 import { getVisibleNavigationItems } from "../features/navigation/navigation";
 
@@ -11,6 +13,8 @@ export function AppLayout() {
   const user = auth.user;
   const location = useLocation();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
+  useWorkspaceMotion(mainRef, location.pathname);
 
   if (!user) {
     return null;
@@ -39,7 +43,7 @@ export function AppLayout() {
     <div className="workspace-layout" data-path={location.pathname}>
       <header className="mobile-topbar">
         <div className="mobile-brand">
-          <span className="brand-mark">M</span>
+          <img className="brand-logo" src={logoUrl} alt="MultiChatEval 标志" />
           <strong>MultiChatEval</strong>
         </div>
         <Button
@@ -49,19 +53,23 @@ export function AppLayout() {
         />
       </header>
       <aside className="sidebar">
-        <div>
-          <p className="eyebrow">MultiChatEval React</p>
-          <h1 className="layout-title">多模型评测</h1>
+        <div className="brand-block">
+          <img className="brand-logo" src={logoUrl} alt="MultiChatEval 标志" />
+          <div>
+            <p className="eyebrow">MultiChatEval React</p>
+            <h1 className="layout-title">多模型评测</h1>
+          </div>
         </div>
 
         {renderNav()}
         {renderUserCard()}
       </aside>
 
-      <main className="workspace-main">
+      <main ref={mainRef} className="workspace-main">
         <Outlet />
       </main>
       <Drawer
+        className="mobile-nav-drawer"
         title="MultiChatEval"
         placement="right"
         width={280}

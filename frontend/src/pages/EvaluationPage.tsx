@@ -11,6 +11,7 @@ import {
   submitResponseFeedback
 } from "../api/client";
 import type { EvaluationTaskPayload, EvaluationVisibility, FeedbackType, TokenUsage } from "../api/client";
+import { useResponseGridMotion } from "../animations/pageMotion";
 import { ModelResponseCard } from "../components/ModelResponseCard";
 import { useAuth } from "../features/auth/AuthContext";
 import { applyFeedbackResult, createPendingResponses, mergeStreamEvent } from "../features/evaluation/evaluation";
@@ -39,6 +40,7 @@ export function EvaluationPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [feedbackSubmittingIds, setFeedbackSubmittingIds] = useState<number[]>([]);
   const timerRef = useRef<number | null>(null);
+  const responseGridRef = useRef<HTMLElement | null>(null);
 
   const quotaExhausted = Boolean(tokenUsage && !tokenUsage.unlimited && (tokenUsage.remainingTokens ?? 0) <= 0);
   const showModelNotice = !modelConfigLoading && availableModels.length === 0;
@@ -50,6 +52,9 @@ export function EvaluationPage() {
     (!enableJudge || judgeModelId !== null);
 
   const selectedModelSet = useMemo(() => new Set(selectedModelIds), [selectedModelIds]);
+  const completedResponseCount =
+    taskState?.responses.filter((response) => !("pending" in response)).length ?? 0;
+  useResponseGridMotion(responseGridRef, completedResponseCount);
 
   useEffect(() => {
     void loadAvailableModels();
@@ -310,7 +315,7 @@ export function EvaluationPage() {
       <AlertMessage message={errorMessage} tone="error" />
 
       {taskState?.responses.length ? (
-        <section className="response-grid">
+        <section ref={responseGridRef} className="response-grid">
           {taskState.responses.map((response) => (
             <ModelResponseCard
               key={response.id}
