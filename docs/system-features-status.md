@@ -18,7 +18,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现页面和交互，不借重构扩大后端功能范围。
 
-当前 React 重构阶段四已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目。Vue 前端已移动到 `vue-frontend/` 并可按原方式启动。
+当前 React 重构阶段五已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 并行验收。Vue 前端已移动到 `vue-frontend/` 并在本阶段继续作为可运行基线保留。
 
 ## 2. 前端功能
 
@@ -660,6 +660,7 @@ final =
 - `docker-compose.yml` 提供 MySQL 服务。
 - `scripts/start-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和前端开发服务。
 - `scripts/start-react-local.sh` 可自动准备 `.env`、启动 MySQL、安装依赖、执行 Alembic 数据库迁移，并启动后端和 React 前端开发服务。
+- `scripts/verify-react-rewrite.sh` 可统一执行后端测试、React 测试、React 构建、Vue 测试、Vue 构建和 `git diff --check`。
 - 启动脚本会在默认端口被占用时自动向后寻找可用端口，并把实际后端地址传给 Vite 代理。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
 - 前端可通过 `pnpm dev` 启动；`vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
@@ -677,7 +678,7 @@ final =
 - 评测服务测试覆盖同步创建、模型级渐进返回、单模型失败隔离、评分持久化、Judge 合成、反馈重算和评论操作。
 - 模型配置、API Key、启动脚本、迁移兼容和 LLM Judge 解析均有对应单元测试。
 - 规则评分器测试覆盖空回答、排除完整或未闭合的 `<think>` 思考内容、相关性、格式和安全性等主要规则。
-- React 阶段一/二/三结构、启动脚本、API 客户端、导航权限、评测 NDJSON 解析、回答内容处理、反馈状态合并和构建链路已有测试覆盖。
+- React 阶段一至五结构、启动脚本、API 客户端、导航权限、评测 NDJSON 解析、回答内容处理、历史状态、反馈状态合并、管理员 API 和构建链路已有测试覆盖。
 
 当前缺口：
 
@@ -730,6 +731,6 @@ v2 新功能开发已结束。后续建议按以下顺序推进 React 前端重�
 4. 已完成：复用现有 FastAPI 接口，迁移登录、注册、退出和基础业务布局。
 5. 已完成阶段三核心工作台：迁移评测表单、模型级 NDJSON 渐进返回、Markdown 渲染、思考过程折叠和点赞/点踩反馈操作。
 6. 已完成阶段四：迁移历史任务分页、详情加载、反馈评论交互、管理员模型配置、用户额度和反馈统计页面。
-7. 下一步：建立 React 前端构建、测试和手工验收清单，并与 Vue 基线做核心路径对照。
-8. 建立 React 前端的构建、测试和验收命令，并与现有 Vue 前端在迁移期并行维护。
-9. 迁移完成后再决定是否保留 Vue 前端作为历史实现或移除。
+7. 已完成阶段五：建立 React 前端构建、测试和手工验收清单，并与 Vue 基线做核心路径对照。
+8. 已完成：建立 `scripts/verify-react-rewrite.sh`，并与现有 Vue 前端在迁移期并行维护。
+9. 后续如要移除 Vue 前端，需要单独任务决策；阶段五默认继续保留 `vue-frontend/`。

@@ -57,6 +57,7 @@ MultiChatEval/
 - `docs/api.md`：后端接口说明。
 - `docs/database.md`：数据库表结构说明。
 - `docs/react-rewrite/`：当前 React 前端重构文档。
+- `docs/react-rewrite/acceptance.md`：React 重构收尾验收清单。
 - `docs/legacy-v2/`：v2 历史开发文档归档；v2 已冻结，不再继续推进后续阶段。
 
 ## 快速开始
@@ -148,6 +149,14 @@ React 前端默认地址：
 http://localhost:5174
 ```
 
+React 重构收尾验收可运行：
+
+```bash
+./scripts/verify-react-rewrite.sh
+```
+
+该脚本会依次验证后端测试、React 测试、React 构建、Vue 测试、Vue 构建和 `git diff --check`。
+
 ## 当前能力
 
 当前版本已经跑通：
@@ -166,7 +175,7 @@ http://localhost:5174
 
 当前仍不做逐字 token 流式输出；`/api/evaluation/tasks/stream` 是模型级渐进返回，即一个模型完整回答完成后立刻展示。
 
-v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示；反馈统计页也已形成角色隔离的可运行闭环。v2 到此结束，未实现的语义分析、模型推荐和运行监控不再继续开发。当前工作聚焦 React 前端重构。目前 React 版本已完成认证、角色导航、评测工作台、历史任务、公开评论交互、管理员模型配置、用户额度和反馈统计迁移。
+v2 阶段 2/3 已提供管理员模型参数、四类计费配置、用户每日 Token 额度和用量展示；反馈统计页也已形成角色隔离的可运行闭环。v2 到此结束，未实现的语义分析、模型推荐和运行监控不再继续开发。当前工作聚焦 React 前端重构。目前 React 版本已完成认证、角色导航、评测工作台、历史任务、公开评论交互、管理员模型配置、用户额度、反馈统计和阶段五收尾验收。`vue-frontend/` 在本阶段继续作为可运行基线保留。
 
 ## 前端展示能力
 

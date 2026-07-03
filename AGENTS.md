@@ -153,6 +153,10 @@ MultiChatEval/
     - `/models` 已迁移为管理员模型配置页面，支持列表、新增、编辑、启用/禁用、删除和连接测试
     - `/users` 已迁移为管理员用户额度页面，支持查看今日 Token 用量并调整普通用户每日额度
     - `/feedback` 已迁移为按角色分流的反馈统计页面
+- 阶段五已完成：
+    - `docs/react-rewrite/acceptance.md` 记录自动验收、手工核心路径和 Vue 基线保留决策
+    - `scripts/verify-react-rewrite.sh` 可执行后端测试、React 测试、React 构建、Vue 测试、Vue 构建和 `git diff --check`
+    - `vue-frontend/` 本阶段继续保留，是否移除需后续单独决策
 
 ### 数据库与文档
 
@@ -392,3 +396,4 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 5. 新建 React 前端框架并复用现有后端 API。
 6. 按现有 Vue 页面逐步迁移 React 页面，迁移期间保持 Vue 前端可运行。
 7. 验证公开任务跨用户可见、私有任务仅创建者可见。
+8. React 重构收尾验收可运行 `./scripts/verify-react-rewrite.sh`。

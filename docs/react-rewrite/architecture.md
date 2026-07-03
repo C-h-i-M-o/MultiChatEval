@@ -31,18 +31,19 @@ FastAPI API
 MySQL
 ```
 
-当前阶段三目录：
+当前 React 主前端目录：
 
 ```text
 frontend/
   src/
-    api/client.ts              类型化 API 客户端、认证请求、评测流和反馈请求
-    components/                Markdown 渲染、评分条和回答卡片
+    api/client.ts              类型化 API 客户端、认证请求、评测流、管理页和反馈统计请求
+    components/                Markdown 渲染、评分条、回答卡片和评论面板
     features/auth/             登录态恢复、认证上下文和错误识别
     features/evaluation/       评测类型、NDJSON 状态合并和回答内容处理
+    features/history/          历史任务状态、时间和反馈合并工具
     features/navigation/       导航项和路由访问判断
     layout/AppLayout.tsx       登录后业务布局
-    pages/                     登录注册页、评测工作台和阶段占位页
+    pages/                     登录注册、评测、历史、模型配置、用户额度和反馈统计页面
     routes/RouteGuards.tsx     公开路由和受保护路由
     App.tsx                    路由声明
     main.tsx                   React 挂载与 BrowserRouter
@@ -104,6 +105,7 @@ React 路由应覆盖现有 Vue 路由能力：
 - `POST /api/evaluation/tasks/stream` 的 NDJSON 分片解析可靠。
 - Markdown 与思考过程渲染行为与 Vue 版本一致。
 - 点赞、点踩和评分详情与后端状态一致。
-- 公开评论交互随阶段四的历史任务详情和统一回答详情继续迁移。
+- 公开评论交互已随历史任务详情迁移。
 - 管理员页面不对普通用户暴露。
 - React 重构不改变后端接口、数据库表和评分公式。
+- 阶段五收尾验收以 `docs/react-rewrite/acceptance.md` 和 `scripts/verify-react-rewrite.sh` 为准。
