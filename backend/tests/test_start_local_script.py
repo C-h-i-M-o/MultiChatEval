@@ -29,7 +29,7 @@ def test_start_local_does_not_download_embedding_model() -> None:
     assert "sentence_transformers" not in script
     assert "prepare_embedding_model" not in script
     assert "SentenceTransformer" not in script
-    assert "prepare_frontend\n  BACKEND_PORT" in script
+    assert "prepare_react_frontend\n  BACKEND_PORT" in script
 
 
 def test_start_local_installs_locked_dependencies_and_checks_services() -> None:
@@ -37,11 +37,12 @@ def test_start_local_installs_locked_dependencies_and_checks_services() -> None:
 
     assert 'pip install -e ".[dev]"' in script
     assert "pnpm install --frozen-lockfile" in script
+    assert 'REACT_FRONTEND_DIR="${PROJECT_ROOT}/frontend"' in script
     assert 'require_command lsof "请先安装 lsof。"' in script
     assert 'require_command curl "请先安装 curl。"' in script
     assert "docker compose version" in script
     assert 'wait_for_url "后端服务"' in script
-    assert 'wait_for_url "前端服务"' in script
+    assert 'wait_for_url "React 前端服务"' in script
 
 
 def test_comment_migration_supports_latest_init_schema() -> None:

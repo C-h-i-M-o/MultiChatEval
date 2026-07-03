@@ -1,3 +1,5 @@
-onlyBuiltDependencies:
-  - esbuild
-  - vue-demi
+packages:
+  - .
+
+overrides:
+  picomatch: 4.0.4

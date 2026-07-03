@@ -5,27 +5,27 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BACKEND_DIR="${PROJECT_ROOT}/backend"
-FRONTEND_DIR="${PROJECT_ROOT}/frontend"
+REACT_FRONTEND_DIR="${PROJECT_ROOT}/frontend"
 LOG_DIR="${PROJECT_ROOT}/logs"
 PYTHON_BIN="${PYTHON_BIN:-/opt/anaconda3/bin/python}"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
-FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
+FRONTEND_HOST="${FRONTEND_HOST:-${REACT_FRONTEND_HOST:-127.0.0.1}}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
-FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+FRONTEND_PORT="${FRONTEND_PORT:-${REACT_FRONTEND_PORT:-5174}}"
 
 BACKEND_PID=""
-FRONTEND_PID=""
+REACT_FRONTEND_PID=""
 
 log() {
-  printf "\033[1;34m[MultiChatEval]\033[0m %s\n" "$1"
+  printf "\033[1;34m[MultiChatEval React]\033[0m %s\n" "$1"
 }
 
 warn() {
-  printf "\033[1;33m[MultiChatEval]\033[0m %s\n" "$1"
+  printf "\033[1;33m[MultiChatEval React]\033[0m %s\n" "$1"
 }
 
 fail() {
-  printf "\033[1;31m[MultiChatEval]\033[0m %s\n" "$1" >&2
+  printf "\033[1;31m[MultiChatEval React]\033[0m %s\n" "$1" >&2
   exit 1
 }
 
@@ -56,11 +56,11 @@ cleanup() {
   fi
   BACKEND_PID=""
 
-  if [[ -n "${FRONTEND_PID}" ]] && kill -0 "${FRONTEND_PID}" >/dev/null 2>&1; then
-    log "停止前端服务..."
-    kill "${FRONTEND_PID}" >/dev/null 2>&1 || true
+  if [[ -n "${REACT_FRONTEND_PID}" ]] && kill -0 "${REACT_FRONTEND_PID}" >/dev/null 2>&1; then
+    log "停止 React 前端服务..."
+    kill "${REACT_FRONTEND_PID}" >/dev/null 2>&1 || true
   fi
-  FRONTEND_PID=""
+  REACT_FRONTEND_PID=""
 }
 
 require_command() {
@@ -116,9 +116,9 @@ prepare_backend() {
   (cd "${BACKEND_DIR}" && "${venv_python}" -m pip install -e ".[dev]")
 }
 
-prepare_frontend() {
-  log "按锁文件校验并安装前端依赖..."
-  (cd "${FRONTEND_DIR}" && pnpm install --frozen-lockfile)
+prepare_react_frontend() {
+  log "按锁文件校验并安装 React 前端依赖..."
+  (cd "${REACT_FRONTEND_DIR}" && pnpm install --frozen-lockfile)
 }
 
 run_migrations() {
@@ -131,17 +131,17 @@ start_backend() {
   (
     cd "${BACKEND_DIR}"
     .venv/bin/python -m uvicorn app.main:app --reload --host "${BACKEND_HOST}" --port "${BACKEND_PORT}"
-  ) >"${LOG_DIR}/backend.log" 2>&1 &
+  ) >"${LOG_DIR}/backend-react.log" 2>&1 &
   BACKEND_PID="$!"
 }
 
-start_frontend() {
-  log "启动前端：http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+start_react_frontend() {
+  log "启动 React 前端：http://${FRONTEND_HOST}:${FRONTEND_PORT}"
   (
-    cd "${FRONTEND_DIR}"
-    VITE_BACKEND_TARGET="http://${BACKEND_HOST}:${BACKEND_PORT}" pnpm dev --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" --strictPort
+    cd "${REACT_FRONTEND_DIR}"
+    VITE_BACKEND_TARGET="http://${BACKEND_HOST}:${BACKEND_PORT}" VITE_DEV_PORT="${FRONTEND_PORT}" pnpm dev --host "${FRONTEND_HOST}" --port "${FRONTEND_PORT}" --strictPort
   ) >"${LOG_DIR}/frontend.log" 2>&1 &
-  FRONTEND_PID="$!"
+  REACT_FRONTEND_PID="$!"
 }
 
 wait_for_url() {
@@ -163,17 +163,17 @@ wait_for_url() {
 }
 
 watch_processes() {
-  log "本地项目已启动。日志目录：${LOG_DIR}"
-  log "按 Ctrl+C 停止后端和前端开发服务。"
+  log "React 版本全栈项目已启动。日志目录：${LOG_DIR}"
+  log "按 Ctrl+C 停止后端和 React 前端开发服务。"
 
   while true; do
     if ! kill -0 "${BACKEND_PID}" >/dev/null 2>&1; then
-      warn "后端服务已退出，请查看 ${LOG_DIR}/backend.log。"
+      warn "后端服务已退出，请查看 ${LOG_DIR}/backend-react.log。"
       exit 1
     fi
 
-    if ! kill -0 "${FRONTEND_PID}" >/dev/null 2>&1; then
-      warn "前端服务已退出，请查看 ${LOG_DIR}/frontend.log。"
+    if ! kill -0 "${REACT_FRONTEND_PID}" >/dev/null 2>&1; then
+      warn "React 前端服务已退出，请查看 ${LOG_DIR}/frontend.log。"
       exit 1
     fi
 
@@ -202,14 +202,14 @@ main() {
   wait_for_mysql
 
   prepare_backend
-  prepare_frontend
+  prepare_react_frontend
   BACKEND_PORT="$(find_available_port "${BACKEND_PORT}")"
   FRONTEND_PORT="$(find_available_port "${FRONTEND_PORT}")"
   run_migrations
   start_backend
   wait_for_url "后端服务" "http://${BACKEND_HOST}:${BACKEND_PORT}/api/health"
-  start_frontend
-  wait_for_url "前端服务" "http://${FRONTEND_HOST}:${FRONTEND_PORT}"
+  start_react_frontend
+  wait_for_url "React 前端服务" "http://${FRONTEND_HOST}:${FRONTEND_PORT}"
   watch_processes
 }
 

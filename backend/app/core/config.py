@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "MultiChatEval"
     app_env: str = "development"
     database_url: str = "mysql+aiomysql://multichateval:multichateval@localhost:3306/multichateval"
-    backend_cors_origins: str = "http://localhost:5173"
+    backend_cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
     jwt_secret_key: str = "development-only-change-this-secret-before-production-2026"
     access_token_expire_minutes: int = 480
     auth_cookie_secure: bool = False
