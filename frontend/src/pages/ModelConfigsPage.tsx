@@ -1,4 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Button,
+  Card,
+  Collapse,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Tag,
+  message
+} from "antd";
+import type { TableColumnsType } from "antd";
 
 import {
   ApiError,
@@ -11,15 +27,17 @@ import {
 import type { ModelConfig, ModelConfigPayload } from "../api/client";
 
 const providerPresets = [
-  { key: "deepseek", label: "DeepSeek", providerName: "deepseek", baseUrl: "https://api.deepseek.com" },
-  { key: "minimax", label: "MiniMax", providerName: "minimax", baseUrl: "https://api.minimaxi.com/v1" },
-  { key: "glm", label: "智谱 GLM", providerName: "glm", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
-  { key: "qwen", label: "阿里 Qwen", providerName: "qwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1" },
-  { key: "openai", label: "OpenAI", providerName: "openai", baseUrl: "https://api.openai.com/v1" },
-  { key: "custom", label: "OpenAI-compatible", providerName: "", baseUrl: "" }
+  { key: "deepseek", label: "DeepSeek", providerName: "deepseek", baseUrl: "https://api.deepseek.com", description: "DeepSeek 官方兼容接口" },
+  { key: "minimax", label: "MiniMax", providerName: "minimax", baseUrl: "https://api.minimaxi.com/v1", description: "MiniMax OpenAI-compatible 接口" },
+  { key: "glm", label: "智谱 GLM", providerName: "glm", baseUrl: "https://open.bigmodel.cn/api/paas/v4", description: "智谱 GLM 兼容接口" },
+  { key: "qwen", label: "阿里 Qwen", providerName: "qwen", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", description: "DashScope 兼容模式" },
+  { key: "openai", label: "OpenAI", providerName: "openai", baseUrl: "https://api.openai.com/v1", description: "OpenAI 官方接口" },
+  { key: "custom", label: "OpenAI-compatible", providerName: "", baseUrl: "", description: "自定义兼容供应商" }
 ];
 
-const emptyForm: Required<ModelConfigPayload> = {
+interface ModelConfigFormValues extends Required<ModelConfigPayload> {}
+
+const emptyForm: ModelConfigFormValues = {
   providerName: "",
   displayName: "",
   modelName: "",
@@ -38,41 +56,76 @@ const emptyForm: Required<ModelConfigPayload> = {
 };
 
 export function ModelConfigsPage() {
+  const [form] = Form.useForm<ModelConfigFormValues>();
   const [configs, setConfigs] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<number | "draft" | null>(null);
   const [editingConfig, setEditingConfig] = useState<ModelConfig | null>(null);
-  const [form, setForm] = useState<Required<ModelConfigPayload>>(emptyForm);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [noticeMessage, setNoticeMessage] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPresetKey, setSelectedPresetKey] = useState("deepseek");
 
   useEffect(() => {
     void loadConfigs();
   }, []);
 
+  const columns = useMemo<TableColumnsType<ModelConfig>>(
+    () => [
+      { title: "供应商", dataIndex: "providerName", width: 130 },
+      { title: "展示名", dataIndex: "displayName", width: 160 },
+      { title: "模型名", dataIndex: "modelName", width: 180 },
+      { title: "Base URL", dataIndex: "baseUrl", ellipsis: true },
+      { title: "币种", dataIndex: "currency", width: 84 },
+      {
+        title: "密钥",
+        width: 130,
+        render: (_, row) => <Tag color={row.hasApiKey ? "green" : "orange"}>{row.hasApiKey ? row.maskedApiKey : "未配置"}</Tag>
+      },
+      {
+        title: "启用",
+        width: 90,
+        render: (_, row) => <Switch checked={row.enabled} onChange={() => void toggleEnabled(row)} />
+      },
+      {
+        title: "操作",
+        width: 230,
+        fixed: "right",
+        render: (_, row) => (
+          <Space>
+            <Button size="small" onClick={() => openEditModal(row)}>编辑</Button>
+            <Button size="small" loading={testingId === row.id} onClick={() => void testSavedConfig(row)}>测试</Button>
+            <Button size="small" danger onClick={() => confirmDelete(row)}>删除</Button>
+          </Space>
+        )
+      }
+    ],
+    [testingId]
+  );
+
   async function loadConfigs(): Promise<void> {
     setLoading(true);
-    setErrorMessage("");
     try {
       setConfigs(await listModelConfigs());
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "模型配置加载失败"));
+      message.error(getErrorMessage(error, "模型配置加载失败"));
     } finally {
       setLoading(false);
     }
   }
 
-  function startCreate(): void {
+  function openCreateModal(): void {
     const firstPreset = providerPresets[0];
     setEditingConfig(null);
-    setForm({ ...emptyForm, providerName: firstPreset.providerName, baseUrl: firstPreset.baseUrl });
-    setNoticeMessage("");
+    setSelectedPresetKey(firstPreset.key);
+    form.setFieldsValue({ ...emptyForm, providerName: firstPreset.providerName, baseUrl: firstPreset.baseUrl });
+    setModalOpen(true);
   }
 
-  function startEdit(config: ModelConfig): void {
+  function openEditModal(config: ModelConfig): void {
+    const preset = providerPresets.find((item) => item.providerName === config.providerName);
     setEditingConfig(config);
-    setForm({
+    setSelectedPresetKey(preset?.key ?? "custom");
+    form.setFieldsValue({
       providerName: config.providerName,
       displayName: config.displayName,
       modelName: config.modelName,
@@ -89,67 +142,82 @@ export function ModelConfigsPage() {
       priceCacheHit: config.priceCacheHit,
       priceCacheCreation: config.priceCacheCreation
     });
-    setNoticeMessage("");
+    setModalOpen(true);
+  }
+
+  function selectPreset(key: string): void {
+    const preset = providerPresets.find((item) => item.key === key);
+    if (!preset) {
+      return;
+    }
+    setSelectedPresetKey(key);
+    form.setFieldsValue({ providerName: preset.providerName, baseUrl: preset.baseUrl });
   }
 
   async function saveConfig(): Promise<void> {
-    if (!form.providerName.trim() || !form.displayName.trim() || !form.modelName.trim() || !form.baseUrl.trim()) {
-      setErrorMessage("请填写供应商、展示名、模型名和 Base URL");
-      return;
-    }
+    const values = await form.validateFields();
     setSaving(true);
-    setErrorMessage("");
     try {
-      const payload = buildPayload(form, !editingConfig);
+      const payload = buildPayload(values, !editingConfig);
       if (editingConfig) {
         await updateModelConfig(editingConfig.id, payload);
       } else {
         await createModelConfig(payload);
       }
-      setNoticeMessage("模型配置已保存");
+      message.success("模型配置已保存");
+      setModalOpen(false);
       await loadConfigs();
-      startCreate();
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "模型配置保存失败"));
+      message.error(getErrorMessage(error, "模型配置保存失败"));
     } finally {
       setSaving(false);
     }
   }
 
   async function toggleEnabled(config: ModelConfig): Promise<void> {
-    setErrorMessage("");
     try {
       await updateModelConfig(config.id, { enabled: !config.enabled });
       await loadConfigs();
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "启用状态更新失败"));
+      message.error(getErrorMessage(error, "启用状态更新失败"));
     }
   }
 
-  async function removeConfig(config: ModelConfig): Promise<void> {
-    if (!window.confirm(`确认删除 ${config.displayName}？历史回答会保留模型快照。`)) {
-      return;
-    }
-    setErrorMessage("");
+  function confirmDelete(config: ModelConfig): void {
+    Modal.confirm({
+      title: "删除模型配置",
+      content: `确认删除 ${config.displayName}？历史回答会保留模型快照。`,
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        await deleteModelConfig(config.id);
+        message.success("模型配置已删除");
+        await loadConfigs();
+      }
+    });
+  }
+
+  async function testSavedConfig(config: ModelConfig): Promise<void> {
+    setTestingId(config.id);
     try {
-      await deleteModelConfig(config.id);
-      await loadConfigs();
+      const result = await testModelConfig({ modelConfigId: config.id });
+      result.success ? message.success(`${result.message}，耗时 ${result.latencyMs}ms`) : message.error(result.message);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "模型配置删除失败"));
+      message.error(getErrorMessage(error, "连接测试失败"));
+    } finally {
+      setTestingId(null);
     }
   }
 
-  async function testConfig(config?: ModelConfig): Promise<void> {
-    setTestingId(config?.id ?? "draft");
-    setErrorMessage("");
-    setNoticeMessage("");
+  async function testDraftConfig(): Promise<void> {
+    const values = await form.validateFields();
+    setTestingId("draft");
     try {
-      const result = await testModelConfig(config ? { modelConfigId: config.id } : buildTestPayload(form, editingConfig?.id));
-      result.success
-        ? setNoticeMessage(`${result.message}，耗时 ${result.latencyMs}ms`)
-        : setErrorMessage(result.message);
+      const result = await testModelConfig(buildTestPayload(values, editingConfig?.id));
+      result.success ? message.success(`${result.message}，耗时 ${result.latencyMs}ms`) : message.error(result.message);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "连接测试失败"));
+      message.error(getErrorMessage(error, "连接测试失败"));
     } finally {
       setTestingId(null);
     }
@@ -162,156 +230,126 @@ export function ModelConfigsPage() {
           <p className="eyebrow">Model Providers</p>
           <h2>模型配置</h2>
         </div>
-        <button type="button" onClick={() => void loadConfigs()}>
-          {loading ? "刷新中" : "刷新"}
-        </button>
+        <Space>
+          <Button loading={loading} onClick={() => void loadConfigs()}>刷新</Button>
+          <Button type="primary" onClick={openCreateModal}>新增配置</Button>
+        </Space>
       </header>
-      {errorMessage ? <p className="alert-message error">{errorMessage}</p> : null}
-      {noticeMessage ? <p className="alert-message success">{noticeMessage}</p> : null}
-      <section className="admin-grid">
-        <div className="admin-table-panel">
-          <div className="section-head">
-            <div>
-              <p className="panel-label">配置列表</p>
-              <h3>可调用模型</h3>
-            </div>
-            <span>{configs.length} 项</span>
-          </div>
-          <div className="table-list">
-            {configs.map((config) => (
-              <article key={config.id} className="table-row-card">
-                <div>
-                  <strong>{config.displayName}</strong>
-                  <span>{config.providerName} · {config.modelName}</span>
-                  <small>{config.baseUrl}</small>
-                </div>
-                <div className="table-row-meta">
-                  <i>{config.currency}</i>
-                  <i>{config.hasApiKey ? config.maskedApiKey : "未配置密钥"}</i>
-                  <i className={config.enabled ? "completed" : "failed"}>{config.enabled ? "启用" : "禁用"}</i>
-                </div>
-                <div className="row-actions">
-                  <button type="button" onClick={() => startEdit(config)}>编辑</button>
-                  <button type="button" disabled={testingId === config.id} onClick={() => void testConfig(config)}>
-                    {testingId === config.id ? "测试中" : "测试"}
-                  </button>
-                  <button type="button" onClick={() => void toggleEnabled(config)}>
-                    {config.enabled ? "禁用" : "启用"}
-                  </button>
-                  <button type="button" className="danger" onClick={() => void removeConfig(config)}>删除</button>
-                </div>
-              </article>
-            ))}
-            {!loading && configs.length === 0 ? <p className="empty-note">暂无模型配置。</p> : null}
-          </div>
-        </div>
-        <ModelConfigForm
-          form={form}
-          editingConfig={editingConfig}
-          saving={saving}
-          testingDraft={testingId === "draft"}
-          onChange={setForm}
-          onSave={() => void saveConfig()}
-          onTest={() => void testConfig()}
-          onCreate={startCreate}
+      <Card className="admin-table-panel" styles={{ body: { padding: 0 } }}>
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={configs}
+          loading={loading}
+          scroll={{ x: 1120 }}
+          pagination={false}
         />
-      </section>
+      </Card>
+      <Modal
+        title={editingConfig ? "编辑模型配置" : "新增模型配置"}
+        open={modalOpen}
+        width="min(760px, 94vw)"
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={saving}
+        onOk={() => void saveConfig()}
+        onCancel={() => setModalOpen(false)}
+        footer={(_, { OkBtn, CancelBtn }) => (
+          <>
+            <CancelBtn />
+            <Button loading={testingId === "draft"} onClick={() => void testDraftConfig()}>测试连接</Button>
+            <OkBtn />
+          </>
+        )}
+      >
+        <Form form={form} layout="vertical" initialValues={emptyForm}>
+          {!editingConfig ? (
+            <section className="mb-4">
+              <p className="panel-label">选择供应商</p>
+              <div className="provider-preset-grid">
+                {providerPresets.map((preset) => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    className={selectedPresetKey === preset.key ? "provider-preset active" : "provider-preset"}
+                    onClick={() => selectPreset(preset.key)}
+                  >
+                    <strong>{preset.label}</strong>
+                    <span>{preset.description}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
+          <div className="form-grid form-grid-two">
+            <Form.Item label="供应商名称" name="providerName" rules={[{ required: true, message: "请填写供应商名称" }]}>
+              <Input placeholder="例如 deepseek" />
+            </Form.Item>
+            <Form.Item label="展示名" name="displayName" rules={[{ required: true, message: "请填写展示名" }]}>
+              <Input placeholder="评测页显示的名称" />
+            </Form.Item>
+          </div>
+          <Form.Item label="模型名" name="modelName" rules={[{ required: true, message: "请填写模型名" }]}>
+            <Input placeholder="复制官方文档中的 Model ID" />
+          </Form.Item>
+          <Form.Item label="API Key" name="apiKey">
+            <Input.Password placeholder={editingConfig?.hasApiKey ? "留空保留现有密钥" : "粘贴供应商控制台创建的 API Key"} />
+          </Form.Item>
+          <Form.Item label="启用状态" name="enabled" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: "advanced",
+                label: "高级选项",
+                children: (
+                  <>
+                    <Form.Item label="Base URL" name="baseUrl" rules={[{ required: true, message: "请填写 Base URL" }]}>
+                      <Input placeholder="例如 https://api.example.com/v1" />
+                    </Form.Item>
+                    <div className="form-grid form-grid-two">
+                      <Form.Item label="温度" name="temperature">
+                        <InputNumber min={0} max={2} step={0.1} className="w-full" />
+                      </Form.Item>
+                      <Form.Item label="最大输出 Token" name="maxTokens">
+                        <InputNumber min={1} step={128} className="w-full" />
+                      </Form.Item>
+                      <Form.Item label="请求超时（秒）" name="timeoutSeconds">
+                        <InputNumber min={1} max={600} step={5} className="w-full" />
+                      </Form.Item>
+                      <Form.Item label="计费币种" name="currency">
+                        <Select options={[{ value: "CNY", label: "人民币 CNY" }, { value: "USD", label: "美元 USD" }]} />
+                      </Form.Item>
+                      <Form.Item label="输入价格" name="priceInput">
+                        <InputNumber min={0} step={0.1} className="w-full" />
+                      </Form.Item>
+                      <Form.Item label="输出价格" name="priceOutput">
+                        <InputNumber min={0} step={0.1} className="w-full" />
+                      </Form.Item>
+                      <Form.Item label="缓存命中价格" name="priceCacheHit">
+                        <InputNumber min={0} step={0.1} className="w-full" />
+                      </Form.Item>
+                      <Form.Item label="缓存创建价格" name="priceCacheCreation">
+                        <InputNumber min={0} step={0.1} className="w-full" />
+                      </Form.Item>
+                    </div>
+                    <Form.Item label="管理员备注" name="notes">
+                      <Input.TextArea rows={3} maxLength={2000} showCount />
+                    </Form.Item>
+                  </>
+                )
+              }
+            ]}
+          />
+        </Form>
+      </Modal>
     </section>
   );
 }
 
-function ModelConfigForm({
-  form,
-  editingConfig,
-  saving,
-  testingDraft,
-  onChange,
-  onSave,
-  onTest,
-  onCreate
-}: {
-  form: Required<ModelConfigPayload>;
-  editingConfig: ModelConfig | null;
-  saving: boolean;
-  testingDraft: boolean;
-  onChange: (form: Required<ModelConfigPayload>) => void;
-  onSave: () => void;
-  onTest: () => void;
-  onCreate: () => void;
-}) {
-  function patch(next: Partial<Required<ModelConfigPayload>>): void {
-    onChange({ ...form, ...next });
-  }
-
-  return (
-    <form className="admin-form" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-      <div className="section-head">
-        <div>
-          <p className="panel-label">{editingConfig ? "编辑配置" : "新增配置"}</p>
-          <h3>{editingConfig ? editingConfig.displayName : "新模型"}</h3>
-        </div>
-        <button type="button" onClick={onCreate}>新建</button>
-      </div>
-      {!editingConfig ? (
-        <div className="preset-grid">
-          {providerPresets.map((preset) => (
-            <button
-              key={preset.key}
-              type="button"
-              className={form.providerName === preset.providerName && form.baseUrl === preset.baseUrl ? "selected" : ""}
-              onClick={() => patch({ providerName: preset.providerName, baseUrl: preset.baseUrl })}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className="form-grid">
-        <TextField label="供应商" value={form.providerName} onChange={(value) => patch({ providerName: value })} />
-        <TextField label="展示名" value={form.displayName} onChange={(value) => patch({ displayName: value })} />
-        <TextField label="模型名" value={form.modelName} onChange={(value) => patch({ modelName: value })} />
-        <TextField label="Base URL" value={form.baseUrl} onChange={(value) => patch({ baseUrl: value })} />
-        <TextField label="API Key" type="password" value={form.apiKey || ""} onChange={(value) => patch({ apiKey: value })} />
-        <NumberField label="最大输出" value={form.maxTokens} onChange={(value) => patch({ maxTokens: value })} />
-        <NumberField label="温度" value={form.temperature} step={0.1} onChange={(value) => patch({ temperature: value })} />
-        <NumberField label="超时秒数" value={form.timeoutSeconds} onChange={(value) => patch({ timeoutSeconds: value })} />
-        <label>
-          币种
-          <select value={form.currency} onChange={(event) => patch({ currency: event.target.value as "CNY" | "USD" })}>
-            <option value="CNY">CNY</option>
-            <option value="USD">USD</option>
-          </select>
-        </label>
-        <NumberField label="输入价格" value={form.priceInput} step={0.1} onChange={(value) => patch({ priceInput: value })} />
-        <NumberField label="输出价格" value={form.priceOutput} step={0.1} onChange={(value) => patch({ priceOutput: value })} />
-        <NumberField label="缓存命中" value={form.priceCacheHit} step={0.1} onChange={(value) => patch({ priceCacheHit: value })} />
-        <NumberField label="缓存创建" value={form.priceCacheCreation} step={0.1} onChange={(value) => patch({ priceCacheCreation: value })} />
-      </div>
-      <label>
-        备注
-        <textarea value={form.notes} rows={3} onChange={(event) => patch({ notes: event.target.value })} />
-      </label>
-      <label className="inline-check">
-        <input type="checkbox" checked={form.enabled} onChange={(event) => patch({ enabled: event.target.checked })} />
-        启用模型
-      </label>
-      <div className="form-actions">
-        <button type="button" disabled={testingDraft} onClick={onTest}>{testingDraft ? "测试中" : "测试连接"}</button>
-        <button type="submit" disabled={saving}>{saving ? "保存中" : "保存"}</button>
-      </div>
-    </form>
-  );
-}
-
-function TextField({ label, type = "text", value, onChange }: { label: string; type?: string; value: string; onChange: (value: string) => void }) {
-  return <label>{label}<input type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>;
-}
-
-function NumberField({ label, value, step = 1, onChange }: { label: string; value: number; step?: number; onChange: (value: number) => void }) {
-  return <label>{label}<input type="number" min={0} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /></label>;
-}
-
-function buildPayload(form: Required<ModelConfigPayload>, includeEmptyApiKey: boolean): ModelConfigPayload {
+function buildPayload(form: ModelConfigFormValues, includeEmptyApiKey: boolean): ModelConfigPayload {
   const payload: ModelConfigPayload = { ...form, apiKey: undefined };
   if (includeEmptyApiKey || form.apiKey?.trim()) {
     payload.apiKey = form.apiKey?.trim() || "";
@@ -319,7 +357,7 @@ function buildPayload(form: Required<ModelConfigPayload>, includeEmptyApiKey: bo
   return payload;
 }
 
-function buildTestPayload(form: Required<ModelConfigPayload>, modelConfigId?: number): ModelConfigPayload & { modelConfigId?: number } {
+function buildTestPayload(form: ModelConfigFormValues, modelConfigId?: number): ModelConfigPayload & { modelConfigId?: number } {
   return { ...buildPayload(form, false), modelConfigId };
 }
 

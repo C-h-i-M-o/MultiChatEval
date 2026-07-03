@@ -11,7 +11,7 @@
 
 阶段一已完成：
 
-- `frontend/` 使用 React 19、TypeScript、Vite、React Router 和 Vitest。
+- `frontend/` 使用 React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design 和 Recharts。
 - React 前端已接入 `/api/health` 与 `/api/auth/me`，用于系统健康检查和登录态恢复。
 - 新增 `scripts/start-react-local.sh`，可一键启动 MySQL、FastAPI 后端和 React 前端。
 

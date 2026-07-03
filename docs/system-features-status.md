@@ -18,7 +18,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 React 重构阶段应以当前 Vue 前端能力为基线，优先迁移已实现页面和交互，不借重构扩大后端功能范围。
 
-当前 React 重构阶段五已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 并行验收。Vue 前端已移动到 `vue-frontend/` 并在本阶段继续作为可运行基线保留。
+当前 React 重构阶段五已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Tailwind CSS、Ant Design、Recharts、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。`scripts/start-react-local.sh` 可一键启动 React 版本全栈项目，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 并行验收。Vue 前端已移动到 `vue-frontend/` 并在本阶段继续作为可运行基线保留。
 
 ## 2. 前端功能
 
@@ -664,7 +664,7 @@ final =
 - 启动脚本会在默认端口被占用时自动向后寻找可用端口，并把实际后端地址传给 Vite 代理。
 - 后端可通过 `uvicorn app.main:app --reload` 启动。
 - 前端可通过 `pnpm dev` 启动；`vue-frontend/pnpm-workspace.yaml` 的 `onlyBuiltDependencies` 已允许 `esbuild`、`vue-demi` 执行 pnpm 10 必要的依赖构建脚本。
-- React 前端可在 `frontend/` 下通过 `pnpm dev` 启动，默认端口为 `5174`。
+- React 前端可在 `frontend/` 下通过 `pnpm dev` 启动，默认端口为 `5174`；`frontend/pnpm-workspace.yaml` 固定 `picomatch@4.0.4`，避免新版 pnpm minimum release age 策略拦截刚发布的传递依赖。
 - 前端通过 Vite 代理或同源 `/api` 访问后端接口。
 
 ## 8. 测试覆盖

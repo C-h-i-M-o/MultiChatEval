@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button, Modal, Space } from "antd";
 
 import { isPendingResponse } from "../features/evaluation/evaluation";
 import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
@@ -30,7 +31,7 @@ export function ModelResponseCard({
   showComments = false,
   onFeedback
 }: ModelResponseCardProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [detailVisible, setDetailVisible] = useState(false);
 
   if (isPendingResponse(response)) {
     return (
@@ -74,28 +75,33 @@ export function ModelResponseCard({
         <ScoreBar label="清晰度" value={score.clarity} />
       </div>
       <footer className="card-actions">
-        <button
-          type="button"
+        <Button
           className={feedback.liked ? "active" : ""}
           disabled={feedbackSubmitting}
           onClick={() => onFeedback(response.id, "like")}
         >
           点赞 {feedback.likeCount}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          danger
           className={feedback.disliked ? "danger active" : "danger"}
           disabled={feedbackSubmitting}
           onClick={() => onFeedback(response.id, "dislike")}
         >
           点踩 {feedback.dislikeCount}
-        </button>
-        <button type="button" className="secondary" onClick={() => setExpanded((visible) => !visible)}>
-          {expanded ? "收起详情" : "查看全文"}
-        </button>
+        </Button>
+        <Button type="primary" ghost onClick={() => setDetailVisible(true)}>
+          查看全文
+        </Button>
       </footer>
-      {expanded ? (
-        <section className="response-detail">
+      <Modal
+        title={`${response.modelName} · 回答详情`}
+        open={detailVisible}
+        width="min(860px, 94vw)"
+        footer={null}
+        onCancel={() => setDetailVisible(false)}
+      >
+        <section className="response-detail-modal">
           <MarkdownRenderer content={response.answer} />
           <div className="score-detail-list">
             {dimensionLabels.map((dimension) => {
@@ -105,8 +111,10 @@ export function ModelResponseCard({
                 <article key={dimension.key} className="score-detail-item">
                   <header>
                     <span>{dimension.label}</span>
-                    <strong>{typeof value === "number" ? `${formatScore(value)} / 10` : "-"}</strong>
-                    <em>权重 {dimension.weight}</em>
+                    <Space size={8}>
+                      <strong>{typeof value === "number" ? `${formatScore(value)} / 10` : "-"}</strong>
+                      <em>权重 {dimension.weight}</em>
+                    </Space>
                   </header>
                   <ul>
                     {details.map((detail) => (
@@ -120,8 +128,10 @@ export function ModelResponseCard({
           <article className="score-detail-item">
             <header>
               <span>用户反馈</span>
-              <strong>{feedback.liked ? "已点赞" : feedback.disliked ? "已点踩" : "未反馈"}</strong>
-              <em>权重 10%</em>
+              <Space size={8}>
+                <strong>{feedback.liked ? "已点赞" : feedback.disliked ? "已点踩" : "未反馈"}</strong>
+                <em>权重 10%</em>
+              </Space>
             </header>
             <p>
               点赞 {feedback.likeCount} 次，点踩 {feedback.dislikeCount} 次。
@@ -134,15 +144,17 @@ export function ModelResponseCard({
             <article className="score-detail-item">
               <header>
                 <span>LLM 评审理由</span>
-                <strong>{formatScore(score.judgeFinal)} / 10</strong>
-                <em>权重 40%</em>
+                <Space size={8}>
+                  <strong>{formatScore(score.judgeFinal)} / 10</strong>
+                  <em>权重 40%</em>
+                </Space>
               </header>
               <p>{score.judgeComment}</p>
             </article>
           ) : null}
           {showComments ? <CommentPanel responseId={response.id} /> : null}
         </section>
-      ) : null}
+      </Modal>
     </article>
   );
 }

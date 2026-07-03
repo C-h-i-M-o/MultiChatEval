@@ -31,7 +31,7 @@
 落地结果：
 
 - React 前端目录为 `frontend/`。
-- 技术栈为 React 19、TypeScript、Vite、React Router 和 Vitest。
+- 技术栈为 React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design 和 Recharts。
 - `pnpm test` 覆盖阶段一 API 客户端。
 - `pnpm build` 可完成 TypeScript 严格检查和 Vite 生产构建。
 - `scripts/start-react-local.sh` 可启动 React 版本全栈项目。

@@ -37,7 +37,7 @@ MySQL
 frontend/
   src/
     api/client.ts              类型化 API 客户端、认证请求、评测流、管理页和反馈统计请求
-    components/                Markdown 渲染、评分条、回答卡片和评论面板
+    components/                Markdown 渲染、评分条、回答卡片、评论面板和组件库弹窗
     features/auth/             登录态恢复、认证上下文和错误识别
     features/evaluation/       评测类型、NDJSON 状态合并和回答内容处理
     features/history/          历史任务状态、时间和反馈合并工具
@@ -48,7 +48,7 @@ frontend/
     App.tsx                    路由声明
     main.tsx                   React 挂载与 BrowserRouter
     styles.css                 认证页和基础布局样式
-  vite.config.ts               Vite React 插件与 /api 开发代理
+  vite.config.ts               Vite React 插件、Tailwind 插件与 /api 开发代理
   package.json                 pnpm 脚本和依赖
 ```
 

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
+import { Button, Input, Segmented, Select, Space, Switch } from "antd";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -13,6 +15,8 @@ import { ModelResponseCard } from "../components/ModelResponseCard";
 import { useAuth } from "../features/auth/AuthContext";
 import { applyFeedbackResult, createPendingResponses, mergeStreamEvent } from "../features/evaluation/evaluation";
 import type { AvailableModelConfig, EvaluationTaskState } from "../features/evaluation/types";
+
+const { TextArea } = Input;
 
 export function EvaluationPage() {
   const { user } = useAuth();
@@ -163,6 +167,16 @@ export function EvaluationPage() {
     setSelectedModelIds((ids) => (ids.includes(modelId) ? ids.filter((id) => id !== modelId) : [...ids, modelId]));
   }
 
+  function handlePromptKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    if (canSubmit) {
+      void submitTask();
+    }
+  }
+
   return (
     <section className="evaluation-page">
       <header className="page-head">
@@ -180,9 +194,9 @@ export function EvaluationPage() {
             <p>{user?.role === "admin" ? "请进入模型配置启用模型并填写 API Key。" : "请联系管理员配置可用模型。"}</p>
           </div>
           {user?.role === "admin" ? (
-            <button type="button" onClick={() => navigate("/models")}>
+            <Button type="primary" onClick={() => navigate("/models")}>
               去配置
-            </button>
+            </Button>
           ) : null}
         </section>
       ) : null}
@@ -205,8 +219,8 @@ export function EvaluationPage() {
             <p className="panel-label">用户问题</p>
             <h3>创建一次多模型评测</h3>
           </div>
-          <div className="query-switches">
-            <SegmentedControl
+          <Space className="query-switches" wrap>
+            <Segmented<EvaluationVisibility>
               value={visibility}
               disabled={loading}
               options={[
@@ -215,59 +229,62 @@ export function EvaluationPage() {
               ]}
               onChange={(nextValue) => setVisibility(nextValue)}
             />
-            <label>
-              <input
-                type="checkbox"
+            <Space size={6}>
+              <Switch
                 checked={enableThinking}
                 disabled={loading}
-                onChange={(event) => setEnableThinking(event.target.checked)}
+                onChange={(checked) => setEnableThinking(checked)}
               />
               思考模式
-            </label>
-            <label>
-              <input
-                type="checkbox"
+            </Space>
+            <Space size={6}>
+              <Switch
                 checked={enableJudge}
                 disabled={loading}
-                onChange={(event) => setEnableJudge(event.target.checked)}
+                onChange={(checked) => setEnableJudge(checked)}
               />
               LLM 评审
-            </label>
-          </div>
+            </Space>
+          </Space>
         </div>
-        <textarea value={prompt} disabled={loading} rows={5} onChange={(event) => setPrompt(event.target.value)} />
+        <TextArea
+          value={prompt}
+          disabled={loading}
+          rows={5}
+          placeholder="输入问题后按 Enter 发起评测，Shift + Enter 换行"
+          onChange={(event) => setPrompt(event.target.value)}
+          onKeyDown={handlePromptKeyDown}
+        />
         <div className="model-row">
           <div className="model-options">
             {availableModels.map((modelConfig) => (
-              <button
+              <Button
                 key={modelConfig.id}
-                type="button"
                 className={selectedModelSet.has(modelConfig.id) ? "selected" : ""}
                 disabled={loading}
                 onClick={() => toggleModel(modelConfig.id)}
               >
                 {modelConfig.displayName}
-              </button>
+              </Button>
             ))}
           </div>
-          <button type="button" className="primary-action" disabled={!canSubmit} onClick={() => void submitTask()}>
+          <Button type="primary" className="primary-action" disabled={!canSubmit} onClick={() => void submitTask()}>
             {loading ? "等待模型响应" : "开始评测"}
-          </button>
+          </Button>
         </div>
         {enableJudge ? (
           <div className="judge-row">
             <span className="panel-label">评审模型</span>
-            <select
+            <Select
               value={judgeModelId ?? ""}
               disabled={loading}
-              onChange={(event) => setJudgeModelId(Number(event.target.value))}
-            >
-              {availableModels.map((modelConfig) => (
-                <option key={modelConfig.id} value={modelConfig.id}>
-                  {modelConfig.displayName}
-                </option>
-              ))}
-            </select>
+              style={{ minWidth: 240 }}
+              options={availableModels.map((modelConfig) => ({
+                value: modelConfig.id,
+                label: modelConfig.displayName
+              }))}
+              onChange={(value) => setJudgeModelId(Number(value))}
+            />
           </div>
         ) : null}
       </section>
@@ -346,32 +363,4 @@ function AlertMessage({ message, tone }: { message: string; tone: "warning" | "e
     return null;
   }
   return <p className={`alert-message ${tone}`}>{message}</p>;
-}
-
-function SegmentedControl<T extends string>({
-  value,
-  disabled,
-  options,
-  onChange
-}: {
-  value: T;
-  disabled: boolean;
-  options: Array<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="segmented-control">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className={option.value === value ? "selected" : ""}
-          disabled={disabled}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
 }

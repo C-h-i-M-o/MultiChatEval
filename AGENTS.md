@@ -18,7 +18,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
 - 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 重构目标前端：React 19、TypeScript、Vite、React Router，独立目录 `frontend/` 并复用现有后端 API
+- 重构目标前端：React 19、TypeScript、Vite、React Router、Tailwind CSS、Ant Design、Recharts，独立目录 `frontend/` 并复用现有后端 API
 - 数据库：MySQL 8
 - 本地数据库环境：Docker Compose
 - 包管理：前端优先使用 pnpm
@@ -129,7 +129,7 @@ MultiChatEval/
 ### React 重构前端
 
 - 独立目录：`frontend/`
-- 技术栈：React 19、TypeScript、Vite、React Router、Vitest
+- 技术栈：React 19、TypeScript、Vite、React Router、Vitest、Tailwind CSS、Ant Design、Recharts
 - 阶段一已完成：
     - 独立依赖、测试、构建和开发服务命令
     - Vite `/api` 开发代理，默认代理到 FastAPI 后端
@@ -353,6 +353,7 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 - 现有 Vue 前端使用 JavaScript，不使用 TypeScript。
 - React 重构阶段需要先补充设计文档，明确目录、技术栈、路由、状态管理、API 封装和验收标准后再编码。
 - 前端包管理优先使用 pnpm。
+- React 前端使用 `frontend/pnpm-workspace.yaml` 固定 `picomatch@4.0.4`，避免新版 pnpm minimum release age 策略拦截刚发布的传递依赖。
 - 后端尽量补充类型标注。
 - 不要把 API Key、数据库密码等真实敏感信息提交到仓库。
 - 文件修改前需要确认用户授权。

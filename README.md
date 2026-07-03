@@ -30,7 +30,7 @@ v2 已提供按角色分流的反馈统计：普通用户查看个人评测表�
 
 - 后端：Python、FastAPI、SQLAlchemy 2.0、Alembic、Pydantic Settings、pytest
 - 现有前端：Vue 3、JavaScript、Vite、Pinia、Vue Router、Axios、Element Plus、Markdown-it、DOMPurify、GSAP
-- 当前主前端：React 19、TypeScript、Vite、React Router，位于 `frontend/`
+- 当前主前端：React 19、TypeScript、Vite、React Router、Tailwind CSS、Ant Design、Recharts，位于 `frontend/`
 - 数据库：MySQL 8
 - 本地环境：Docker Compose
 
@@ -86,6 +86,8 @@ React 版本脚本同样会准备 `.env`、MySQL、后端虚拟环境、数据�
 - macOS 自带的 `curl` 和 `lsof`。
 
 Vue 版本脚本会按 `backend/pyproject.toml` 和 `vue-frontend/pnpm-lock.yaml` 校验依赖；React 版本脚本会按 `backend/pyproject.toml` 和 `frontend/pnpm-lock.yaml` 校验依赖。两个脚本都会在前后端真实可访问后才提示启动完成。
+
+React 前端通过 `frontend/pnpm-workspace.yaml` 固定 `picomatch@4.0.4`。这是为了避开新版 pnpm minimum release age 策略对刚发布传递依赖的拦截，保证 VSCode、系统终端和 Codex 终端都能按锁文件稳定安装。
 
 如果默认端口已被占用，脚本会自动向后寻找可用端口，并把实际后端地址同步给 Vite 代理。也可以通过 `BACKEND_PORT=8001 FRONTEND_PORT=5174 ./scripts/start-local.sh` 指定起始端口。
 
