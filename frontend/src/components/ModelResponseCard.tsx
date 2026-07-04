@@ -1,13 +1,16 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { Button, Modal, Space } from "antd";
 
 import { animateModalIn } from "../animations/pageMotion";
 import { isPendingResponse } from "../features/evaluation/evaluation";
 import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
 import { toAnswerPreview } from "../features/evaluation/content";
-import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CommentPanel } from "./CommentPanel";
 import { formatScore, ScoreBar } from "./ScoreBar";
+
+const MarkdownRenderer = lazy(() =>
+  import("./MarkdownRenderer").then((module) => ({ default: module.MarkdownRenderer }))
+);
 
 interface ModelResponseCardProps {
   response: DisplayModelResponse;
@@ -109,7 +112,9 @@ export function ModelResponseCard({
         }}
       >
         <section ref={detailRef} className="response-detail-modal">
-          <MarkdownRenderer content={response.answer} />
+          <Suspense fallback={<p className="empty-note">正在加载回答内容...</p>}>
+            <MarkdownRenderer content={response.answer} />
+          </Suspense>
           <div className="score-detail-list">
             {dimensionLabels.map((dimension) => {
               const value = score[dimension.key];
