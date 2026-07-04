@@ -18,7 +18,8 @@ from app.services.evaluation_service import (
     EvaluationResponseNotFoundError,
     evaluation_service,
 )
-from app.services.evaluation_service import EvaluationTaskNotFoundError
+from app.services.evaluation_service import EvaluationTaskNotFoundError, EvaluationTaskValidationError
+from app.services.token_quota_service import token_quota_service
 
 
 @pytest.fixture(autouse=True)
@@ -45,6 +46,54 @@ def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> Non
     )
 
     assert response.status_code == 422
+
+
+def test_create_evaluation_task_returns_400_when_judge_model_is_tested(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_ensure_can_start(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def fake_create_task(*_args: object, **_kwargs: object) -> None:
+        raise EvaluationTaskValidationError("LLM 评审模型不能同时作为被测模型")
+
+    monkeypatch.setattr(token_quota_service, "ensure_can_start", fake_ensure_can_start)
+    monkeypatch.setattr(evaluation_service, "create_task", fake_create_task)
+
+    response = TestClient(app).post(
+        "/api/evaluation/tasks",
+        json={
+            "prompt": "测试问题",
+            "modelIds": [1],
+            "enableJudge": True,
+            "judgeModelId": 2,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "LLM 评审模型不能同时作为被测模型"}
+
+
+def test_stream_evaluation_task_returns_400_when_judge_model_is_tested(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_ensure_can_start(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def fake_validate_task_models(*_args: object, **_kwargs: object) -> None:
+        raise EvaluationTaskValidationError("LLM 评审模型不能同时作为被测模型")
+
+    monkeypatch.setattr(token_quota_service, "ensure_can_start", fake_ensure_can_start)
+    monkeypatch.setattr(evaluation_service, "validate_task_models", fake_validate_task_models)
+
+    response = TestClient(app).post(
+        "/api/evaluation/tasks/stream",
+        json={
+            "prompt": "测试问题",
+            "modelIds": [1],
+            "enableJudge": True,
+            "judgeModelId": 2,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "LLM 评审模型不能同时作为被测模型"}
 
 
 def test_get_evaluation_task_returns_404_when_task_missing(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,9 +1,11 @@
+import json
+from collections.abc import AsyncIterator
 from decimal import Decimal
 from time import perf_counter
 
 import httpx
 
-from app.adapters.base import ModelClient, ModelCostDetails, ModelReply, ModelRequest, ModelUsage
+from app.adapters.base import ModelClient, ModelCostDetails, ModelReply, ModelRequest, ModelStreamEvent, ModelUsage
 
 TOKENS_PER_MILLION = Decimal("1000000")
 
@@ -67,6 +69,91 @@ class OpenAICompatibleClient(ModelClient):
         latency_ms = int((perf_counter() - started_at) * 1000)
         return ModelReply(answer=answer, usage=usage, latency_ms=latency_ms)
 
+    async def stream_chat(self, request: ModelRequest) -> AsyncIterator[ModelStreamEvent]:
+        if not self.api_key:
+            raise ValueError(f"{self.model_name} 未配置 API Key")
+        if not self.base_url:
+            raise ValueError(f"{self.model_name} 未配置 Base URL")
+
+        started_at = perf_counter()
+        payload = {
+            "model": request.model_name,
+            "messages": [{"role": "user", "content": request.prompt}],
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "stream": True,
+        }
+        payload.update(self.extra_body)
+        payload.update(request.extra_body)
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        answer_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        content_parts: list[str] = []
+        usage_data: dict[str, object] = {}
+        reasoning_open = False
+        content_started = False
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                json=payload,
+                headers=headers,
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    chunk = self._parse_sse_line(line)
+                    if chunk is None:
+                        continue
+                    if chunk == "[DONE]":
+                        break
+
+                    data = json.loads(chunk)
+                    if isinstance(data.get("usage"), dict):
+                        usage_data = data["usage"]
+                    delta = self._extract_stream_delta(data)
+                    reasoning_delta = delta.get("reasoning_content")
+                    content_delta = delta.get("content")
+
+                    if reasoning_delta:
+                        reasoning_text = str(reasoning_delta)
+                        reasoning_parts.append(reasoning_text)
+                        if not reasoning_open:
+                            output = f"<think>\n{reasoning_text}"
+                            reasoning_open = True
+                        else:
+                            output = reasoning_text
+                        answer_parts.append(output)
+                        yield ModelStreamEvent(delta=output)
+
+                    if content_delta:
+                        content_text = str(content_delta)
+                        content_parts.append(content_text)
+                        output = content_text
+                        if reasoning_open and not content_started:
+                            output = f"\n</think>\n\n{content_text}"
+                        content_started = True
+                        answer_parts.append(output)
+                        yield ModelStreamEvent(delta=output)
+
+        if reasoning_open and not content_started:
+            closing = "\n</think>"
+            answer_parts.append(closing)
+            yield ModelStreamEvent(delta=closing)
+
+        answer = "".join(answer_parts).strip()
+        if not answer and (reasoning_parts or content_parts):
+            reasoning_content = "".join(reasoning_parts).strip()
+            content = "".join(content_parts)
+            answer = f"<think>\n{reasoning_content}\n</think>\n\n{content}".strip() if reasoning_content else content
+        usage = self.normalize_usage(
+            usage_data,
+            prompt_fallback=len(request.prompt),
+            answer_fallback=len(answer),
+        )
+        latency_ms = int((perf_counter() - started_at) * 1000)
+        yield ModelStreamEvent(delta="", reply=ModelReply(answer=answer, usage=usage, latency_ms=latency_ms))
+
     def get_model_name(self) -> str:
         return self.model_name
 
@@ -82,6 +169,26 @@ class OpenAICompatibleClient(ModelClient):
                 Decimal(usage.cache_creation_tokens) * self.cache_creation_price / TOKENS_PER_MILLION
             ),
         )
+
+    @staticmethod
+    def _parse_sse_line(line: str) -> str | None:
+        stripped_line = line.strip()
+        if not stripped_line or not stripped_line.startswith("data:"):
+            return None
+        return stripped_line.removeprefix("data:").strip()
+
+    @staticmethod
+    def _extract_stream_delta(data: object) -> dict[str, object]:
+        if not isinstance(data, dict):
+            return {}
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return {}
+        first_choice = choices[0]
+        if not isinstance(first_choice, dict):
+            return {}
+        delta = first_choice.get("delta")
+        return delta if isinstance(delta, dict) else {}
 
     @staticmethod
     def normalize_usage(

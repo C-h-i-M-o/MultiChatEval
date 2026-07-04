@@ -20,7 +20,7 @@ UML 图使用 PlantUML 编写，ER 图使用 Graphviz DOT 绘制。建议依次�
 
 ![MultiChatEval 系统组件图](./assert/component.png)
 
-前端通过统一 API 客户端访问后端。渐进接口使用 NDJSON 按模型完成顺序返回事件，不进行逐字 Token 流式输出。后端通过认证依赖和 `require_admin` 实施访问控制，并通过异步 SQLAlchemy 会话访问 MySQL。
+前端通过统一 API 客户端访问后端。流式接口使用 NDJSON 返回逐 token 增量、回答完成和最终评分结果事件。后端通过认证依赖和 `require_admin` 实施访问控制，并通过异步 SQLAlchemy 会话访问 MySQL。
 
 ## 4. 多模型渐进评测时序图
 

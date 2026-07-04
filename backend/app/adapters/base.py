@@ -43,6 +43,12 @@ class ModelReply:
     latency_ms: int
 
 
+@dataclass(frozen=True)
+class ModelStreamEvent:
+    delta: str
+    reply: ModelReply | None = None
+
+
 class ModelClient(ABC):
     @abstractmethod
     async def chat(self, request: ModelRequest) -> ModelReply:

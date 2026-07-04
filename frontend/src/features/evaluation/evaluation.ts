@@ -5,7 +5,8 @@ import type {
   EvaluationTaskState,
   FeedbackToggleResult,
   ModelResponse,
-  PendingModelResponse
+  PendingModelResponse,
+  StreamingModelResponse
 } from "./types";
 
 export function createPendingResponses(
@@ -19,6 +20,26 @@ export function createPendingResponses(
     modelName: modelNameMap.get(modelId) || `模型 ${modelId}`,
     pending: true
   }));
+}
+
+export function getIdleJudgeModels(
+  availableModels: AvailableModelConfig[],
+  selectedModelIds: number[]
+): AvailableModelConfig[] {
+  const selectedModelSet = new Set(selectedModelIds);
+  return availableModels.filter((modelConfig) => !selectedModelSet.has(modelConfig.id));
+}
+
+export function normalizeJudgeModelId(
+  currentJudgeModelId: number | null,
+  availableModels: AvailableModelConfig[],
+  selectedModelIds: number[]
+): number | null {
+  const judgeModels = getIdleJudgeModels(availableModels, selectedModelIds);
+  if (judgeModels.some((modelConfig) => modelConfig.id === currentJudgeModelId)) {
+    return currentJudgeModelId;
+  }
+  return judgeModels[0]?.id ?? null;
 }
 
 export function mergeStreamEvent(
@@ -38,6 +59,20 @@ export function mergeStreamEvent(
     return {
       ...(state || { taskId: null, status: "running", prompt: "", responses: [] }),
       responses: mergeModelResponse(state?.responses || [], event.response)
+    };
+  }
+
+  if (event.type === "model_delta") {
+    return {
+      ...(state || { taskId: null, status: "running", prompt: "", responses: [] }),
+      responses: appendModelDelta(state?.responses || [], event.modelConfigId, event.delta)
+    };
+  }
+
+  if (event.type === "model_answer_completed") {
+    return {
+      ...(state || { taskId: null, status: "running", prompt: "", responses: [] }),
+      responses: markModelScoring(state?.responses || [], event.modelConfigId)
     };
   }
 
@@ -70,6 +105,14 @@ export function isPendingResponse(response: DisplayModelResponse): response is P
   return "pending" in response && response.pending;
 }
 
+export function isStreamingResponse(response: DisplayModelResponse): response is StreamingModelResponse {
+  return "streaming" in response && response.streaming;
+}
+
+export function isTransientResponse(response: DisplayModelResponse): response is PendingModelResponse | StreamingModelResponse {
+  return isPendingResponse(response) || "streaming" in response;
+}
+
 function mergeModelResponse(responses: DisplayModelResponse[], nextResponse: ModelResponse): DisplayModelResponse[] {
   const targetModelId = nextResponse.modelConfigId;
   let replaced = false;
@@ -86,4 +129,71 @@ function mergeModelResponse(responses: DisplayModelResponse[], nextResponse: Mod
   });
 
   return replaced ? nextResponses : [...nextResponses, nextResponse];
+}
+
+function appendModelDelta(
+  responses: DisplayModelResponse[],
+  modelConfigId: number,
+  delta: string
+): DisplayModelResponse[] {
+  let updated = false;
+  const nextResponses = responses.map((response) => {
+    if (response.modelConfigId !== modelConfigId) {
+      return response;
+    }
+    updated = true;
+    if ("streaming" in response) {
+      return { ...response, answer: `${response.answer}${delta}`, scoring: false };
+    }
+    return {
+      id: `streaming-${modelConfigId}`,
+      modelConfigId,
+      modelName: response.modelName,
+      answer: delta,
+      streaming: true,
+      scoring: false
+    };
+  });
+
+  if (updated) {
+    return nextResponses;
+  }
+
+  return [
+    ...responses,
+    {
+      id: `streaming-${modelConfigId}`,
+      modelConfigId,
+      modelName: `模型 ${modelConfigId}`,
+      answer: delta,
+      streaming: true,
+      scoring: false
+    }
+  ];
+}
+
+function markModelScoring(responses: DisplayModelResponse[], modelConfigId: number): DisplayModelResponse[] {
+  let updated = false;
+  const nextResponses = responses.map((response) => {
+    if (response.modelConfigId !== modelConfigId) {
+      return response;
+    }
+    updated = true;
+    if ("streaming" in response) {
+      return { ...response, streaming: false, scoring: true };
+    }
+    if (isPendingResponse(response)) {
+      return {
+        id: `streaming-${modelConfigId}`,
+        modelConfigId,
+        modelName: response.modelName,
+        answer: "",
+        streaming: false,
+        scoring: true
+      };
+    }
+    return response;
+  });
+
+  return updated ? nextResponses : responses;
 }

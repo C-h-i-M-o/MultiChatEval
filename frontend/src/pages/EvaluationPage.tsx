@@ -14,7 +14,14 @@ import type { EvaluationTaskPayload, EvaluationVisibility, FeedbackType, TokenUs
 import { useResponseGridMotion } from "../animations/pageMotion";
 import { ModelResponseCard } from "../components/ModelResponseCard";
 import { useAuth } from "../features/auth/AuthContext";
-import { applyFeedbackResult, createPendingResponses, mergeStreamEvent } from "../features/evaluation/evaluation";
+import {
+  applyFeedbackResult,
+  createPendingResponses,
+  getIdleJudgeModels,
+  isTransientResponse,
+  mergeStreamEvent,
+  normalizeJudgeModelId
+} from "../features/evaluation/evaluation";
 import type { AvailableModelConfig, EvaluationTaskState } from "../features/evaluation/types";
 
 const { TextArea } = Input;
@@ -44,16 +51,20 @@ export function EvaluationPage() {
 
   const quotaExhausted = Boolean(tokenUsage && !tokenUsage.unlimited && (tokenUsage.remainingTokens ?? 0) <= 0);
   const showModelNotice = !modelConfigLoading && availableModels.length === 0;
+  const selectedModelSet = useMemo(() => new Set(selectedModelIds), [selectedModelIds]);
+  const judgeModelOptions = useMemo(
+    () => getIdleJudgeModels(availableModels, selectedModelIds),
+    [availableModels, selectedModelIds]
+  );
+  const judgeUnavailable = judgeModelOptions.length === 0;
   const canSubmit =
     !loading &&
     prompt.trim().length > 0 &&
     selectedModelIds.length > 0 &&
     !quotaExhausted &&
-    (!enableJudge || judgeModelId !== null);
-
-  const selectedModelSet = useMemo(() => new Set(selectedModelIds), [selectedModelIds]);
+    (!enableJudge || (judgeModelId !== null && !selectedModelSet.has(judgeModelId)));
   const completedResponseCount =
-    taskState?.responses.filter((response) => !("pending" in response)).length ?? 0;
+    taskState?.responses.filter((response) => !isTransientResponse(response)).length ?? 0;
   useResponseGridMotion(responseGridRef, completedResponseCount);
 
   useEffect(() => {
@@ -62,10 +73,14 @@ export function EvaluationPage() {
   }, []);
 
   useEffect(() => {
-    if (enableJudge && judgeModelId === null) {
-      setJudgeModelId(availableModels[0]?.id ?? null);
+    const nextJudgeModelId = normalizeJudgeModelId(judgeModelId, availableModels, selectedModelIds);
+    if (judgeModelId !== nextJudgeModelId) {
+      setJudgeModelId(nextJudgeModelId);
     }
-  }, [availableModels, enableJudge, judgeModelId]);
+    if (enableJudge && nextJudgeModelId === null) {
+      setEnableJudge(false);
+    }
+  }, [availableModels, enableJudge, judgeModelId, selectedModelIds]);
 
   useEffect(() => {
     return () => {
@@ -80,7 +95,6 @@ export function EvaluationPage() {
       const models = await listAvailableModels();
       setAvailableModels(models);
       setSelectedModelIds((currentIds) => selectDefaultModelIds(models, currentIds));
-      setJudgeModelId((currentId) => (models.some((model) => model.id === currentId) ? currentId : models[0]?.id ?? null));
     } catch (error) {
       setModelConfigErrorMessage(getErrorMessage(error, "模型配置加载失败"));
     } finally {
@@ -98,6 +112,22 @@ export function EvaluationPage() {
     } finally {
       setTokenUsageLoading(false);
     }
+  }
+
+  function toggleJudge(checked: boolean): void {
+    if (!checked) {
+      setEnableJudge(false);
+      return;
+    }
+
+    const nextJudgeModelId = normalizeJudgeModelId(judgeModelId, availableModels, selectedModelIds);
+    if (nextJudgeModelId === null) {
+      setEnableJudge(false);
+      return;
+    }
+
+    setJudgeModelId(nextJudgeModelId);
+    setEnableJudge(true);
   }
 
   async function submitTask(): Promise<void> {
@@ -245,8 +275,8 @@ export function EvaluationPage() {
             <Space size={6}>
               <Switch
                 checked={enableJudge}
-                disabled={loading}
-                onChange={(checked) => setEnableJudge(checked)}
+                disabled={loading || judgeUnavailable}
+                onChange={toggleJudge}
               />
               LLM 评审
             </Space>
@@ -284,13 +314,16 @@ export function EvaluationPage() {
               value={judgeModelId ?? ""}
               disabled={loading}
               style={{ minWidth: 240 }}
-              options={availableModels.map((modelConfig) => ({
+              options={judgeModelOptions.map((modelConfig) => ({
                 value: modelConfig.id,
                 label: modelConfig.displayName
               }))}
               onChange={(value) => setJudgeModelId(Number(value))}
             />
           </div>
+        ) : null}
+        {judgeUnavailable ? (
+          <p className="form-hint warning">LLM 评审需要至少保留一个未参与本次测评的空闲模型。</p>
         ) : null}
       </section>
 
@@ -305,8 +338,7 @@ export function EvaluationPage() {
           <div>
             <p className="panel-label">模型调用中</p>
             <strong>
-              已完成 {taskState?.responses.filter((response) => !("pending" in response)).length || 0} /{" "}
-              {selectedModelIds.length}，已等待 {elapsedSeconds}s
+              已完成 {completedResponseCount} / {selectedModelIds.length}，已等待 {elapsedSeconds}s
             </strong>
           </div>
           <span className="waiting-pulse" aria-hidden="true" />
@@ -318,10 +350,10 @@ export function EvaluationPage() {
         <section ref={responseGridRef} className="response-grid">
           {taskState.responses.map((response) => (
             <ModelResponseCard
-              key={response.id}
+              key={response.modelConfigId ?? response.id}
               response={response}
               elapsedSeconds={elapsedSeconds}
-              feedbackSubmitting={!("pending" in response) && feedbackSubmittingIds.includes(response.id)}
+              feedbackSubmitting={!isTransientResponse(response) && feedbackSubmittingIds.includes(response.id)}
               onFeedback={(responseId, feedbackType) => void submitFeedback(responseId, feedbackType)}
             />
           ))}

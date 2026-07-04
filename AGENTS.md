@@ -12,7 +12,7 @@ MultiChatEval 是一个“面向多模型问答的对话质量评估系统”。
 
 当前 **v2 版本开发已经结束并冻结**。开放注册、HttpOnly Cookie JWT、普通用户/管理员 RBAC、真实用户数据归属、公开/私有评测、管理员模型配置、Token 额度、反馈统计等已实现能力继续保留；语义分析、模型推荐、运行监控等未完成的 v2 后续功能不再继续开发。
 
-`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、模型级渐进展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。React 前端已经完成对原 Vue 前端的功能替代，后续开发统一使用 `frontend/` React 技术栈；`vue-frontend/` 仅作为历史版本保留。
+`main` 分支的 `demo-v1` 标签对应可发布基线。模型配置、多模型并发评测、逐 token 流式展示、规则评分、可选 LLM Judge、历史任务、点赞/点踩反馈计分和公开评论均已形成可运行闭环。v2 的 `/feedback` 已实现角色分流：普通用户查看个人统计，管理员查看全局统计和互动明细。React 前端已经完成对原 Vue 前端的功能替代，后续开发统一使用 `frontend/` React 技术栈；`vue-frontend/` 仅作为历史版本保留。
 
 ## 当前技术栈
 
@@ -90,7 +90,7 @@ MultiChatEval/
 - 评测请求支持全局“思考模式”开关。关闭时所有模型统一发送 `thinking.type=disabled`；开启时统一发送 `thinking.type=enabled`；不传递思考程度参数。
 - 思考模式字段以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。MiniMax 等 OpenAI-compatible 供应商即使收到 `thinking.type=disabled`，也可能仍返回 `<think>` 或 reasoning 内容。
 - `POST /api/evaluation/tasks` 保留一次性返回完整结果。
-- `POST /api/evaluation/tasks/stream` 支持模型级渐进返回：哪个模型完整回答先完成，哪个模型结果先展示。
+- `POST /api/evaluation/tasks/stream` 支持多模型并发逐 token 流式返回；单个模型回答结束后先进入“评分中……”状态，评分和持久化完成后再返回最终模型结果。
 - 评测任务、模型回答、规则评分、LLM Judge 结果、点赞/点踩和评论会真实写入 MySQL。
 - `GET /api/evaluation/tasks` 支持分页查询历史任务。
 - `GET /api/evaluation/tasks/{taskId}` 支持从数据库查询任务详情。
@@ -104,7 +104,7 @@ MultiChatEval/
 - 已完成对原 Vue 前端的功能替代：
     - 登录、注册、退出和 HttpOnly Cookie 登录态恢复。
     - 受保护业务路由、公开认证路由、基础业务布局和按角色导航。
-    - `/` 评测工作台：模型列表、今日 Token、公开/私有评测、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。
+    - `/` 评测工作台：模型列表、今日 Token、公开/私有评测、思考模式、空闲模型 LLM 评审、多模型逐 token NDJSON 展示、评分中状态、卡片内 Markdown 与数学公式渲染、`<think>` 默认展开、评分详情和点赞/点踩反馈。
     - `/history` 历史任务：分页、详情加载、状态标记、超时提示、公开/私有标记、反馈操作和公开评论分页、发布、删除。
     - `/models` 管理员模型配置：列表、新增、编辑、启用/禁用、删除和连接测试。
     - `/users` 管理员用户额度：查看今日 Token 用量并调整普通用户每日额度。
@@ -226,10 +226,10 @@ BACKEND_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://127.0.0.
 
 当前已实现：
 
-- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 模型级渐进展示 → 规则评分与可选 LLM Judge → 前端对比展示。
+- 用户提问 → 选择多个模型 → 后端并发调用真实 OpenAI-compatible 模型 → 逐 token 流式展示 → 回答完成后显示“评分中……” → 规则评分与可选 LLM Judge → 前端对比展示。
 - 模型配置从数据库动态读取。
 - 模型耗时、输出 token、成本估算、错误状态、规则评分和可选 LLM Judge 结果会返回给前端。
-- `<think>...</think>` 和 `reasoning_content` 会折叠展示为“思考过程”。
+- `<think>...</think>` 和 `reasoning_content` 会默认展开展示为“思考过程”，并在流式响应中同步更新。
 
 ### 已实现：持久化与历史任务
 
@@ -257,6 +257,7 @@ BACKEND_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://127.0.0.
 已实现：
 
 - 使用独立评审 Prompt，并将候选回答视为不可信输入。
+- 评审模型必须是未参与本次测评的空闲模型；如果所有可用模型都已被测，前端会禁用 LLM 评审开关并提示用户保留一个空闲模型。
 - 要求评审模型输出结构化 JSON。
 - 解析评分、优点、缺点、改进建议和推荐理由。
 - 将有效 LLM Judge 分以 40% 权重纳入基础分。
@@ -332,7 +333,7 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 - 文件修改前需要确认用户授权。
 - 不要随意删除用户已有文件。
 - 不要将 `.env`、`node_modules`、虚拟环境、构建产物提交到 Git。
-- 当前只做模型级渐进返回，不做逐字 token 流式输出。
+- 当前 `POST /api/evaluation/tasks/stream` 做逐 token 流式输出；一次性 `POST /api/evaluation/tasks` 仍保留完整结果返回。
 
 ## 文档先行约定
 
@@ -365,7 +366,7 @@ Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 
 1. 安装依赖并启动前后端，默认使用 `./scripts/start-local.sh`。
 2. 确认 React 主前端能调用后端真实模型接口。
-3. 确认模型级渐进展示和全局思考模式行为正常。
+3. 确认逐 token 流式展示、“评分中……”状态和全局思考模式行为正常。
 4. 验证评分结果、点赞/点踩和公开评论均正确持久化到 MySQL。
 5. 验证公开任务跨用户可见、私有任务仅创建者可见。
 6. React 主前端收尾验收可运行 `./scripts/verify-react-rewrite.sh`。

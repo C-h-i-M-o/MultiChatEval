@@ -57,7 +57,16 @@ export interface PendingModelResponse {
   pending: true;
 }
 
-export type DisplayModelResponse = ModelResponse | PendingModelResponse;
+export interface StreamingModelResponse {
+  id: string;
+  modelConfigId: number;
+  modelName: string;
+  answer: string;
+  streaming: boolean;
+  scoring: boolean;
+}
+
+export type DisplayModelResponse = ModelResponse | PendingModelResponse | StreamingModelResponse;
 
 export interface EvaluationTaskState {
   taskId: number | null;
@@ -125,6 +134,15 @@ export type EvaluationStreamEvent =
   | {
       type: "model_response";
       response: ModelResponse;
+    }
+  | {
+      type: "model_delta";
+      modelConfigId: number;
+      delta: string;
+    }
+  | {
+      type: "model_answer_completed";
+      modelConfigId: number;
     }
   | {
       type: "task_completed";

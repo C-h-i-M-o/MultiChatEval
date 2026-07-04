@@ -525,6 +525,17 @@ a {
   accent-color: var(--color-primary);
 }
 
+.form-hint {
+  margin: 0;
+  color: #667167;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.form-hint.warning {
+  color: #9a5a13;
+}
+
 .segmented-control {
   display: inline-flex;
   border: 1px solid rgba(22, 97, 106, 0.18);
@@ -742,19 +753,21 @@ button:disabled {
   background: linear-gradient(90deg, rgba(22, 97, 106, 0.14), rgba(229, 184, 93, 0.1), rgba(22, 97, 106, 0.14));
 }
 
-.answer-preview,
 .markdown-body {
   color: #354236;
   line-height: 1.75;
 }
 
-.answer-preview {
-  display: -webkit-box;
-  min-height: 74px;
-  margin: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.answer-scroll {
+  min-height: 138px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(22, 32, 24, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 253, 248, 0.62);
+  scrollbar-gutter: stable;
 }
 
 .score-bars {
@@ -813,6 +826,7 @@ button:disabled {
 .think-panel {
   border: 1px solid rgba(22, 32, 24, 0.12);
   border-radius: 8px;
+  margin-bottom: 12px;
   padding: 10px 12px;
   background: rgba(244, 240, 232, 0.7);
 }
@@ -844,6 +858,12 @@ button:disabled {
 .markdown-body pre code {
   padding: 0;
   background: transparent;
+}
+
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
 }
 
 .score-detail-list {

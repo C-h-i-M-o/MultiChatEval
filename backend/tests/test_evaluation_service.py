@@ -22,6 +22,7 @@ from app.models.response import ModelResponse
 from app.services.evaluation_service import (
     EvaluationCommentNotFoundError,
     EvaluationResponseNotFoundError,
+    EvaluationTaskValidationError,
     evaluation_service,
 )
 from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
@@ -247,6 +248,26 @@ def test_model_prompt_contains_builtin_instruction_before_user_prompt() -> None:
 def test_enable_judge_requires_judge_model_id() -> None:
     with pytest.raises(ValidationError):
         EvaluationTaskCreate(prompt="你好", modelIds=[1], enableJudge=True)
+
+
+def test_enable_judge_requires_idle_judge_model() -> None:
+    with pytest.raises(ValidationError):
+        EvaluationTaskCreate(prompt="你好", modelIds=[1, 2], enableJudge=True, judgeModelId=2)
+
+
+@pytest.mark.asyncio
+async def test_enable_judge_checks_default_selected_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_resolve_runtime_models(_db: FakeDb, model_ids: list[int]) -> list[RuntimeModelConfig]:
+        assert model_ids == []
+        return [make_runtime_model(2, "默认被测模型")]
+
+    monkeypatch.setattr(model_config_service, "resolve_runtime_models", fake_resolve_runtime_models)
+
+    with pytest.raises(EvaluationTaskValidationError, match="LLM 评审模型不能同时作为被测模型"):
+        await evaluation_service.validate_task_models(
+            EvaluationTaskCreate(prompt="你好", enableJudge=True, judgeModelId=2),
+            FakeDb(),
+        )
 
 
 def test_evaluation_task_defaults_to_public_and_accepts_private() -> None:
@@ -525,12 +546,16 @@ async def test_stream_task_events_yields_model_responses_in_completion_order(mon
         assert model_ids == [1, 2]
         return models
 
-    async def fake_call_model(prompt: str, model: RuntimeModelConfig, extra_body: dict[str, object]) -> ModelResponseRead:
+    async def fake_stream_model_response(
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> AsyncIterator[dict[str, object]]:
         assert prompt == "测试问题"
         assert extra_body == {"thinking": {"type": "disabled"}}
         if model.id == 1:
             await asyncio.sleep(0.02)
-        return make_response(model.id, model.display_name, response_id=model.id + 500)
+        yield {"type": "response", "response": make_response(model.id, model.display_name, response_id=model.id + 500)}
 
     async def fake_create_task_record(
         _db: FakeDb,
@@ -556,7 +581,7 @@ async def test_stream_task_events_yields_model_responses_in_completion_order(mon
         assert status == "completed"
 
     monkeypatch.setattr(model_config_service, "resolve_runtime_models", fake_resolve_runtime_models)
-    monkeypatch.setattr(evaluation_service, "_call_model", fake_call_model)
+    monkeypatch.setattr(evaluation_service, "_stream_model_response", fake_stream_model_response, raising=False)
     monkeypatch.setattr(evaluation_service, "_create_task_record", fake_create_task_record, raising=False)
     monkeypatch.setattr(evaluation_service, "_persist_response", fake_persist_response, raising=False)
     monkeypatch.setattr(evaluation_service, "_finish_task_record", fake_finish_task_record, raising=False)
@@ -572,20 +597,171 @@ async def test_stream_task_events_yields_model_responses_in_completion_order(mon
 
     assert [event["type"] for event in events] == [
         "task_started",
+        "model_answer_completed",
         "model_response",
+        "model_answer_completed",
         "model_response",
         "task_completed",
     ]
     assert events[0]["taskId"] == 101
     assert events[0]["modelIds"] == [1, 2]
-    assert events[1]["response"].model_name == "快模型"
-    assert events[1]["response"].id == 502
-    assert events[1]["response"].model_config_id == 2
-    assert events[2]["response"].model_name == "慢模型"
-    assert events[2]["response"].id == 501
-    assert events[2]["response"].model_config_id == 1
-    assert events[3]["task"].task_id == 101
-    assert events[3]["task"].status == "completed"
+    assert events[2]["response"].model_name == "快模型"
+    assert events[2]["response"].id == 502
+    assert events[2]["response"].model_config_id == 2
+    assert events[4]["response"].model_name == "慢模型"
+    assert events[4]["response"].id == 501
+    assert events[4]["response"].model_config_id == 1
+    assert events[5]["task"].task_id == 101
+    assert events[5]["task"].status == "completed"
+
+
+@pytest.mark.asyncio
+async def test_stream_task_events_yields_deltas_then_scoring_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    models = [make_runtime_model(1, "慢模型"), make_runtime_model(2, "快模型")]
+
+    async def fake_resolve_runtime_models(_db: FakeDb, _model_ids: list[int]) -> list[RuntimeModelConfig]:
+        return models
+
+    async def fake_stream_model_response(
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> AsyncIterator[dict[str, object]]:
+        assert prompt == "测试问题"
+        assert extra_body == {"thinking": {"type": "disabled"}}
+        if model.id == 1:
+            yield {"type": "delta", "delta": "慢"}
+            await asyncio.sleep(0.02)
+            yield {"type": "delta", "delta": "模型"}
+        else:
+            yield {"type": "delta", "delta": "快模型"}
+        yield {"type": "response", "response": make_response(model.id, model.display_name, response_id=model.id + 600)}
+
+    async def fake_create_task_record(
+        _db: FakeDb,
+        _payload: EvaluationTaskCreate,
+        _user_id: int,
+    ) -> int:
+        return 103
+
+    async def fake_persist_response(
+        _db: FakeDb,
+        _task_id: int,
+        response: ModelResponseRead,
+        _user_id: int,
+    ) -> ModelResponseRead:
+        return response
+
+    async def fake_finish_task_record(_db: FakeDb, task_id: int, status: str) -> None:
+        assert task_id == 103
+        assert status == "completed"
+
+    monkeypatch.setattr(model_config_service, "resolve_runtime_models", fake_resolve_runtime_models)
+    monkeypatch.setattr(evaluation_service, "_stream_model_response", fake_stream_model_response, raising=False)
+    monkeypatch.setattr(evaluation_service, "_create_task_record", fake_create_task_record, raising=False)
+    monkeypatch.setattr(evaluation_service, "_persist_response", fake_persist_response, raising=False)
+    monkeypatch.setattr(evaluation_service, "_finish_task_record", fake_finish_task_record, raising=False)
+
+    events = await collect_events(
+        evaluation_service.stream_task_events(
+            EvaluationTaskCreate(prompt="测试问题", modelIds=[1, 2], enableThinking=False),
+            FakeDb(),
+            TEST_USER_ID,
+            TEST_USERNAME,
+        )
+    )
+
+    event_types = [event["type"] for event in events]
+    assert event_types[0] == "task_started"
+    assert {"type": "model_delta", "modelConfigId": 1, "delta": "慢"} in events
+    assert {"type": "model_delta", "modelConfigId": 1, "delta": "模型"} in events
+    assert {"type": "model_delta", "modelConfigId": 2, "delta": "快模型"} in events
+    fast_completed_index = events.index({"type": "model_answer_completed", "modelConfigId": 2})
+    fast_response_index = next(
+        index
+        for index, event in enumerate(events)
+        if event["type"] == "model_response" and event["response"].model_config_id == 2
+    )
+    assert fast_completed_index < fast_response_index
+    assert event_types[-1] == "task_completed"
+
+
+@pytest.mark.asyncio
+async def test_stream_task_events_keeps_emitting_deltas_while_another_model_is_scoring(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    models = [make_runtime_model(1, "先完成模型"), make_runtime_model(2, "继续生成模型")]
+
+    async def fake_resolve_runtime_models(_db: FakeDb, _model_ids: list[int]) -> list[RuntimeModelConfig]:
+        return models
+
+    async def fake_stream_model_response(
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> AsyncIterator[dict[str, object]]:
+        assert prompt == "测试问题"
+        assert extra_body == {"thinking": {"type": "disabled"}}
+        if model.id == 1:
+            yield {"type": "response", "response": make_response(model.id, model.display_name, response_id=701)}
+            return
+        await asyncio.sleep(0.01)
+        yield {"type": "delta", "delta": "B 模型继续输出"}
+        yield {"type": "response", "response": make_response(model.id, model.display_name, response_id=702)}
+
+    async def fake_apply_judge_score(
+        _prompt: str,
+        response: ModelResponseRead,
+        _judge_model: RuntimeModelConfig | None,
+    ) -> ModelResponseRead:
+        if response.model_config_id == 1:
+            await asyncio.sleep(0.05)
+        return response
+
+    async def fake_create_task_record(
+        _db: FakeDb,
+        _payload: EvaluationTaskCreate,
+        _user_id: int,
+    ) -> int:
+        return 104
+
+    async def fake_persist_response(
+        _db: FakeDb,
+        _task_id: int,
+        response: ModelResponseRead,
+        _user_id: int,
+    ) -> ModelResponseRead:
+        return response
+
+    async def fake_finish_task_record(_db: FakeDb, task_id: int, status: str) -> None:
+        assert task_id == 104
+        assert status == "completed"
+
+    monkeypatch.setattr(model_config_service, "resolve_runtime_models", fake_resolve_runtime_models)
+    monkeypatch.setattr(evaluation_service, "_stream_model_response", fake_stream_model_response, raising=False)
+    monkeypatch.setattr(evaluation_service, "_apply_judge_score", fake_apply_judge_score, raising=False)
+    monkeypatch.setattr(evaluation_service, "_create_task_record", fake_create_task_record, raising=False)
+    monkeypatch.setattr(evaluation_service, "_persist_response", fake_persist_response, raising=False)
+    monkeypatch.setattr(evaluation_service, "_finish_task_record", fake_finish_task_record, raising=False)
+
+    events = await collect_events(
+        evaluation_service.stream_task_events(
+            EvaluationTaskCreate(prompt="测试问题", modelIds=[1, 2], enableThinking=False),
+            FakeDb(),
+            TEST_USER_ID,
+            TEST_USERNAME,
+        )
+    )
+
+    model_two_delta_index = events.index(
+        {"type": "model_delta", "modelConfigId": 2, "delta": "B 模型继续输出"}
+    )
+    model_one_response_index = next(
+        index
+        for index, event in enumerate(events)
+        if event["type"] == "model_response" and event["response"].model_config_id == 1
+    )
+    assert model_two_delta_index < model_one_response_index
 
 
 @pytest.mark.asyncio
@@ -595,11 +771,15 @@ async def test_stream_task_events_keeps_running_when_one_model_fails(monkeypatch
     async def fake_resolve_runtime_models(_db: FakeDb, _model_ids: list[int]) -> list[RuntimeModelConfig]:
         return models
 
-    async def fake_call_model(prompt: str, model: RuntimeModelConfig, extra_body: dict[str, object]) -> ModelResponseRead:
+    async def fake_stream_model_response(
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> AsyncIterator[dict[str, object]]:
         assert prompt == "测试问题"
         assert extra_body == {"thinking": {"type": "enabled"}}
         status = "failed" if model.id == 1 else "success"
-        return make_response(model.id, model.display_name, status=status)
+        yield {"type": "response", "response": make_response(model.id, model.display_name, status=status)}
 
     async def fake_create_task_record(
         _db: FakeDb,
@@ -623,7 +803,7 @@ async def test_stream_task_events_keeps_running_when_one_model_fails(monkeypatch
         assert status == "completed"
 
     monkeypatch.setattr(model_config_service, "resolve_runtime_models", fake_resolve_runtime_models)
-    monkeypatch.setattr(evaluation_service, "_call_model", fake_call_model)
+    monkeypatch.setattr(evaluation_service, "_stream_model_response", fake_stream_model_response, raising=False)
     monkeypatch.setattr(evaluation_service, "_create_task_record", fake_create_task_record, raising=False)
     monkeypatch.setattr(evaluation_service, "_persist_response", fake_persist_response, raising=False)
     monkeypatch.setattr(evaluation_service, "_finish_task_record", fake_finish_task_record, raising=False)

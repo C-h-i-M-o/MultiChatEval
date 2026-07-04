@@ -134,11 +134,11 @@ describe("React 阶段二认证 API 客户端", () => {
 });
 
 describe("React 阶段三评测 API 客户端", () => {
-  test("按 NDJSON 分片顺序推送模型级事件", async () => {
+  test("按 NDJSON 分片顺序推送流式事件", async () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('{"type":"task_started","taskId":7,"prompt":"问题","status":"running"}\n{"type":"model_'));
+        controller.enqueue(encoder.encode('{"type":"task_started","taskId":7,"prompt":"问题","status":"running"}\n{"type":"model_delta","modelConfigId":2,"delta":"第一段"}\n{"type":"model_answer_completed","modelConfigId":2}\n{"type":"model_'));
         controller.enqueue(
           encoder.encode(
             'response","response":{"id":11,"modelConfigId":2,"modelName":"DeepSeek","provider":"deepseek","answer":"答案","latencyMs":1200,"inputTokens":3,"outputTokens":4,"cacheHitTokens":0,"cacheCreationTokens":0,"totalTokens":7,"estimatedCost":0.01,"currency":"CNY","costDetails":{"inputCost":0,"outputCost":0.01,"cacheHitCost":0,"cacheCreationCost":0},"status":"success","score":{"relevance":9,"completeness":8,"clarity":8,"format":7,"safety":10,"final":8.5,"details":{},"ruleFinal":8.5,"judgeFinal":null,"baseFinal":8.5,"feedbackScore":null,"judgeComment":null,"judgeDetails":{}},"feedback":{"liked":false,"likeCount":0,"disliked":false,"dislikeCount":0}}}\n'
@@ -179,9 +179,11 @@ describe("React 阶段三评测 API 客户端", () => {
         visibility: "public"
       })
     });
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(4);
     expect(events[0]).toMatchObject({ type: "task_started", taskId: 7 });
-    expect(events[1]).toMatchObject({ type: "model_response", response: { id: 11, modelName: "DeepSeek" } });
+    expect(events[1]).toMatchObject({ type: "model_delta", modelConfigId: 2, delta: "第一段" });
+    expect(events[2]).toMatchObject({ type: "model_answer_completed", modelConfigId: 2 });
+    expect(events[3]).toMatchObject({ type: "model_response", response: { id: 11, modelName: "DeepSeek" } });
   });
 
   test("提交反馈使用后端 feedbackType 字段", async () => {

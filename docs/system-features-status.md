@@ -14,9 +14,9 @@
 
 MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户输入同一个问题后，可以选择多个模型并发回答，系统展示每个模型的回答内容、耗时、输出长度、成本估算和规则评分，帮助用户横向比较不同模型的回答质量。
 
-当前版本优先保证多模型、规则评分、LLM Judge、模型级渐进展示、历史任务查询和用户反馈的完整链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口；哪个模型完整回答先完成，前端就先展示哪个模型。评测任务、回答、评分、点赞/点踩和公开评论会写入 MySQL，并可在历史任务页继续查看和操作。
+当前版本优先保证多模型、规则评分、LLM Judge、逐 token 流式展示、历史任务查询和用户反馈的完整链路。系统已经可以从前端发起评测请求，并由后端并发调用真实 OpenAI-compatible 模型接口；各模型生成过程会以 NDJSON 增量事件实时展示，单个模型回答完成后进入“评分中……”，评分完成后更新为最终结果。评测任务、回答、评分、点赞/点踩和公开评论会写入 MySQL，并可在历史任务页继续查看和操作。
 
-当前 React 主前端已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Tailwind CSS、Ant Design、Recharts、GSAP、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、模型级 NDJSON 渐进展示、Markdown 安全渲染、`<think>` 折叠、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。React 前端已补充品牌 logo、深色侧栏、主题色层和遵循减少动态效果偏好的 GSAP 页面/卡片/弹窗动画。`scripts/start-local.sh` 可一键启动 React 主前端全栈项目，`scripts/start-local-vue.sh` 可启动历史 Vue 版本，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 验收。
+当前 React 主前端已落地：`frontend/` 已提供 React 19 + TypeScript + Vite 工程、Tailwind CSS、Ant Design、Recharts、GSAP、Vite `/api` 开发代理、类型化 API 客户端、系统健康检查、登录态恢复、登录、注册、退出、受保护业务路由、基础业务布局、按角色导航、`/` 评测工作台、`/history` 历史任务、`/models` 管理员模型配置、`/users` 用户额度和 `/feedback` 反馈统计页面。评测工作台已支持模型列表、今日 Token、公开/私有、思考模式、LLM 评审、多模型逐 token NDJSON 展示、评分中状态、卡片内 Markdown 与数学公式渲染、`<think>` 默认展开、评分详情和点赞/点踩反馈。历史页已支持分页、详情加载、状态标记、超时提示、反馈操作和公开评论分页、发布、删除。管理员页面已支持模型配置维护、连接测试和普通用户每日 Token 额度调整。反馈统计已支持普通用户个人统计和管理员全局统计、每日趋势、互动明细。React 前端已补充品牌 logo、深色侧栏、主题色层和遵循减少动态效果偏好的 GSAP 页面/卡片/弹窗动画。`scripts/start-local.sh` 可一键启动 React 主前端全栈项目，`scripts/start-local-vue.sh` 可启动历史 Vue 版本，`scripts/verify-react-rewrite.sh` 可运行后端、React、Vue 和 diff 验收。
 
 ## 2. 前端功能
 
@@ -83,7 +83,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 - 普通用户默认每日 100,000 总 Token，管理员不限额，按北京时间自然日统计。
 - 评测页展示今日已用、剩余和每日额度，额度耗尽时禁用提交。
-- 同步与 NDJSON 渐进接口在任务开始前共用额度检查。
+- 同步与 NDJSON 流式接口在任务开始前共用额度检查。
 - 每个模型回答持久化时，同一事务写入总 Token 流水并原子更新每日汇总。
 - 管理员可在 `/users` 查看用户角色、状态、今日用量并调整普通用户每日额度。
 
@@ -108,7 +108,7 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 
 - 根据后端返回的 `responses` 渲染模型回答摘要。
 - 评测页使用平衡摘要网格，历史任务详情页使用单列紧凑列表；两种模式都展示模型名称、状态、分数、耗时、输出、成本和回答预览。
-- 完整回答进入详情弹窗查看，弹窗内展示完整 Markdown 回答、折叠的“思考过程”、评分详情、点赞/点踩和公开评论。
+- 回答卡片内直接展示可滚动 Markdown 内容，详情弹窗内展示完整 Markdown 回答、默认展开的“思考过程”、评分详情、点赞/点踩和公开评论。
 - 评测页的四个模型固定使用两行两列；五至九个模型按 `3+2`、`3+3`、`3+2+2`、`3+3+2`、`3+3+3` 平衡分行，保证每行铺满。
 - 评测网格根据结果容器自身宽度降为两列或单列，而不是只依赖浏览器视口宽度。
 - 长回答只在摘要卡中展示固定高度预览，不再直接拉伸评测页或历史详情页。
@@ -184,10 +184,10 @@ MultiChatEval 是一个面向多模型问答的对话质量评估系统。用户
 已实现能力：
 
 - 使用 `markdown-it` 渲染模型回答中的 Markdown 内容。
-- 支持自动链接识别、换行、标题、列表、代码块、表格等 Markdown 内容。
+- 支持自动链接识别、换行、标题、列表、代码块、表格和 `$...$` / `$$...$$` 数学公式。
 - 使用 `DOMPurify` 清洗 HTML，降低模型输出导致的 XSS 风险。
 - 外部链接自动添加 `target="_blank"` 与 `rel="noopener noreferrer"`。
-- 自动解析 `<think>...</think>` 内容，并折叠到“思考过程”面板。
+- 自动解析 `<think>...</think>` 内容，并默认展开展示为“思考过程”面板。
 - 未闭合的 `<think>` 内容也会被识别为思考过程。
 - 没有正式回答内容时展示“暂无回答内容”。
 
@@ -277,13 +277,14 @@ POST /api/evaluation/tasks
 - `conversationId`：可选，会话 ID。
 - `prompt`：用户问题。
 - `modelIds`：模型 ID 列表。
-- `enableJudge`：是否启用 LLM 评审。
+- `enableJudge`：是否启用 LLM 评审。启用时评审模型必须是未参与本次测评的空闲模型。
 - `enableThinking`：是否启用全局思考模式。
 
 已实现能力：
 
 - 接收前端提交的问题、模型列表和 LLM 评审开关。
 - 根据 `modelIds` 从 `model_configs.id` 动态解析要调用的模型。
+- LLM 评审候选会排除本次被测模型；如果所有可用模型均被测，前端会禁用 LLM 评审开关并提示用户保留一个空闲模型。
 - 未传模型时默认选择已启用的 DeepSeek 和 MiniMax；不可用时回退到前两个已启用模型。
 - 如果传入的模型 ID 全部无效，也按同样规则回退。
 - 使用 `asyncio.gather` 并发调用多个模型。
@@ -298,7 +299,7 @@ POST /api/evaluation/tasks
 当前限制：
 
 - `conversationId` 已在请求模型中定义，会写入任务记录；会话管理功能尚未完善。
-- `enableJudge` 启用时必须指定 `judgeModelId`，服务层会调用评审模型并合成基础分。
+- `enableJudge` 启用时必须指定未出现在 `modelIds` 中的 `judgeModelId`，服务层会调用评审模型并合成基础分。
 - `POST /api/evaluation/tasks` 仍为同步等待所有模型完成后一次性返回。
 - 思考模式不提供思考程度选择。
 
@@ -323,13 +324,15 @@ POST /api/evaluation/tasks/stream
 - 请求字段与 `POST /api/evaluation/tasks` 一致。
 - 响应类型为 `application/x-ndjson`。
 - 先返回 `task_started` 事件。
-- 每个模型完整回答完成后立即返回 `model_response` 事件。
+- 模型生成过程中持续返回 `model_delta` 事件。
+- 单个模型回答完成后立即返回 `model_answer_completed` 事件，前端展示“评分中……”。
+- 评分和持久化完成后返回最终 `model_response` 事件。
 - 所有模型结束后返回 `task_completed` 事件。
 - 单个模型失败只影响该模型事件，不中断其他模型调用。
 
 当前限制：
 
-- 该接口是模型级渐进返回，不是逐字 token 流式输出。
+- 该接口是逐 token 流式返回，单个模型回答结束后会先进入评分中状态。
 
 ### 3.4 查询评测任务
 
@@ -488,7 +491,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 已实现能力：
 
 - 兼容 `/chat/completions` 协议。
-- 使用非流式请求。
+- 流式评测接口使用 `stream: true` 请求。
 - 自动拼接 `{base_url}/chat/completions`。
 - 使用 Bearer Token 认证。
 - 请求参数包含：
@@ -496,9 +499,9 @@ POST /api/evaluation/responses/{response_id}/feedback
   - `messages`
   - `max_tokens`
   - `temperature`
-  - `stream: false`
+  - `stream: true`
 - 支持通过 `extra_body` 追加模型供应商特定参数。
-- 解析 `choices[0].message.content` 作为回答内容。
+- 流式解析 `choices[0].delta.content` 作为回答增量，并兼容 `choices[0].delta.reasoning_content`。
 - 兼容常见 OpenAI-compatible usage 字段，将输入总量拆分为普通输入、缓存命中和缓存创建。
 - 当供应商未返回 usage 时各类 Token 记为 0，不虚构输出 Token。
 - 记录模型响应耗时。
@@ -532,7 +535,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 }
 ```
 
-关闭思考模式时，`type` 为 `disabled`；开启思考模式时，`type` 为 `enabled`。该字段会以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。第一版不发送思考程度参数。如果某个供应商不支持该字段并返回错误，该错误会作为对应模型的失败结果展示。MiniMax 等 OpenAI-compatible 供应商可能在收到 `thinking.type=disabled` 后仍返回 `<think>` 或 reasoning 内容，当前前端会继续折叠展示这些内容。
+关闭思考模式时，`type` 为 `disabled`；开启思考模式时，`type` 为 `enabled`。该字段会以嵌套 JSON `thinking.type` 传输，不使用 `thinkingmode`。第一版不发送思考程度参数。如果某个供应商不支持该字段并返回错误，该错误会作为对应模型的失败结果展示。MiniMax 等 OpenAI-compatible 供应商可能在收到 `thinking.type=disabled` 后仍返回 `<think>` 或 reasoning 内容，当前前端会继续默认展开展示这些内容。
 
 系统内置提示词当前为 9 条通用回答要求，覆盖直接作答、中文表达、结构化格式、不编造、高风险谨慎、安全边界、简洁完整和含糊问题处理。
 
@@ -674,7 +677,7 @@ final =
 
 - 后端健康检查测试：`backend/tests/test_health.py`。
 - 评测 API 测试覆盖 Judge 参数校验、历史列表、任务详情和评论接口。
-- 评测服务测试覆盖同步创建、模型级渐进返回、单模型失败隔离、评分持久化、Judge 合成、反馈重算和评论操作。
+- 评测服务测试覆盖同步创建、逐 token 流式返回、评分中状态、单模型失败隔离、评分持久化、Judge 合成、反馈重算和评论操作。
 - 模型配置、API Key、启动脚本、迁移兼容和 LLM Judge 解析均有对应单元测试。
 - 规则评分器测试覆盖空回答、排除完整或未闭合的 `<think>` 思考内容、相关性、格式和安全性等主要规则。
 - React 阶段一至五结构、启动脚本、API 客户端、导航权限、评测 NDJSON 解析、回答内容处理、历史状态、反馈状态合并、管理员 API 和构建链路已有测试覆盖。
