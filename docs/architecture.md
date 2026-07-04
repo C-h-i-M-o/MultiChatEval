@@ -31,10 +31,11 @@ MySQL
 
 ## 认证与权限层
 
-- 开放注册用户默认为普通用户。
+- 开放注册用户默认为普通用户，注册时要求二次确认密码，并校验密码至少 8 位且包含数字、小写字母和大写字母。
 - 密码使用 Argon2 哈希，登录态使用写入 HttpOnly Cookie 的短期 JWT。
 - `get_current_user` 负责认证，`require_admin` 负责管理员授权。
 - 普通用户通过精简接口读取可评测模型，完整模型配置接口仅管理员可访问。
+- 管理员用户管理接口支持用户名搜索、角色/状态筛选、分页查询和封号/解封；被禁用用户不能登录。
 - 反馈统计使用个人与管理员双端点：普通用户只能读取本人任务表现与本人互动汇总，管理员端点通过 `require_admin` 返回全局聚合和互动明细。
 - 公开任务对所有登录用户可见；私有任务仅创建者可见。
 - 对无权访问的私有任务或回答返回 404，避免资源枚举。
@@ -52,7 +53,7 @@ MySQL
 - `/` 对应 `frontend/src/pages/EvaluationPage.tsx`，用于完成问题输入、模型选择、任务提交和结果对比。
 - `/login` 和 `/register` 对应 `frontend/src/pages/AuthPage.tsx`，用于登录和开放注册。
 - `/models` 对应 `frontend/src/pages/ModelConfigsPage.tsx`，仅管理员用于通过供应商预设或空白模板维护 OpenAI-compatible 模型。
-- `/users` 对应 `frontend/src/pages/AdminUsersPage.tsx`，用于查看今日 Token 用量并调整普通用户每日额度。
+- `/users` 对应 `frontend/src/pages/AdminUsersPage.tsx`，用于搜索筛选用户、分页查看今日 Token 用量、封号/解封并调整普通用户每日额度。
 - `/history` 对应 `frontend/src/pages/HistoryPage.tsx`，用于分页查看最近评测任务，并可点击任务加载完整回答和评分详情。
 - `/feedback` 对应 `frontend/src/pages/FeedbackStatsPage.tsx`，所有登录用户均可进入；页面根据角色展示个人统计或管理员全局统计。
 - Ant Design 在应用入口启用中文语言配置，历史任务和反馈统计分页使用中文交互。

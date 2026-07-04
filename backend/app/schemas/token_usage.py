@@ -22,5 +22,16 @@ class AdminUserUsageRead(BaseModel):
     daily_limit: int | None = Field(alias="dailyLimit")
 
 
+class AdminUserListRead(BaseModel):
+    items: list[AdminUserUsageRead]
+    total: int
+    page: int
+    page_size: int = Field(alias="pageSize")
+
+
 class UserQuotaUpdate(BaseModel):
     daily_limit: int = Field(alias="dailyLimit", ge=0)
+
+
+class UserStatusUpdate(BaseModel):
+    status: Literal["active", "disabled"]

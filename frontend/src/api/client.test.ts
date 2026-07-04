@@ -21,6 +21,7 @@ import {
   streamEvaluationTask,
   submitResponseFeedback,
   testModelConfig,
+  updateAdminUserStatus,
   updateModelConfig,
   updateUserQuota
 } from "./client";
@@ -114,7 +115,9 @@ describe("React 阶段二认证 API 客户端", () => {
     const user = { id: 3, username: "newuser", role: "user", status: "active" };
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockJsonResponse(user, { status: 201 })));
 
-    await expect(registerUser({ username: "newuser", password: "password123" })).resolves.toEqual(user);
+    await expect(
+      registerUser({ username: "newuser", password: "Password123", confirmPassword: "Password123" })
+    ).resolves.toEqual(user);
   });
 
   test("退出请求不解析空响应体", async () => {
@@ -378,7 +381,7 @@ describe("React 阶段四管理员 API 客户端", () => {
     });
   });
 
-  test("用户额度列表和保存使用管理员接口", async () => {
+  test("用户额度列表、筛选分页、封号和保存使用管理员接口", async () => {
     const user = {
       id: 2,
       username: "demo",
@@ -388,16 +391,38 @@ describe("React 阶段四管理员 API 客户端", () => {
       usedTokens: 1200,
       dailyLimit: 100000
     };
-    const fetchMock = vi.fn().mockResolvedValueOnce(mockJsonResponse([user])).mockResolvedValueOnce(mockJsonResponse({
-      ...user,
-      dailyLimit: 80000
-    }));
+    const listResult = { items: [user], total: 1, page: 2, pageSize: 5 };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(mockJsonResponse(listResult))
+      .mockResolvedValueOnce(mockJsonResponse({ ...user, status: "disabled" }))
+      .mockResolvedValueOnce(mockJsonResponse({
+        ...user,
+        dailyLimit: 80000
+      }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(listAdminUsers()).resolves.toEqual([user]);
+    await expect(
+      listAdminUsers({ page: 2, pageSize: 5, keyword: "demo", role: "user", status: "active" })
+    ).resolves.toEqual(listResult);
+    await expect(updateAdminUserStatus(2, "disabled")).resolves.toMatchObject({ status: "disabled" });
     await expect(updateUserQuota(2, 80000)).resolves.toMatchObject({ dailyLimit: 80000 });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/admin/users/2/quota", {
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/admin/users?page=2&pageSize=5&keyword=demo&role=user&status=active",
+      {
+        credentials: "include",
+        headers: { Accept: "application/json" }
+      }
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/api/admin/users/2/status", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "disabled" })
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/admin/users/2/quota", {
       method: "PUT",
       credentials: "include",
       headers: { Accept: "application/json", "Content-Type": "application/json" },

@@ -13,11 +13,12 @@ POST /api/auth/register
 ```json
 {
   "username": "demo_user",
-  "password": "password123"
+  "password": "Password123",
+  "confirmPassword": "Password123"
 }
 ```
 
-注册成功返回当前用户并设置登录 Cookie。重复用户名返回 `409`。
+注册密码至少 8 位，并且必须同时包含数字、小写字母和大写字母；`confirmPassword` 必须与 `password` 一致。注册成功返回当前用户并设置登录 Cookie。重复用户名返回 `409`。
 
 ### 登录
 
@@ -25,7 +26,16 @@ POST /api/auth/register
 POST /api/auth/login
 ```
 
-请求结构与注册相同。登录成功返回当前用户并设置登录 Cookie；凭据错误返回 `401`，禁用用户返回 `403`。
+请求结构：
+
+```json
+{
+  "username": "demo_user",
+  "password": "Password123"
+}
+```
+
+登录成功返回当前用户并设置登录 Cookie；凭据错误返回 `401`，禁用用户返回 `403`。
 
 ### 当前用户
 
@@ -470,26 +480,55 @@ GET /api/token-usage/me/today
 ## 查询管理员用户列表
 
 ```http
-GET /api/admin/users
+GET /api/admin/users?page=1&pageSize=10&keyword=test&role=user&status=active
 ```
+
+查询参数：
+
+- `page`：页码，从 1 开始。
+- `pageSize`：每页数量，最大 100。
+- `keyword`：按用户名模糊搜索，可选。
+- `role`：按角色筛选，支持 `user` 和 `admin`，可选。
+- `status`：按状态筛选，支持 `active` 和 `disabled`，可选。
 
 响应：
 
 ```json
-[
-  {
-    "id": 7,
-    "username": "test_user",
-    "role": "user",
-    "status": "active",
-    "usageDate": "2026-06-12",
-    "usedTokens": 24000,
-    "dailyLimit": 100000
-  }
-]
+{
+  "items": [
+    {
+      "id": 7,
+      "username": "test_user",
+      "role": "user",
+      "status": "active",
+      "usageDate": "2026-06-12",
+      "usedTokens": 24000,
+      "dailyLimit": 100000
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 10
+}
 ```
 
 匿名占位用户 `id = 0` 不返回。
+
+## 修改用户状态
+
+```http
+PATCH /api/admin/users/{userId}/status
+```
+
+请求：
+
+```json
+{
+  "status": "disabled"
+}
+```
+
+`status` 支持 `active` 和 `disabled`。禁用用户不能继续登录；管理员不能修改匿名占位用户，也不能封禁当前登录的管理员账号。
 
 ## 修改用户每日额度
 
