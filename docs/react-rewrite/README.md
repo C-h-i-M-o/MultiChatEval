@@ -54,4 +54,4 @@
 - `../database.md`：数据库结构说明，React 重构默认不修改。
 - `../architecture.md`：当前系统架构和 React 主前端说明。
 - `../system-features-status.md`：当前已实现功能与后续维护建议。
-- `../legacy-v2/`：v2 历史开发文档归档。
+- `../legacy-v2/`：v2 已落地阶段设计归档，原 v2 开发计划已废除并移除。

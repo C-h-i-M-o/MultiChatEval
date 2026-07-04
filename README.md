@@ -58,7 +58,7 @@ MultiChatEval/
 - `docs/database.md`：数据库表结构说明。
 - `docs/react-rewrite/`：React 替代 Vue 的历史重构文档。
 - `docs/react-rewrite/acceptance.md`：React 替代完成时的验收清单。
-- `docs/legacy-v2/`：v2 历史开发文档归档；v2 已冻结，不再继续推进后续阶段。
+- `docs/legacy-v2/`：v2 已落地阶段设计归档；原 v2 开发计划已废除并移除。
 
 ## 快速开始
 
