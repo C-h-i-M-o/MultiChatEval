@@ -1,7 +1,13 @@
 import { describe, expect, test } from "vitest";
 
-import { applyFeedbackResult, createPendingResponses, mergeStreamEvent } from "./evaluation";
-import type { EvaluationTaskState, ModelResponse } from "./types";
+import {
+  applyFeedbackResult,
+  createPendingResponses,
+  getIdleJudgeModels,
+  mergeStreamEvent,
+  normalizeJudgeModelId
+} from "./evaluation";
+import type { EvaluationTaskState, ModelResponse, StreamingModelResponse } from "./types";
 
 const successfulResponse: ModelResponse = {
   id: 31,
@@ -63,6 +69,38 @@ describe("React 阶段三评测状态", () => {
     ]);
   });
 
+  test("评审模型候选只包含未被测模型", () => {
+    const models = [
+      { id: 1, providerName: "deepseek", displayName: "DeepSeek", modelName: "deepseek-chat" },
+      { id: 2, providerName: "minimax", displayName: "MiniMax", modelName: "abab" },
+      { id: 3, providerName: "qwen", displayName: "Qwen", modelName: "qwen-plus" }
+    ];
+
+    expect(getIdleJudgeModels(models, [1, 3])).toEqual([
+      { id: 2, providerName: "minimax", displayName: "MiniMax", modelName: "abab" }
+    ]);
+  });
+
+  test("所有模型都被测时无法保留评审模型", () => {
+    const models = [
+      { id: 1, providerName: "deepseek", displayName: "DeepSeek", modelName: "deepseek-chat" },
+      { id: 2, providerName: "minimax", displayName: "MiniMax", modelName: "abab" }
+    ];
+
+    expect(getIdleJudgeModels(models, [1, 2])).toEqual([]);
+    expect(normalizeJudgeModelId(1, models, [1, 2])).toBeNull();
+  });
+
+  test("当前评审模型被选为被测模型时切换到第一个空闲模型", () => {
+    const models = [
+      { id: 1, providerName: "deepseek", displayName: "DeepSeek", modelName: "deepseek-chat" },
+      { id: 2, providerName: "minimax", displayName: "MiniMax", modelName: "abab" },
+      { id: 3, providerName: "qwen", displayName: "Qwen", modelName: "qwen-plus" }
+    ];
+
+    expect(normalizeJudgeModelId(1, models, [1])).toBe(2);
+  });
+
   test("模型响应事件替换对应等待卡片并保留其余顺序", () => {
     const state: EvaluationTaskState = {
       taskId: 12,
@@ -80,6 +118,56 @@ describe("React 阶段三评测状态", () => {
         { id: "pending-5", modelConfigId: 5, modelName: "MiniMax", pending: true },
         successfulResponse
       ]
+    });
+  });
+
+  test("模型增量事件把等待卡片转换为流式卡片并追加回答", () => {
+    const state: EvaluationTaskState = {
+      taskId: 12,
+      status: "running",
+      prompt: "问题",
+      responses: [
+        { id: "pending-5", modelConfigId: 5, modelName: "MiniMax", pending: true },
+        { id: "pending-2", modelConfigId: 2, modelName: "DeepSeek", pending: true }
+      ]
+    };
+
+    const nextState = mergeStreamEvent(state, { type: "model_delta", modelConfigId: 2, delta: "第一段" });
+    const appendedState = mergeStreamEvent(nextState, { type: "model_delta", modelConfigId: 2, delta: "第二段" });
+
+    expect(appendedState.responses).toEqual([
+      { id: "pending-5", modelConfigId: 5, modelName: "MiniMax", pending: true },
+      {
+        id: "streaming-2",
+        modelConfigId: 2,
+        modelName: "DeepSeek",
+        answer: "第一段第二段",
+        streaming: true,
+        scoring: false
+      }
+    ]);
+  });
+
+  test("模型回答完成事件把流式卡片切换为评分中", () => {
+    const streamingResponse: StreamingModelResponse = {
+      id: "streaming-2",
+      modelConfigId: 2,
+      modelName: "DeepSeek",
+      answer: "完整回答",
+      streaming: true,
+      scoring: false
+    };
+    const state: EvaluationTaskState = {
+      taskId: 12,
+      status: "running",
+      prompt: "问题",
+      responses: [streamingResponse]
+    };
+
+    expect(mergeStreamEvent(state, { type: "model_answer_completed", modelConfigId: 2 }).responses[0]).toEqual({
+      ...streamingResponse,
+      streaming: false,
+      scoring: true
     });
   });
 

@@ -1,12 +1,11 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Button, Modal, Space } from "antd";
 
 import { animateModalIn } from "../animations/pageMotion";
 import { isPendingResponse } from "../features/evaluation/evaluation";
 import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
-import { toAnswerPreview } from "../features/evaluation/content";
-import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CommentPanel } from "./CommentPanel";
+import { MarkdownRenderer } from "./MarkdownRenderer";
 import { formatScore, ScoreBar } from "./ScoreBar";
 
 interface ModelResponseCardProps {
@@ -53,6 +52,25 @@ export function ModelResponseCard({
     );
   }
 
+  if ("streaming" in response) {
+    return (
+      <article className={`response-card${response.scoring ? " scoring" : ""}`}>
+        <ResponseHeader
+          modelName={response.modelName}
+          statusLabel={response.scoring ? "评分中……" : "生成中"}
+          scoreText={response.scoring ? "评分中" : "..."}
+          failed={false}
+        />
+        <ScrollableMarkdownAnswer content={response.answer} placeholder="模型回答已生成，正在准备评分。" />
+        <dl className="metric-row">
+          <Metric label="耗时" value={`${elapsedSeconds}s`} />
+          <Metric label="输出" value={response.scoring ? "等待评分" : "生成中"} />
+          <Metric label="成本" value="待估算" />
+        </dl>
+      </article>
+    );
+  }
+
   const score = normalizedScore(response.score);
   const feedback = response.feedback;
   const failed = response.status !== "success";
@@ -65,7 +83,7 @@ export function ModelResponseCard({
         scoreText={failed ? "失败" : formatScore(score.final)}
         failed={failed}
       />
-      <p className="answer-preview">{toAnswerPreview(response.answer)}</p>
+      <ScrollableMarkdownAnswer content={response.answer} placeholder="暂无回答内容" />
       <dl className="metric-row">
         <Metric label="耗时" value={`${response.latencyMs}ms`} />
         <Metric label="输出" value={String(response.outputTokens)} />
@@ -163,6 +181,50 @@ export function ModelResponseCard({
         </section>
       </Modal>
     </article>
+  );
+}
+
+interface ScrollMetrics {
+  scrollTop: number;
+  clientHeight: number;
+  scrollHeight: number;
+}
+
+export function isNearScrollBottom(metrics: ScrollMetrics, threshold = 28): boolean {
+  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= threshold;
+}
+
+function ScrollableMarkdownAnswer({
+  content,
+  placeholder
+}: {
+  content: string;
+  placeholder: string;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const displayContent = content || placeholder;
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (!element || !shouldStickToBottomRef.current) {
+      return;
+    }
+    element.scrollTop = element.scrollHeight;
+  }, [displayContent]);
+
+  function handleScroll(): void {
+    const element = scrollRef.current;
+    if (!element) {
+      return;
+    }
+    shouldStickToBottomRef.current = isNearScrollBottom(element);
+  }
+
+  return (
+    <div ref={scrollRef} className="answer-scroll" onScroll={handleScroll}>
+      <MarkdownRenderer content={displayContent} />
+    </div>
   );
 }
 

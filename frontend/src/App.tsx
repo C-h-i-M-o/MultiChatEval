@@ -1,16 +1,28 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 
 import { AuthProvider } from "./features/auth/AuthContext";
 import { AppLayout } from "./layout/AppLayout";
-import { AuthPage } from "./pages/AuthPage";
-import { EvaluationPage } from "./pages/EvaluationPage";
-import { HistoryPage } from "./pages/HistoryPage";
-import { AdminUsersPage } from "./pages/AdminUsersPage";
-import { FeedbackStatsPage } from "./pages/FeedbackStatsPage";
-import { ModelConfigsPage } from "./pages/ModelConfigsPage";
 import { ProtectedRoute, PublicOnlyRoute } from "./routes/RouteGuards";
+
+const AuthPage = lazy(() => import("./pages/AuthPage").then((module) => ({ default: module.AuthPage })));
+const EvaluationPage = lazy(() =>
+  import("./pages/EvaluationPage").then((module) => ({ default: module.EvaluationPage }))
+);
+const HistoryPage = lazy(() =>
+  import("./pages/HistoryPage").then((module) => ({ default: module.HistoryPage }))
+);
+const AdminUsersPage = lazy(() =>
+  import("./pages/AdminUsersPage").then((module) => ({ default: module.AdminUsersPage }))
+);
+const FeedbackStatsPage = lazy(() =>
+  import("./pages/FeedbackStatsPage").then((module) => ({ default: module.FeedbackStatsPage }))
+);
+const ModelConfigsPage = lazy(() =>
+  import("./pages/ModelConfigsPage").then((module) => ({ default: module.ModelConfigsPage }))
+);
 
 function App() {
   return (
@@ -28,39 +40,41 @@ function App() {
       }}
     >
       <AuthProvider>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <PublicOnlyRoute>
-                <AuthPage mode="login" />
-              </PublicOnlyRoute>
-            }
-          />
-          <Route
-            path="/register"
-            element={
-              <PublicOnlyRoute>
-                <AuthPage mode="register" />
-              </PublicOnlyRoute>
-            }
-          />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <AppLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<EvaluationPage />} />
-            <Route path="models" element={<ModelConfigsPage />} />
-            <Route path="users" element={<AdminUsersPage />} />
-            <Route path="history" element={<HistoryPage />} />
-            <Route path="feedback" element={<FeedbackStatsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<main className="route-loading">正在加载页面...</main>}>
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                <PublicOnlyRoute>
+                  <AuthPage mode="login" />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                <PublicOnlyRoute>
+                  <AuthPage mode="register" />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<EvaluationPage />} />
+              <Route path="models" element={<ModelConfigsPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="history" element={<HistoryPage />} />
+              <Route path="feedback" element={<FeedbackStatsPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </AuthProvider>
     </ConfigProvider>
   );

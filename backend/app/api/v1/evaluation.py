@@ -24,6 +24,7 @@ from app.services.evaluation_service import (
     EvaluationCommentNotFoundError,
     EvaluationResponseNotFoundError,
     EvaluationTaskNotFoundError,
+    EvaluationTaskValidationError,
     evaluation_service,
 )
 from app.services.token_quota_service import TokenQuotaExceededError, token_quota_service
@@ -42,6 +43,8 @@ async def create_evaluation_task(
         return await evaluation_service.create_task(payload, db, current_user.id, current_user.username)
     except TokenQuotaExceededError as error:
         raise HTTPException(status_code=429, detail=str(error)) from error
+    except EvaluationTaskValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @router.post("/tasks/stream")
@@ -52,8 +55,11 @@ async def stream_evaluation_task(
 ) -> StreamingResponse:
     try:
         await token_quota_service.ensure_can_start(db, current_user)
+        await evaluation_service.validate_task_models(payload, db)
     except TokenQuotaExceededError as error:
         raise HTTPException(status_code=429, detail=str(error)) from error
+    except EvaluationTaskValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
     async def render_events() -> AsyncIterator[str]:
         async for event in evaluation_service.stream_task_events(

@@ -65,13 +65,13 @@ frontend/
 5. 已登录用户访问 `/login` 或 `/register` 会回到工作台。
 6. 普通用户无法看到或访问 `/models`、`/users` 管理员入口。
 
-### 模型级渐进评测
+### 逐 token 流式评测
 
 1. 前端请求 `GET /api/models/available` 获取可评测模型。
 2. 用户提交问题、模型列表、公开/私有模式、LLM Judge 开关和思考模式。
 3. 前端通过 `fetch` 调用 `POST /api/evaluation/tasks/stream`。
 4. 前端使用 `ReadableStream`、`TextDecoder` 和按行缓冲解析 NDJSON。
-5. 按 `task_started`、`model_response`、`task_completed` 更新页面状态。
+5. 按 `task_started`、`model_delta`、`model_answer_completed`、`model_response`、`task_completed` 更新页面状态。
 
 ### 安全渲染
 
@@ -87,7 +87,7 @@ DOMPurify 清洗
 React 渲染
 ```
 
-`<think>...</think>` 和未闭合 `<think>` 内容需要折叠为思考过程，正式回答单独展示。
+`<think>...</think>` 和未闭合 `<think>` 内容需要默认展开展示为思考过程，正式回答单独展示。
 
 ## 视觉与动效
 
@@ -109,7 +109,7 @@ React 路由已经覆盖原 Vue 路由能力：
 
 - 登录态恢复和角色隔离正确。
 - `POST /api/evaluation/tasks/stream` 的 NDJSON 分片解析可靠。
-- Markdown 与思考过程渲染行为与 Vue 版本一致。
+- Markdown、数学公式与思考过程渲染行为由 React 主前端维护，思考过程默认展开。
 - 点赞、点踩和评分详情与后端状态一致。
 - 公开评论交互已随历史任务详情迁移。
 - 管理员页面不对普通用户暴露。

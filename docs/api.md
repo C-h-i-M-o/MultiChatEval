@@ -13,11 +13,12 @@ POST /api/auth/register
 ```json
 {
   "username": "demo_user",
-  "password": "password123"
+  "password": "Password123",
+  "confirmPassword": "Password123"
 }
 ```
 
-注册成功返回当前用户并设置登录 Cookie。重复用户名返回 `409`。
+注册密码至少 8 位，并且必须同时包含数字、小写字母和大写字母；`confirmPassword` 必须与 `password` 一致。注册成功返回当前用户并设置登录 Cookie。重复用户名返回 `409`。
 
 ### 登录
 
@@ -25,7 +26,16 @@ POST /api/auth/register
 POST /api/auth/login
 ```
 
-请求结构与注册相同。登录成功返回当前用户并设置登录 Cookie；凭据错误返回 `401`，禁用用户返回 `403`。
+请求结构：
+
+```json
+{
+  "username": "demo_user",
+  "password": "Password123"
+}
+```
+
+登录成功返回当前用户并设置登录 Cookie；凭据错误返回 `401`，禁用用户返回 `403`。
 
 ### 当前用户
 
@@ -88,7 +98,7 @@ POST /api/evaluation/tasks
 
 `visibility` 支持 `public` 和 `private`，默认 `public`。公开任务可被所有登录用户查看，私有任务只对创建者可见。
 
-`enableJudge` 为 `true` 时必须传入 `judgeModelId`，且该模型必须已启用并配置 API Key。`judgeModelId` 用于确定评审调用；候选回答仍由 `modelIds` 决定，同一模型可以同时承担候选回答和评审角色。
+`enableJudge` 为 `true` 时必须传入 `judgeModelId`，且该模型必须已启用、配置 API Key，并且不能出现在本次 `modelIds` 中。`judgeModelId` 用于确定评审调用；候选回答仍由 `modelIds` 决定。当前前端只展示未参与本次测评的空闲模型作为评审候选；如果所有可用模型都已被选为被测模型，则禁用 LLM 评审开关并提示用户保留一个空闲模型。
 
 `enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
 
@@ -196,7 +206,7 @@ POST /api/evaluation/tasks
 POST /api/evaluation/tasks/stream
 ```
 
-请求字段与 `POST /api/evaluation/tasks` 一致。响应内容类型为 `application/x-ndjson`，每一行都是一个独立 JSON 事件。
+请求字段与 `POST /api/evaluation/tasks` 一致。响应内容类型为 `application/x-ndjson`，每一行都是一个独立 JSON 事件。模型回答生成阶段会持续返回增量文本；单个模型回答结束后先返回“回答完成”事件，前端展示“评分中……”，评分和持久化完成后再返回最终模型结果。
 
 任务开始事件：
 
@@ -210,7 +220,26 @@ POST /api/evaluation/tasks/stream
 }
 ```
 
-单个模型完成事件：
+单个模型回答增量事件：
+
+```json
+{
+  "type": "model_delta",
+  "modelConfigId": 1,
+  "delta": "增量回答片段"
+}
+```
+
+单个模型回答完成、进入评分事件：
+
+```json
+{
+  "type": "model_answer_completed",
+  "modelConfigId": 1
+}
+```
+
+单个模型评分和持久化完成事件：
 
 ```json
 {
@@ -272,7 +301,7 @@ POST /api/evaluation/tasks/stream
 }
 ```
 
-如果某个模型调用失败，会以 `model_response` 事件返回该模型的失败状态，不会中断其他模型。
+如果某个模型调用失败，会以 `model_response` 事件返回该模型的失败状态，不会中断其他模型。失败模型不会参与“评分中”阶段。
 
 ## 分页查询历史评测任务
 
@@ -451,26 +480,55 @@ GET /api/token-usage/me/today
 ## 查询管理员用户列表
 
 ```http
-GET /api/admin/users
+GET /api/admin/users?page=1&pageSize=10&keyword=test&role=user&status=active
 ```
+
+查询参数：
+
+- `page`：页码，从 1 开始。
+- `pageSize`：每页数量，最大 100。
+- `keyword`：按用户名模糊搜索，可选。
+- `role`：按角色筛选，支持 `user` 和 `admin`，可选。
+- `status`：按状态筛选，支持 `active` 和 `disabled`，可选。
 
 响应：
 
 ```json
-[
-  {
-    "id": 7,
-    "username": "test_user",
-    "role": "user",
-    "status": "active",
-    "usageDate": "2026-06-12",
-    "usedTokens": 24000,
-    "dailyLimit": 100000
-  }
-]
+{
+  "items": [
+    {
+      "id": 7,
+      "username": "test_user",
+      "role": "user",
+      "status": "active",
+      "usageDate": "2026-06-12",
+      "usedTokens": 24000,
+      "dailyLimit": 100000
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 10
+}
 ```
 
 匿名占位用户 `id = 0` 不返回。
+
+## 修改用户状态
+
+```http
+PATCH /api/admin/users/{userId}/status
+```
+
+请求：
+
+```json
+{
+  "status": "disabled"
+}
+```
+
+`status` 支持 `active` 和 `disabled`。禁用用户不能继续登录；管理员不能修改匿名占位用户，也不能封禁当前登录的管理员账号。
 
 ## 修改用户每日额度
 

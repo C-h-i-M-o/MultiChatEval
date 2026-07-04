@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import "antd/dist/reset.css";
+import "katex/dist/katex.min.css";
 import "./styles.css";
 
 const rootElement = document.getElementById("root");

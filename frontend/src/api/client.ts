@@ -26,6 +26,10 @@ export interface AuthCredentials {
   password: string;
 }
 
+export interface RegisterCredentials extends AuthCredentials {
+  confirmPassword: string;
+}
+
 export interface AvailableModel {
   id: number;
   providerName: string;
@@ -110,6 +114,21 @@ export interface AdminUserUsage {
   usageDate: string;
   usedTokens: number;
   dailyLimit: number | null;
+}
+
+export interface AdminUserList {
+  items: AdminUserUsage[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminUserListParams {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  role?: UserRole | "all";
+  status?: UserStatus | "all";
 }
 
 export interface FeedbackStatsSummary {
@@ -318,7 +337,7 @@ export async function loginUser(credentials: AuthCredentials): Promise<UserProfi
   return postJson<UserProfile>("/api/auth/login", credentials);
 }
 
-export async function registerUser(credentials: AuthCredentials): Promise<UserProfile> {
+export async function registerUser(credentials: RegisterCredentials): Promise<UserProfile> {
   return postJson<UserProfile>("/api/auth/register", credentials);
 }
 
@@ -411,8 +430,41 @@ export async function testModelConfig(payload: ModelConfigTestPayload): Promise<
   return postJson<ModelConfigTestResult>("/api/admin/model-configs/test", payload);
 }
 
-export async function listAdminUsers(): Promise<AdminUserUsage[]> {
-  return fetchJson<AdminUserUsage[]>("/api/admin/users");
+export async function listAdminUsers(params: AdminUserListParams): Promise<AdminUserList> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize)
+  });
+  const keyword = params.keyword?.trim();
+  if (keyword) {
+    searchParams.set("keyword", keyword);
+  }
+  if (params.role && params.role !== "all") {
+    searchParams.set("role", params.role);
+  }
+  if (params.status && params.status !== "all") {
+    searchParams.set("status", params.status);
+  }
+  return fetchJson<AdminUserList>(`/api/admin/users?${searchParams.toString()}`);
+}
+
+export async function updateAdminUserStatus(userId: number, userStatus: UserStatus): Promise<AdminUserUsage> {
+  const response = await fetch(`/api/admin/users/${userId}/status`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ status: userStatus })
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new ApiError(response.status, message);
+  }
+
+  return response.json() as Promise<AdminUserUsage>;
 }
 
 export async function updateUserQuota(userId: number, dailyLimit: number): Promise<AdminUserUsage> {

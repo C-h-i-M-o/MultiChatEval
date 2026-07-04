@@ -12,6 +12,9 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
   const location = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordTouched, setConfirmPasswordTouched] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const cardRef = useRef<HTMLElement | null>(null);
   const isRegister = mode === "register";
@@ -22,6 +25,15 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
     const redirect = params.get("redirect");
     return redirect?.startsWith("/") ? redirect : "/";
   }, [location.search]);
+
+  const passwordRules = useMemo(() => getPasswordRuleStates(password), [password]);
+  const showPasswordRequirements = isRegister && (passwordFocused || password.length > 0);
+  const confirmPasswordMessage = isRegister && confirmPasswordTouched
+    ? getRegisterInlineMessage(password, confirmPassword)
+    : null;
+  const registerSubmitDisabled = isRegister
+    ? isRegisterSubmitDisabled(username, password, confirmPassword, auth.loading)
+    : auth.loading;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -36,10 +48,17 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       setErrorMessage("请输入用户名和密码");
       return;
     }
+    if (isRegister) {
+      const passwordError = validateRegisterPassword(password, confirmPassword);
+      if (passwordError) {
+        setErrorMessage(passwordError);
+        return;
+      }
+    }
 
     try {
       if (isRegister) {
-        await auth.register(credentials);
+        await auth.register({ ...credentials, confirmPassword });
       } else {
         await auth.login(credentials);
       }
@@ -78,14 +97,55 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
             密码
             <input
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onBlur={() => setPasswordFocused(false)}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setErrorMessage(null);
+              }}
+              onFocus={() => setPasswordFocused(true)}
               type="password"
               autoComplete={isRegister ? "new-password" : "current-password"}
               maxLength={128}
             />
           </label>
+          {showPasswordRequirements ? (
+            <div className="password-rules" aria-live="polite">
+              <p>密码需要满足以下条件</p>
+              <ul>
+                {passwordRules.map((rule) => (
+                  <li className={rule.valid ? "valid" : "invalid"} key={rule.key}>
+                    <span aria-hidden="true">{rule.valid ? "✓" : "•"}</span>
+                    {rule.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {isRegister ? (
+            <label>
+              确认密码
+              <input
+                value={confirmPassword}
+                aria-invalid={confirmPasswordMessage ? "true" : "false"}
+                onBlur={() => setConfirmPasswordTouched(true)}
+                onChange={(event) => {
+                  setConfirmPassword(event.target.value);
+                  setConfirmPasswordTouched(true);
+                  setErrorMessage(null);
+                }}
+                type="password"
+                autoComplete="new-password"
+                maxLength={128}
+              />
+              {confirmPasswordMessage ? (
+                <span className="field-hint error" role="alert">{confirmPasswordMessage}</span>
+              ) : confirmPassword ? (
+                <span className="field-hint success">两次输入的密码一致</span>
+              ) : null}
+            </label>
+          ) : null}
           {errorMessage ? <p className="error-message">{errorMessage}</p> : null}
-          <button className="auth-submit" type="submit" disabled={auth.loading}>
+          <button className="auth-submit" type="submit" disabled={registerSubmitDisabled}>
             {auth.loading ? "处理中..." : isRegister ? "注册并登录" : "登录"}
           </button>
         </form>
@@ -97,4 +157,69 @@ export function AuthPage({ mode }: { mode: "login" | "register" }) {
       </section>
     </main>
   );
+}
+
+function validateRegisterPassword(password: string, confirmPassword: string): string | null {
+  if (password.length < 8) {
+    return "密码长度不能少于 8 位";
+  }
+  if (!hasDigit(password) || !hasLowercase(password) || !hasUppercase(password)) {
+    return "密码必须包含数字、小写字母和大写字母";
+  }
+  if (!confirmPassword) {
+    return "请再次输入密码";
+  }
+  if (password !== confirmPassword) {
+    return "两次输入的密码不一致";
+  }
+  return null;
+}
+
+type PasswordRuleKey = "length" | "digit" | "lowercase" | "uppercase";
+
+export interface PasswordRuleState {
+  key: PasswordRuleKey;
+  label: string;
+  valid: boolean;
+}
+
+export function getPasswordRuleStates(password: string): PasswordRuleState[] {
+  return [
+    { key: "length", label: "至少 8 位", valid: isPasswordStrong(password) },
+    { key: "digit", label: "包含数字", valid: hasDigit(password) },
+    { key: "lowercase", label: "包含小写字母", valid: hasLowercase(password) },
+    { key: "uppercase", label: "包含大写字母", valid: hasUppercase(password) }
+  ];
+}
+
+export function getRegisterInlineMessage(password: string, confirmPassword: string): string | null {
+  if (!confirmPassword) {
+    return null;
+  }
+  return password === confirmPassword ? null : "两次输入的密码不一致";
+}
+
+export function isRegisterSubmitDisabled(
+  username: string,
+  password: string,
+  confirmPassword: string,
+  loading: boolean
+): boolean {
+  return loading || !username.trim() || !isPasswordStrong(password) || !confirmPassword || password !== confirmPassword;
+}
+
+function isPasswordStrong(password: string): boolean {
+  return password.length >= 8 && hasDigit(password) && hasLowercase(password) && hasUppercase(password);
+}
+
+function hasDigit(password: string): boolean {
+  return /\d/.test(password);
+}
+
+function hasLowercase(password: string): boolean {
+  return /[a-z]/.test(password);
+}
+
+function hasUppercase(password: string): boolean {
+  return /[A-Z]/.test(password);
 }

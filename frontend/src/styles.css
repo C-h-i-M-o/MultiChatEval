@@ -164,6 +164,74 @@ a {
   box-shadow: 0 0 0 3px rgba(22, 97, 106, 0.14);
 }
 
+.password-rules {
+  display: grid;
+  gap: 8px;
+  margin-top: -4px;
+  border: 1px solid rgba(22, 97, 106, 0.14);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(22, 97, 106, 0.06);
+}
+
+.password-rules p {
+  margin: 0;
+  color: #455446;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.password-rules ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.password-rules li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6a746b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.password-rules li span {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(22, 32, 24, 0.08);
+  color: #667167;
+  font-size: 12px;
+}
+
+.password-rules li.valid {
+  color: #1e4a2e;
+}
+
+.password-rules li.valid span {
+  background: rgba(30, 74, 46, 0.14);
+  color: #1e4a2e;
+}
+
+.field-hint {
+  color: #526052;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field-hint.error {
+  color: #9b3321;
+}
+
+.field-hint.success {
+  color: #1e4a2e;
+}
+
 .auth-submit,
 .user-card button,
 .notice-panel button,
@@ -525,6 +593,17 @@ a {
   accent-color: var(--color-primary);
 }
 
+.form-hint {
+  margin: 0;
+  color: #667167;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.form-hint.warning {
+  color: #9a5a13;
+}
+
 .segmented-control {
   display: inline-flex;
   border: 1px solid rgba(22, 97, 106, 0.18);
@@ -742,19 +821,21 @@ button:disabled {
   background: linear-gradient(90deg, rgba(22, 97, 106, 0.14), rgba(229, 184, 93, 0.1), rgba(22, 97, 106, 0.14));
 }
 
-.answer-preview,
 .markdown-body {
   color: #354236;
   line-height: 1.75;
 }
 
-.answer-preview {
-  display: -webkit-box;
-  min-height: 74px;
-  margin: 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.answer-scroll {
+  min-height: 138px;
+  max-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(22, 32, 24, 0.1);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(255, 253, 248, 0.62);
+  scrollbar-gutter: stable;
 }
 
 .score-bars {
@@ -813,6 +894,7 @@ button:disabled {
 .think-panel {
   border: 1px solid rgba(22, 32, 24, 0.12);
   border-radius: 8px;
+  margin-bottom: 12px;
   padding: 10px 12px;
   background: rgba(244, 240, 232, 0.7);
 }
@@ -844,6 +926,12 @@ button:disabled {
 .markdown-body pre code {
   padding: 0;
   background: transparent;
+}
+
+.markdown-body .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
 }
 
 .score-detail-list {
@@ -1471,6 +1559,60 @@ button:disabled {
   font-weight: 800;
 }
 
+.user-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(22, 32, 24, 0.12);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 248, 0.94), rgba(247, 244, 232, 0.78)),
+    var(--color-panel);
+  box-shadow: 0 14px 32px rgba(23, 35, 42, 0.08);
+}
+
+.user-filter-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 156px;
+}
+
+.user-filter-copy span {
+  color: #52666b;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.user-filter-copy strong {
+  color: var(--color-ink);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.user-filter-controls {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.user-filter-search {
+  width: min(320px, 100%);
+}
+
+.user-filter-select {
+  width: 140px;
+}
+
+.user-filter-controls .ant-btn,
+.user-filter-controls .ant-input-search,
+.user-filter-controls .ant-select {
+  min-height: 38px;
+}
+
 @keyframes pulse {
   70% {
     box-shadow: 0 0 0 14px rgba(229, 184, 93, 0);
@@ -1555,6 +1697,7 @@ button:disabled {
   .comment-actions,
   .pagination,
   .section-head,
+  .user-filter-bar,
   .toolbar,
   .quota-row,
   .quota-editor {
@@ -1570,6 +1713,17 @@ button:disabled {
   }
 
   .quota-editor input {
+    width: 100%;
+  }
+
+  .user-filter-controls {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .user-filter-search,
+  .user-filter-select,
+  .user-filter-controls .ant-btn {
     width: 100%;
   }
 }

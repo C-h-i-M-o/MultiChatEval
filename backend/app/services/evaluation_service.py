@@ -60,6 +60,10 @@ class EvaluationTaskNotFoundError(Exception):
     pass
 
 
+class EvaluationTaskValidationError(Exception):
+    pass
+
+
 class EvaluationResponseNotFoundError(Exception):
     pass
 
@@ -77,6 +81,7 @@ class EvaluationService:
         username: str,
     ) -> EvaluationTaskRead:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
+        self._ensure_judge_model_is_idle(payload, selected_models)
         judge_model = await self._resolve_judge_model(db, payload)
         task_id = await self._create_task_record(db, payload, user_id)
         responses = await self._collect_model_responses(
@@ -109,6 +114,7 @@ class EvaluationService:
         username: str,
     ) -> AsyncIterator[dict[str, object]]:
         selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
+        self._ensure_judge_model_is_idle(payload, selected_models)
         judge_model = await self._resolve_judge_model(db, payload)
         task_id = await self._create_task_record(db, payload, user_id)
         model_ids = [model.id for model in selected_models]
@@ -123,16 +129,52 @@ class EvaluationService:
             "total": len(selected_models),
         }
 
+        event_queue: asyncio.Queue[dict[str, object]] = asyncio.Queue()
         tasks = [
-            asyncio.create_task(self._call_model(prompt=payload.prompt, model=model, extra_body=extra_body))
+            asyncio.create_task(
+                self._stream_model_worker(
+                    queue=event_queue,
+                    prompt=payload.prompt,
+                    model=model,
+                    extra_body=extra_body,
+                )
+            )
             for model in selected_models
         ]
-        for completed_task in asyncio.as_completed(tasks):
-            response = await completed_task
-            response = await self._apply_judge_score(payload.prompt, response, judge_model)
-            persisted_response = await self._persist_response(db, task_id, response, user_id)
-            responses.append(persisted_response)
-            yield {"type": "model_response", "response": persisted_response}
+        scoring_tasks: list[asyncio.Task[None]] = []
+        completed_models = 0
+        try:
+            while completed_models < len(tasks):
+                event = await event_queue.get()
+                if event["type"] == "response_ready":
+                    response = event["response"]
+                    if not isinstance(response, ModelResponseRead):
+                        continue
+                    scoring_tasks.append(
+                        asyncio.create_task(
+                            self._score_model_worker(
+                                queue=event_queue,
+                                prompt=payload.prompt,
+                                response=response,
+                                judge_model=judge_model,
+                            )
+                        )
+                    )
+                    continue
+                if event["type"] == "scored_response_ready":
+                    completed_models += 1
+                    response = event["response"]
+                    if not isinstance(response, ModelResponseRead):
+                        continue
+                    persisted_response = await self._persist_response(db, task_id, response, user_id)
+                    responses.append(persisted_response)
+                    yield {"type": "model_response", "response": persisted_response}
+                    continue
+                yield event
+        finally:
+            for task in [*tasks, *scoring_tasks]:
+                if not task.done():
+                    task.cancel()
 
         task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
         await self._finish_task_record(db, task_id, task_status)
@@ -424,49 +466,148 @@ class EvaluationService:
                 score=EvaluationScoreRead(**score),
             )
         except TimeoutError:
-            answer = f"模型调用超时：{model.display_name} 超过 {model.timeout_seconds} 秒未返回"
-            score = rule_evaluator.evaluate(prompt=prompt, answer="")
-            return ModelResponseRead(
-                id=model.id,
-                modelConfigId=model.id,
-                modelName=model.display_name,
-                provider=model.provider_name,
-                answer=answer,
-                latencyMs=0,
-                inputTokens=0,
-                outputTokens=0,
-                cacheHitTokens=0,
-                cacheCreationTokens=0,
-                totalTokens=0,
-                estimatedCost=0,
-                currency=model.currency,
-                costDetails=ModelCostDetailsRead(),
-                configSnapshot=self._config_snapshot(model),
-                status="failed",
-                score=EvaluationScoreRead(**score),
+            return self._failed_model_response(
+                model,
+                f"模型调用超时：{model.display_name} 超过 {model.timeout_seconds} 秒未返回",
             )
         except (httpx.HTTPError, ValueError, KeyError, IndexError) as error:
-            answer = f"模型调用失败：{error}"
-            score = rule_evaluator.evaluate(prompt=prompt, answer="")
-            return ModelResponseRead(
-                id=model.id,
-                modelConfigId=model.id,
-                modelName=model.display_name,
-                provider=model.provider_name,
-                answer=answer,
-                latencyMs=0,
-                inputTokens=0,
-                outputTokens=0,
-                cacheHitTokens=0,
-                cacheCreationTokens=0,
-                totalTokens=0,
-                estimatedCost=0,
-                currency=model.currency,
-                costDetails=ModelCostDetailsRead(),
-                configSnapshot=self._config_snapshot(model),
-                status="failed",
-                score=EvaluationScoreRead(**score),
+            return self._failed_model_response(model, f"模型调用失败：{error}")
+
+    async def _stream_model_worker(
+        self,
+        queue: asyncio.Queue[dict[str, object]],
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> None:
+        try:
+            async for event in self._stream_model_response(prompt=prompt, model=model, extra_body=extra_body):
+                if event["type"] == "delta":
+                    queue.put_nowait(
+                        {
+                            "type": "model_delta",
+                            "modelConfigId": model.id,
+                            "delta": event["delta"],
+                        }
+                    )
+                    continue
+                if event["type"] == "response":
+                    queue.put_nowait({"type": "model_answer_completed", "modelConfigId": model.id})
+                    queue.put_nowait({"type": "response_ready", "response": event["response"]})
+        except Exception as error:
+            queue.put_nowait(
+                {
+                    "type": "response_ready",
+                    "response": self._failed_model_response(model, f"模型调用失败：{error}"),
+                }
             )
+
+    async def _score_model_worker(
+        self,
+        queue: asyncio.Queue[dict[str, object]],
+        prompt: str,
+        response: ModelResponseRead,
+        judge_model: RuntimeModelConfig | None,
+    ) -> None:
+        try:
+            scored_response = await self._apply_judge_score(prompt, response, judge_model)
+        except Exception:
+            scored_response = response
+        queue.put_nowait({"type": "scored_response_ready", "response": scored_response})
+
+    async def _stream_model_response(
+        self,
+        prompt: str,
+        model: RuntimeModelConfig,
+        extra_body: dict[str, object],
+    ) -> AsyncIterator[dict[str, object]]:
+        client = OpenAICompatibleClient(
+            model_name=model.model_name,
+            base_url=model.base_url,
+            api_key=model.api_key,
+            input_price=model.input_price,
+            output_price=model.output_price,
+            cache_hit_price=model.cache_hit_price,
+            cache_creation_price=model.cache_creation_price,
+            timeout=model.timeout_seconds,
+            extra_body=model.extra_body,
+        )
+        try:
+            reply = None
+            async with asyncio.timeout(model.timeout_seconds + 5):
+                async for event in client.stream_chat(
+                    ModelRequest(
+                        prompt=self._model_prompt(prompt),
+                        model_name=model.model_name,
+                        max_tokens=model.max_tokens,
+                        temperature=model.temperature,
+                        extra_body=extra_body,
+                    )
+                ):
+                    if event.delta:
+                        yield {"type": "delta", "delta": event.delta}
+                    if event.reply is not None:
+                        reply = event.reply
+
+            if reply is None:
+                raise ValueError("模型流式响应未返回完整结果")
+
+            cost_details = client.estimate_cost_details(reply.usage)
+            estimated_cost = float(cost_details.total_cost)
+            score = rule_evaluator.evaluate(prompt=prompt, answer=reply.answer)
+            yield {
+                "type": "response",
+                "response": ModelResponseRead(
+                    id=model.id,
+                    modelConfigId=model.id,
+                    modelName=model.display_name,
+                    provider=model.provider_name,
+                    answer=reply.answer,
+                    latencyMs=reply.latency_ms,
+                    inputTokens=reply.usage.input_tokens,
+                    outputTokens=reply.usage.output_tokens,
+                    cacheHitTokens=reply.usage.cache_hit_tokens,
+                    cacheCreationTokens=reply.usage.cache_creation_tokens,
+                    totalTokens=reply.usage.total_tokens,
+                    estimatedCost=estimated_cost,
+                    currency=model.currency,
+                    costDetails=ModelCostDetailsRead(
+                        inputCost=float(cost_details.input_cost),
+                        outputCost=float(cost_details.output_cost),
+                        cacheHitCost=float(cost_details.cache_hit_cost),
+                        cacheCreationCost=float(cost_details.cache_creation_cost),
+                    ),
+                    configSnapshot=self._config_snapshot(model),
+                    status="success",
+                    score=EvaluationScoreRead(**score),
+                ),
+            }
+        except TimeoutError:
+            yield {"type": "response", "response": self._failed_model_response(model, "模型调用超时")}
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, json.JSONDecodeError) as error:
+            yield {"type": "response", "response": self._failed_model_response(model, f"模型调用失败：{error}")}
+
+    def _failed_model_response(self, model: RuntimeModelConfig, answer: str) -> ModelResponseRead:
+        score = rule_evaluator.evaluate(prompt="", answer="")
+        return ModelResponseRead(
+            id=model.id,
+            modelConfigId=model.id,
+            modelName=model.display_name,
+            provider=model.provider_name,
+            answer=answer,
+            latencyMs=0,
+            inputTokens=0,
+            outputTokens=0,
+            cacheHitTokens=0,
+            cacheCreationTokens=0,
+            totalTokens=0,
+            estimatedCost=0,
+            currency=model.currency,
+            costDetails=ModelCostDetailsRead(),
+            configSnapshot=self._config_snapshot(model),
+            status="failed",
+            score=EvaluationScoreRead(**score),
+        )
 
     async def _resolve_judge_model(
         self,
@@ -476,6 +617,21 @@ class EvaluationService:
         if not payload.enable_judge or payload.judge_model_id is None:
             return None
         return await model_config_service.resolve_runtime_model(db, payload.judge_model_id)
+
+    async def validate_task_models(self, payload: EvaluationTaskCreate, db: AsyncSession) -> None:
+        selected_models = await model_config_service.resolve_runtime_models(db, payload.model_ids)
+        self._ensure_judge_model_is_idle(payload, selected_models)
+
+    def _ensure_judge_model_is_idle(
+        self,
+        payload: EvaluationTaskCreate,
+        selected_models: list[RuntimeModelConfig],
+    ) -> None:
+        if not payload.enable_judge or payload.judge_model_id is None:
+            return
+        selected_model_ids = {model.id for model in selected_models}
+        if payload.judge_model_id in selected_model_ids:
+            raise EvaluationTaskValidationError("LLM 评审模型不能同时作为被测模型")
 
     async def _apply_judge_score(
         self,

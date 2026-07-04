@@ -6,6 +6,7 @@ import {
   logoutUser,
   registerUser,
   type AuthCredentials,
+  type RegisterCredentials,
   type UserProfile
 } from "../../api/client";
 import { isUnauthorizedError } from "./auth";
@@ -15,7 +16,7 @@ interface AuthContextValue {
   initialized: boolean;
   loading: boolean;
   login: (credentials: AuthCredentials) => Promise<UserProfile>;
-  register: (credentials: AuthCredentials) => Promise<UserProfile>;
+  register: (credentials: RegisterCredentials) => Promise<UserProfile>;
   logout: () => Promise<void>;
   refresh: () => Promise<UserProfile | null>;
 }
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const register = useCallback(async (credentials: AuthCredentials): Promise<UserProfile> => {
+  const register = useCallback(async (credentials: RegisterCredentials): Promise<UserProfile> => {
     setLoading(true);
     try {
       const currentUser = await registerUser(credentials);

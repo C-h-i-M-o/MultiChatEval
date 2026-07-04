@@ -10,7 +10,7 @@ React 技术栈前端已经完成对原 Vue 前端的功能替代。本文档保
 
 - 不继续开发 v2 已冻结的新功能。
 - 不重写后端 API、数据库结构、评分公式或权限模型。
-- 不把模型级 NDJSON 渐进返回改成逐字 Token 流式输出。
+- 当前主前端已升级为逐 token NDJSON 流式输出；React 重写阶段早期“不改逐字 Token”的限制不再适用于当前实现。
 - 不删除 `vue-frontend/` 历史版本，除非后续单独任务明确要求。
 
 ## 阶段计划
@@ -59,8 +59,8 @@ React 技术栈前端已经完成对原 Vue 前端的功能替代。本文档保
 ### 阶段 3：评测工作台（核心迁移已完成）
 
 - 迁移模型列表加载、问题输入、公开/私有选择、LLM Judge 开关和全局思考模式开关。
-- 迁移 `POST /api/evaluation/tasks/stream` 的 NDJSON 读取和模型级渐进展示。
-- 迁移 Markdown 渲染、DOMPurify 清洗、`<think>` 折叠和点赞/点踩反馈操作。
+- 迁移 `POST /api/evaluation/tasks/stream` 的 NDJSON 读取；当前实现已在此基础上升级为逐 token 展示和评分中状态。
+- 迁移 Markdown 渲染、DOMPurify 清洗、`<think>` 默认展开和点赞/点踩反馈操作。
 
 验收标准：
 
@@ -72,9 +72,9 @@ React 技术栈前端已经完成对原 Vue 前端的功能替代。本文档保
 
 - `/` 已从阶段占位壳替换为 React 评测工作台。
 - API 客户端新增 `GET /api/models/available`、`GET /api/token-usage/me/today`、`POST /api/evaluation/tasks/stream` 和 `POST /api/evaluation/responses/{responseId}/feedback`。
-- React 工作台已支持可用模型加载、默认模型选择、今日 Token 用量展示、公开/私有评测、思考模式、LLM 评审模型选择和模型级等待卡片。
-- NDJSON 读取使用 `ReadableStream`、`TextDecoder` 和按行缓冲解析；`model_response` 会替换对应模型等待卡片，其他模型继续等待。
-- 回答卡片已支持摘要、关键指标、成本、三项评分条、全文展开、Markdown 安全渲染、`<think>` 折叠、评分命中项和点赞/点踩反馈。
+- React 工作台已支持可用模型加载、默认模型选择、今日 Token 用量展示、公开/私有评测、思考模式、LLM 评审模型选择、逐 token 回答卡片和评分中状态。
+- NDJSON 读取使用 `ReadableStream`、`TextDecoder` 和按行缓冲解析；`model_delta` 会追加对应模型回答，`model_answer_completed` 切换为评分中，`model_response` 会替换为最终结果卡片。
+- 回答卡片已支持卡片内可滚动 Markdown、数学公式、关键指标、成本、三项评分条、全文展开、`<think>` 默认展开、评分命中项和点赞/点踩反馈。
 - 公开评论分页、发布和删除已随阶段四历史任务详情迁移。
 
 ### 阶段 4：管理与历史页面（已完成）

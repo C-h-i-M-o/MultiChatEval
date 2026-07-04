@@ -17,6 +17,8 @@ class EvaluationTaskCreate(BaseModel):
     def require_judge_model(self) -> "EvaluationTaskCreate":
         if self.enable_judge and self.judge_model_id is None:
             raise ValueError("启用 LLM 评审时必须选择评审模型")
+        if self.enable_judge and self.judge_model_id in self.model_ids:
+            raise ValueError("LLM 评审模型不能同时作为被测模型")
         return self
 
 

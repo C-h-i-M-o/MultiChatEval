@@ -13,14 +13,14 @@ from app.services.model_config_service import model_config_service
 def test_register_sets_auth_cookie(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_register(_db: object, username: str, password: str) -> UserRead:
         assert username == "demo_user"
-        assert password == "password123"
+        assert password == "Password123"
         return UserRead(id=1, username=username, role="user", status="active")
 
     monkeypatch.setattr(auth_service, "register", fake_register)
 
     response = TestClient(app).post(
         "/api/auth/register",
-        json={"username": "demo_user", "password": "password123"},
+        json={"username": "demo_user", "password": "Password123", "confirmPassword": "Password123"},
     )
 
     assert response.status_code == 201
@@ -37,11 +37,31 @@ def test_register_returns_409_for_duplicate_username(monkeypatch: pytest.MonkeyP
 
     response = TestClient(app).post(
         "/api/auth/register",
-        json={"username": "demo_user", "password": "password123"},
+        json={"username": "demo_user", "password": "Password123", "confirmPassword": "Password123"},
     )
 
     assert response.status_code == 409
     assert response.json() == {"detail": "用户名已存在"}
+
+
+def test_register_rejects_mismatched_confirm_password() -> None:
+    response = TestClient(app).post(
+        "/api/auth/register",
+        json={"username": "demo_user", "password": "Password123", "confirmPassword": "Password124"},
+    )
+
+    assert response.status_code == 422
+    assert "两次输入的密码不一致" in response.text
+
+
+def test_register_requires_strong_password() -> None:
+    response = TestClient(app).post(
+        "/api/auth/register",
+        json={"username": "demo_user", "password": "password123", "confirmPassword": "password123"},
+    )
+
+    assert response.status_code == 422
+    assert "密码必须包含数字、小写字母和大写字母" in response.text
 
 
 def test_login_rejects_invalid_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
