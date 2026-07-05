@@ -589,6 +589,16 @@ class EvaluationService:
 
     def _failed_model_response(self, model: RuntimeModelConfig, answer: str) -> ModelResponseRead:
         score = rule_evaluator.evaluate(prompt="", answer="")
+        score.update(
+            {
+                "final": None,
+                "ruleFinal": score.get("ruleFinal", 0),
+                "baseFinal": None,
+                "judgeFinal": None,
+                "scoreStatus": "model_failed",
+                "excludedFromStats": True,
+            }
+        )
         return ModelResponseRead(
             id=model.id,
             modelConfigId=model.id,
@@ -748,7 +758,13 @@ class EvaluationService:
                 safety_score=Decimal(str(score.safety)),
                 rule_score=Decimal(str(score.rule_final if score.rule_final is not None else score.final)),
                 judge_score=Decimal(str(score.judge_final)) if score.judge_final is not None else None,
-                final_score=Decimal(str(score.final)),
+                final_score=Decimal(str(score.final)) if score.final is not None else None,
+                score_status=score.score_status,
+                excluded_from_stats=score.excluded_from_stats,
+                judge_score_range=(
+                    Decimal(str(score.judge_score_range)) if score.judge_score_range is not None else None
+                ),
+                judge_runs_json=[run.model_dump(by_alias=True) for run in score.judge_runs],
                 judge_comment=judge_comment,
             )
         )
@@ -913,10 +929,12 @@ class EvaluationService:
                 clarity=0,
                 format=0,
                 safety=0,
-                final=0,
+                final=None,
                 details=details,
                 ruleFinal=0,
-                baseFinal=0,
+                baseFinal=None,
+                scoreStatus="model_failed",
+                excludedFromStats=True,
             )
 
         judge_comment, judge_details = self._decode_judge_comment(result.judge_comment)
@@ -929,7 +947,7 @@ class EvaluationService:
             clarity=float(result.clarity_score),
             format=float(result.format_score),
             safety=float(result.safety_score),
-            final=float(result.final_score),
+            final=float(result.final_score) if result.final_score is not None else None,
             details=details,
             ruleFinal=float(result.rule_score),
             judgeFinal=float(result.judge_score) if result.judge_score is not None else None,
@@ -937,6 +955,10 @@ class EvaluationService:
             feedbackScore=feedback_score,
             judgeComment=judge_comment,
             judgeDetails=judge_details,
+            scoreStatus=result.score_status or "scored",
+            excludedFromStats=bool(result.excluded_from_stats),
+            judgeRuns=result.judge_runs_json or [],
+            judgeScoreRange=float(result.judge_score_range) if result.judge_score_range is not None else None,
         )
 
     def _recalculate_final_score(
@@ -949,6 +971,13 @@ class EvaluationService:
             return self._serialize_score(None, prompt=response.task.prompt, answer=response.answer_text)
 
         base_final = self._base_final(result)
+        if base_final is None:
+            return self._serialize_score(
+                result,
+                prompt=response.task.prompt,
+                answer=response.answer_text,
+                feedback=feedback,
+            )
         feedback_score = self._feedback_score(feedback)
         final = base_final
         if feedback_score is not None:
@@ -961,7 +990,9 @@ class EvaluationService:
             feedback=feedback,
         )
 
-    def _base_final(self, result: EvaluationResult) -> float:
+    def _base_final(self, result: EvaluationResult) -> float | None:
+        if (result.score_status or "scored") != "scored" or bool(result.excluded_from_stats):
+            return None
         rule_final = Decimal(str(result.rule_score))
         if result.judge_score is None:
             return float(round(rule_final, 2))

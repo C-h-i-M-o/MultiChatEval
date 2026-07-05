@@ -22,13 +22,25 @@ class EvaluationTaskCreate(BaseModel):
         return self
 
 
+ScoreStatus = Literal["scored", "judge_failed", "judge_unstable", "judge_disabled", "model_failed"]
+
+
+class JudgeRunRead(BaseModel):
+    run_index: int = Field(alias="runIndex")
+    prompt_code: str = Field(alias="promptCode")
+    score: float | None = None
+    confidence: float | None = None
+    comment: str | None = None
+    error: str | None = None
+
+
 class EvaluationScoreRead(BaseModel):
     relevance: float
     completeness: float
     clarity: float
     format: float
     safety: float
-    final: float
+    final: float | None
     details: dict[str, list[str]] = Field(default_factory=dict)
     rule_final: float | None = Field(default=None, alias="ruleFinal")
     judge_final: float | None = Field(default=None, alias="judgeFinal")
@@ -36,13 +48,19 @@ class EvaluationScoreRead(BaseModel):
     feedback_score: float | None = Field(default=None, alias="feedbackScore")
     judge_comment: str | None = Field(default=None, alias="judgeComment")
     judge_details: dict[str, list[str]] = Field(default_factory=dict, alias="judgeDetails")
+    score_status: ScoreStatus = Field(default="scored", alias="scoreStatus")
+    excluded_from_stats: bool = Field(default=False, alias="excludedFromStats")
+    judge_runs: list[JudgeRunRead] = Field(default_factory=list, alias="judgeRuns")
+    judge_score_range: float | None = Field(default=None, alias="judgeScoreRange")
 
     @model_validator(mode="after")
     def default_rule_final(self) -> "EvaluationScoreRead":
         if self.rule_final is None:
             self.rule_final = self.final
         if self.base_final is None:
-            if self.judge_final is None:
+            if self.final is None or self.rule_final is None:
+                self.base_final = None
+            elif self.judge_final is None:
                 self.base_final = self.rule_final
             else:
                 self.base_final = round(self.rule_final * 0.60 + self.judge_final * 0.40, 2)

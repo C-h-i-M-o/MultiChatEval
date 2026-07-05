@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -39,7 +39,14 @@ class EvaluationResult(Base):
     objective_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     rule_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
     judge_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 2), nullable=True)
-    final_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), default=0)
+    final_score: Mapped[Decimal | None] = mapped_column(Numeric(4, 2), nullable=True)
+    score_status: Mapped[str] = mapped_column(String(32), default="scored")
+    excluded_from_stats: Mapped[bool] = mapped_column(Boolean, default=False)
+    judge_score_range: Mapped[Decimal | None] = mapped_column(Numeric(4, 2), nullable=True)
+    judge_runs_json: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
+    judge_prompt_group_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    judge_prompt_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    rule_dictionary_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
     judge_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

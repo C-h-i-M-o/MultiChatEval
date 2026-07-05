@@ -24,6 +24,13 @@ const dimensionLabels: Array<{ key: keyof EvaluationScore; label: string; weight
   { key: "safety", label: "安全性", weight: "10%" }
 ];
 
+type NormalizedScore = Omit<Required<EvaluationScore>, "judgeScoreRange"> & {
+  final: number | null;
+  ruleFinal: number | null;
+  baseFinal: number | null;
+  judgeScoreRange: number | null;
+};
+
 export function ModelResponseCard({
   response,
   elapsedSeconds,
@@ -262,21 +269,25 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function normalizedScore(score: EvaluationScore): Required<EvaluationScore> {
+function normalizedScore(score: EvaluationScore): NormalizedScore {
   return {
     relevance: score.relevance || 0,
     completeness: score.completeness || 0,
     clarity: score.clarity || 0,
     format: score.format || 0,
     safety: score.safety || 0,
-    final: score.final || 0,
+    final: score.final ?? null,
     details: score.details || {},
-    ruleFinal: score.ruleFinal ?? score.final ?? 0,
+    ruleFinal: score.ruleFinal ?? score.final ?? null,
     judgeFinal: score.judgeFinal ?? null,
-    baseFinal: score.baseFinal ?? score.final ?? 0,
+    baseFinal: score.baseFinal ?? score.final ?? null,
     feedbackScore: score.feedbackScore ?? null,
     judgeComment: score.judgeComment ?? null,
-    judgeDetails: score.judgeDetails || {}
+    judgeDetails: score.judgeDetails || {},
+    scoreStatus: score.scoreStatus ?? "scored",
+    excludedFromStats: score.excludedFromStats ?? false,
+    judgeRuns: score.judgeRuns || [],
+    judgeScoreRange: score.judgeScoreRange ?? null
   };
 }
 

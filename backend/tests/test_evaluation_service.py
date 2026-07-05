@@ -320,6 +320,47 @@ def test_score_defaults_rule_final_to_final_without_judge() -> None:
     assert score.base_final == 8.4
 
 
+def test_score_read_allows_null_final_and_exposes_status_fields() -> None:
+    score = EvaluationScoreRead(
+        relevance=8,
+        completeness=8,
+        clarity=8,
+        format=8,
+        safety=10,
+        final=None,
+        ruleFinal=8.4,
+        judgeFinal=None,
+        baseFinal=None,
+        scoreStatus="judge_failed",
+        excludedFromStats=True,
+        judgeRuns=[
+            {
+                "runIndex": 1,
+                "promptCode": "judge_v1_a",
+                "score": None,
+                "confidence": None,
+                "comment": None,
+                "error": "JSON 解析失败",
+            }
+        ],
+        judgeScoreRange=None,
+    )
+
+    assert score.final is None
+    assert score.base_final is None
+    assert score.score_status == "judge_failed"
+    assert score.excluded_from_stats is True
+    assert score.judge_runs[0].error == "JSON 解析失败"
+
+
+def test_failed_model_response_is_marked_model_failed_and_excluded_from_stats() -> None:
+    response = evaluation_service._failed_model_response(make_runtime_model(1, "失败模型"), "模型调用失败")
+
+    assert response.score.final is None
+    assert response.score.score_status == "model_failed"
+    assert response.score.excluded_from_stats is True
+
+
 def test_serialize_score_rebuilds_rule_details_for_history() -> None:
     result = EvaluationResult(
         relevance_score=Decimal("8"),
