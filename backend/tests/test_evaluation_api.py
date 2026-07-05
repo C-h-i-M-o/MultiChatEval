@@ -35,7 +35,23 @@ def authenticated_user() -> object:
     app.dependency_overrides.clear()
 
 
-def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> None:
+def test_create_evaluation_task_allows_missing_judge_model_when_judge_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_ensure_can_start(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def fake_create_task(payload: object, *_args: object, **_kwargs: object) -> EvaluationTaskRead:
+        assert payload.enable_judge is True
+        assert payload.judge_model_id is None
+        return EvaluationTaskRead(
+            taskId=12,
+            status="completed",
+            prompt=payload.prompt,
+            responses=[],
+        )
+
+    monkeypatch.setattr(token_quota_service, "ensure_can_start", fake_ensure_can_start)
+    monkeypatch.setattr(evaluation_service, "create_task", fake_create_task)
+
     response = TestClient(app).post(
         "/api/evaluation/tasks",
         json={
@@ -45,7 +61,8 @@ def test_create_evaluation_task_requires_judge_model_when_judge_enabled() -> Non
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["taskId"] == 12
 
 
 def test_create_evaluation_task_returns_400_when_judge_model_is_tested(monkeypatch: pytest.MonkeyPatch) -> None:

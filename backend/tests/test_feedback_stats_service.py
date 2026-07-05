@@ -176,6 +176,79 @@ def test_failed_response_counts_as_call_but_not_as_scored() -> None:
     assert dashboard.summary.average_final_score is None
 
 
+def test_dashboard_only_scores_included_records() -> None:
+    service_module = _service_module()
+    records = [
+        service_module.ResponseStatRecord(
+            task_id=1,
+            response_id=11,
+            model_config_id=3,
+            model_name="模型 A",
+            created_at=datetime(2026, 6, 18, 1, 0),
+            final_score=8.0,
+            rule_score=8.0,
+            judge_score=8.0,
+            score_status="scored",
+            excluded_from_stats=False,
+        ),
+        service_module.ResponseStatRecord(
+            task_id=1,
+            response_id=12,
+            model_config_id=3,
+            model_name="模型 A",
+            created_at=datetime(2026, 6, 18, 2, 0),
+            final_score=None,
+            rule_score=8.0,
+            judge_score=None,
+            score_status="judge_failed",
+            excluded_from_stats=True,
+        ),
+        service_module.ResponseStatRecord(
+            task_id=2,
+            response_id=13,
+            model_config_id=3,
+            model_name="模型 A",
+            created_at=datetime(2026, 6, 18, 3, 0),
+            final_score=None,
+            rule_score=8.0,
+            judge_score=None,
+            score_status="judge_unstable",
+            excluded_from_stats=True,
+        ),
+        service_module.ResponseStatRecord(
+            task_id=3,
+            response_id=14,
+            model_config_id=3,
+            model_name="模型 A",
+            created_at=datetime(2026, 6, 18, 4, 0),
+            final_score=None,
+            rule_score=8.0,
+            judge_score=None,
+            score_status="judge_disabled",
+            excluded_from_stats=True,
+        ),
+        service_module.ResponseStatRecord(
+            task_id=4,
+            response_id=15,
+            model_config_id=3,
+            model_name="模型 A",
+            created_at=datetime(2026, 6, 18, 5, 0),
+            final_score=None,
+            rule_score=0.0,
+            judge_score=None,
+            score_status="model_failed",
+            excluded_from_stats=True,
+        ),
+    ]
+
+    dashboard = service_module.feedback_stats_service.build_dashboard(records, [], [])
+
+    assert dashboard.summary.call_count == 5
+    assert dashboard.summary.scored_count == 1
+    assert dashboard.summary.average_final_score == 8.0
+    assert dashboard.models[0].scored_count == 1
+
+
 async def test_personal_stats_separates_owned_tasks_from_own_interactions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

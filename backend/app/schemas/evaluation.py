@@ -8,15 +8,13 @@ class EvaluationTaskCreate(BaseModel):
     conversation_id: int | None = Field(default=None, alias="conversationId")
     prompt: str
     model_ids: list[int] = Field(default_factory=list, alias="modelIds")
-    enable_judge: bool = Field(default=False, alias="enableJudge")
+    enable_judge: bool = Field(default=True, alias="enableJudge")
     judge_model_id: int | None = Field(default=None, alias="judgeModelId")
     enable_thinking: bool = Field(default=False, alias="enableThinking")
     visibility: Literal["public", "private"] = "public"
 
     @model_validator(mode="after")
     def require_judge_model(self) -> "EvaluationTaskCreate":
-        if self.enable_judge and self.judge_model_id is None:
-            raise ValueError("启用 LLM 评审时必须选择评审模型")
         if self.enable_judge and self.judge_model_id in self.model_ids:
             raise ValueError("LLM 评审模型不能同时作为被测模型")
         return self

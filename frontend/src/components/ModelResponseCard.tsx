@@ -3,7 +3,7 @@ import { Button, Modal, Space } from "antd";
 
 import { animateModalIn } from "../animations/pageMotion";
 import { isPendingResponse } from "../features/evaluation/evaluation";
-import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
+import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult, ScoreStatus } from "../features/evaluation/types";
 import { CommentPanel } from "./CommentPanel";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { formatScore, ScoreBar } from "./ScoreBar";
@@ -23,6 +23,18 @@ const dimensionLabels: Array<{ key: keyof EvaluationScore; label: string; weight
   { key: "format", label: "格式", weight: "15%" },
   { key: "safety", label: "安全性", weight: "10%" }
 ];
+
+const scoreStatusMessages: Record<ScoreStatus, string> = {
+  scored: "已计入统计",
+  judge_failed: "LLM 评分失败，本次不计入统计",
+  judge_unstable: "LLM 三次评分分歧较大，本次不计入统计",
+  judge_disabled: "本次关闭 LLM 评分，仅展示规则检查，不计入统计",
+  model_failed: "模型调用失败，不计入统计"
+};
+
+export function scoreStatusText(status: ScoreStatus): string {
+  return scoreStatusMessages[status];
+}
 
 type NormalizedScore = Omit<Required<EvaluationScore>, "judgeScoreRange"> & {
   final: number | null;
@@ -91,6 +103,7 @@ export function ModelResponseCard({
         failed={failed}
       />
       <ScrollableMarkdownAnswer content={response.answer} placeholder="暂无回答内容" />
+      <p className={`score-status-note ${score.scoreStatus}`}>{scoreStatusText(score.scoreStatus)}</p>
       <dl className="metric-row">
         <Metric label="耗时" value={`${response.latencyMs}ms`} />
         <Metric label="输出" value={String(response.outputTokens)} />
@@ -172,6 +185,42 @@ export function ModelResponseCard({
                 : `最终分 = 基础分 ${formatScore(score.baseFinal)} x 90% + 反馈分 ${formatScore(score.feedbackScore)} x 10%。`}
             </p>
           </article>
+          <article className="score-detail-item">
+            <header>
+              <span>评分状态</span>
+              <Space size={8}>
+                <strong>{scoreStatusText(score.scoreStatus)}</strong>
+                <em>{score.excludedFromStats ? "不计入统计" : "计入统计"}</em>
+              </Space>
+            </header>
+            <p>
+              最终分 {formatScore(score.final)}，规则分 {formatScore(score.ruleFinal)}，Judge 平均分{" "}
+              {formatScore(score.judgeFinal)}
+              {score.judgeScoreRange === null ? "。" : `，三次分差 ${formatScore(score.judgeScoreRange)}。`}
+            </p>
+          </article>
+          {score.judgeRuns.length > 0 ? (
+            <article className="score-detail-item">
+              <header>
+                <span>三次 LLM 评分</span>
+                <Space size={8}>
+                  <strong>{score.judgeRuns.length} 次</strong>
+                  <em>稳定阈值 1.0</em>
+                </Space>
+              </header>
+              <div className="judge-run-list">
+                {score.judgeRuns.map((run) => (
+                  <section key={`${run.runIndex}-${run.promptCode}`} className={run.error ? "failed" : ""}>
+                    <strong>
+                      #{run.runIndex} {run.promptCode}
+                    </strong>
+                    <span>{run.error ? "失败" : `${formatScore(run.score)} / 10`}</span>
+                    <p>{run.error || run.comment || "评审模型未返回说明"}</p>
+                  </section>
+                ))}
+              </div>
+            </article>
+          ) : null}
           {score.judgeComment ? (
             <article className="score-detail-item">
               <header>

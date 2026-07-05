@@ -31,6 +31,7 @@ from app.schemas.evaluation import (
     EvaluationTaskRead,
     FeedbackCreate,
     FeedbackToggleRead,
+    JudgeRunRead,
     ModelResponseRead,
 )
 from app.services.llm_judge_evaluator import LLMJudgeResult, llm_judge_evaluator
@@ -54,6 +55,7 @@ BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手�
 用户问题如下："""
 
 FEEDBACK_TYPES = ("like", "dislike")
+JUDGE_PROMPT_CODES = ("judge_v1_a", "judge_v1_b", "judge_v1_c")
 
 
 class EvaluationTaskNotFoundError(Exception):
@@ -91,6 +93,7 @@ class EvaluationService:
             models=selected_models,
             extra_body=self._thinking_extra_body(payload),
             judge_model=judge_model,
+            judge_enabled=payload.enable_judge,
             user_id=user_id,
         )
         task_status = "completed" if any(response.status == "success" for response in responses) else "failed"
@@ -157,6 +160,7 @@ class EvaluationService:
                                 prompt=payload.prompt,
                                 response=response,
                                 judge_model=judge_model,
+                                judge_enabled=payload.enable_judge,
                             )
                         )
                     )
@@ -396,13 +400,14 @@ class EvaluationService:
         models: list[RuntimeModelConfig],
         extra_body: dict[str, object],
         judge_model: RuntimeModelConfig | None,
+        judge_enabled: bool,
         user_id: int,
     ) -> list[ModelResponseRead]:
         tasks = [self._call_model(prompt=prompt, model=model, extra_body=extra_body) for model in models]
         responses = await asyncio.gather(*tasks)
         persisted_responses = []
         for response in responses:
-            response = await self._apply_judge_score(prompt, response, judge_model)
+            response = await self._apply_judge_score(prompt, response, judge_model, judge_enabled)
             persisted_responses.append(await self._persist_response(db, task_id, response, user_id))
         return persisted_responses
 
@@ -508,9 +513,10 @@ class EvaluationService:
         prompt: str,
         response: ModelResponseRead,
         judge_model: RuntimeModelConfig | None,
+        judge_enabled: bool,
     ) -> None:
         try:
-            scored_response = await self._apply_judge_score(prompt, response, judge_model)
+            scored_response = await self._apply_judge_score(prompt, response, judge_model, judge_enabled)
         except Exception:
             scored_response = response
         queue.put_nowait({"type": "scored_response_ready", "response": scored_response})
@@ -648,37 +654,114 @@ class EvaluationService:
         prompt: str,
         response: ModelResponseRead,
         judge_model: RuntimeModelConfig | None,
+        judge_enabled: bool = True,
     ) -> ModelResponseRead:
-        if judge_model is None or response.status != "success":
+        if response.status != "success":
             return response
+        if not judge_enabled:
+            return response.model_copy(update={"score": self._mark_judge_disabled(response.score)})
+        if judge_model is None:
+            failed = LLMJudgeResult(score=None, comment="LLM 评审失败：没有可用的评审模型", details={})
+            return response.model_copy(update={"score": self._merge_judge_runs(response.score, [failed])})
 
-        judge_result = await llm_judge_evaluator.evaluate(prompt=prompt, answer=response.answer, model=judge_model)
-        return response.model_copy(update={"score": self._merge_judge_score(response.score, judge_result)})
+        judge_results = await asyncio.gather(
+            *[
+                llm_judge_evaluator.evaluate(
+                    prompt=prompt,
+                    answer=response.answer,
+                    model=judge_model,
+                    prompt_code=prompt_code,
+                )
+                for prompt_code in JUDGE_PROMPT_CODES
+            ]
+        )
+        return response.model_copy(update={"score": self._merge_judge_runs(response.score, list(judge_results))})
 
     def _merge_judge_score(self, score: EvaluationScoreRead, judge_result: LLMJudgeResult) -> EvaluationScoreRead:
+        return self._merge_judge_runs(score, [judge_result])
+
+    def _merge_judge_runs(
+        self,
+        score: EvaluationScoreRead,
+        judge_results: list[LLMJudgeResult],
+    ) -> EvaluationScoreRead:
         rule_final = score.rule_final if score.rule_final is not None else score.final
-        if judge_result.score is None:
+        judge_runs = [
+            JudgeRunRead(
+                runIndex=index + 1,
+                promptCode=JUDGE_PROMPT_CODES[index] if index < len(JUDGE_PROMPT_CODES) else f"judge_v1_{index + 1}",
+                score=round(result.score, 2) if result.score is not None else None,
+                confidence=None,
+                comment=result.comment if result.score is not None else None,
+                error=result.comment if result.score is None else None,
+            )
+            for index, result in enumerate(judge_results)
+        ]
+        successful_scores = [run.score for run in judge_runs if run.score is not None]
+        score_range = round(max(successful_scores) - min(successful_scores), 2) if successful_scores else None
+        if len(successful_scores) != 3:
             return score.model_copy(
                 update={
-                    "final": round(rule_final, 2),
-                    "rule_final": round(rule_final, 2),
+                    "final": None,
+                    "rule_final": round(rule_final, 2) if rule_final is not None else None,
                     "judge_final": None,
-                    "base_final": round(rule_final, 2),
-                    "judge_comment": judge_result.comment,
-                    "judge_details": judge_result.details,
+                    "base_final": None,
+                    "judge_comment": "LLM 评审失败，本次不计入统计",
+                    "judge_details": {},
+                    "score_status": "judge_failed",
+                    "excluded_from_stats": True,
+                    "judge_runs": judge_runs,
+                    "judge_score_range": score_range,
                 }
             )
-
-        judge_final = round(judge_result.score, 2)
-        final = Decimal(str(rule_final)) * Decimal("0.60") + Decimal(str(judge_final)) * Decimal("0.40")
+        if score_range is not None and score_range > 1.0:
+            return score.model_copy(
+                update={
+                    "final": None,
+                    "rule_final": round(rule_final, 2) if rule_final is not None else None,
+                    "judge_final": None,
+                    "base_final": None,
+                    "judge_comment": "LLM 三次评分分歧较大，本次不计入统计",
+                    "judge_details": {},
+                    "score_status": "judge_unstable",
+                    "excluded_from_stats": True,
+                    "judge_runs": judge_runs,
+                    "judge_score_range": score_range,
+                }
+            )
+        if rule_final is None:
+            return score
+        judge_final = round(sum(successful_scores) / 3, 2)
+        final = Decimal(str(rule_final)) * Decimal("0.30") + Decimal(str(judge_final)) * Decimal("0.70")
         return score.model_copy(
             update={
                 "final": float(round(final, 2)),
                 "rule_final": round(rule_final, 2),
                 "judge_final": judge_final,
                 "base_final": float(round(final, 2)),
-                "judge_comment": judge_result.comment,
-                "judge_details": judge_result.details,
+                "judge_comment": "LLM 三次评分稳定，采用平均分",
+                "judge_details": {},
+                "score_status": "scored",
+                "excluded_from_stats": False,
+                "judge_runs": judge_runs,
+                "judge_score_range": score_range,
+            }
+        )
+
+    def _mark_judge_disabled(self, score: EvaluationScoreRead) -> EvaluationScoreRead:
+        rule_final = score.rule_final if score.rule_final is not None else score.final
+        return score.model_copy(
+            update={
+                "final": None,
+                "rule_final": round(rule_final, 2) if rule_final is not None else None,
+                "judge_final": None,
+                "base_final": None,
+                "judge_comment": "本次关闭 LLM 评分，仅展示规则检查，不计入统计",
+                "judge_details": {},
+                "score_status": "judge_disabled",
+                "excluded_from_stats": True,
+                "judge_runs": [],
+                "judge_score_range": None,
             }
         )
 
@@ -996,7 +1079,7 @@ class EvaluationService:
         rule_final = Decimal(str(result.rule_score))
         if result.judge_score is None:
             return float(round(rule_final, 2))
-        base_final = rule_final * Decimal("0.60") + Decimal(str(result.judge_score)) * Decimal("0.40")
+        base_final = rule_final * Decimal("0.30") + Decimal(str(result.judge_score)) * Decimal("0.70")
         return float(round(base_final, 2))
 
     def _feedback_score(self, feedback: EvaluationFeedbackRead | None) -> float | None:

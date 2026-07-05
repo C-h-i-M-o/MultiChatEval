@@ -246,8 +246,10 @@ def test_model_prompt_contains_builtin_instruction_before_user_prompt() -> None:
 
 
 def test_enable_judge_requires_judge_model_id() -> None:
-    with pytest.raises(ValidationError):
-        EvaluationTaskCreate(prompt="你好", modelIds=[1], enableJudge=True)
+    payload = EvaluationTaskCreate(prompt="你好", modelIds=[1])
+
+    assert payload.enable_judge is True
+    assert payload.judge_model_id is None
 
 
 def test_enable_judge_requires_idle_judge_model() -> None:
@@ -359,6 +361,75 @@ def test_failed_model_response_is_marked_model_failed_and_excluded_from_stats() 
     assert response.score.final is None
     assert response.score.score_status == "model_failed"
     assert response.score.excluded_from_stats is True
+
+
+def test_merge_stable_judge_runs_uses_average_and_scored_status() -> None:
+    response = make_response(1, "模型 A")
+    runs = [
+        LLMJudgeResult(score=8.0, comment="A", details={}),
+        LLMJudgeResult(score=8.2, comment="B", details={}),
+        LLMJudgeResult(score=8.4, comment="C", details={}),
+    ]
+
+    score = evaluation_service._merge_judge_runs(response.score, runs)
+
+    assert score.judge_final == 8.2
+    assert score.base_final == 8.26
+    assert score.final == 8.26
+    assert score.score_status == "scored"
+    assert score.excluded_from_stats is False
+    assert score.judge_score_range == 0.4
+    assert [run.score for run in score.judge_runs] == [8.0, 8.2, 8.4]
+
+
+def test_merge_unstable_judge_runs_excludes_score_but_keeps_runs() -> None:
+    response = make_response(1, "模型 A")
+    runs = [
+        LLMJudgeResult(score=7.0, comment="A", details={}),
+        LLMJudgeResult(score=8.5, comment="B", details={}),
+        LLMJudgeResult(score=9.1, comment="C", details={}),
+    ]
+
+    score = evaluation_service._merge_judge_runs(response.score, runs)
+
+    assert score.final is None
+    assert score.base_final is None
+    assert score.judge_final is None
+    assert score.score_status == "judge_unstable"
+    assert score.excluded_from_stats is True
+    assert score.judge_score_range == 2.1
+    assert len(score.judge_runs) == 3
+
+
+def test_merge_failed_judge_runs_excludes_score_but_keeps_successful_runs() -> None:
+    response = make_response(1, "模型 A")
+    runs = [
+        LLMJudgeResult(score=8.0, comment="A", details={}),
+        LLMJudgeResult(score=None, comment="LLM 评审失败：JSON 解析失败", details={}),
+        LLMJudgeResult(score=8.4, comment="C", details={}),
+    ]
+
+    score = evaluation_service._merge_judge_runs(response.score, runs)
+
+    assert score.final is None
+    assert score.base_final is None
+    assert score.judge_final is None
+    assert score.score_status == "judge_failed"
+    assert score.excluded_from_stats is True
+    assert [run.score for run in score.judge_runs] == [8.0, None, 8.4]
+
+
+def test_mark_judge_disabled_excludes_score_and_keeps_rule_final() -> None:
+    response = make_response(1, "模型 A")
+
+    score = evaluation_service._mark_judge_disabled(response.score)
+
+    assert score.final is None
+    assert score.base_final is None
+    assert score.judge_final is None
+    assert score.rule_final == 8.4
+    assert score.score_status == "judge_disabled"
+    assert score.excluded_from_stats is True
 
 
 def test_serialize_score_rebuilds_rule_details_for_history() -> None:
@@ -494,10 +565,10 @@ def test_recalculate_final_score_uses_judge_base_and_feedback_weight() -> None:
 
     score = evaluation_service._recalculate_final_score(db.response, feedback)
 
-    assert score.base_final == 8.64
+    assert score.base_final == 8.82
     assert score.feedback_score == 7.5
-    assert score.final == 8.53
-    assert db.response.evaluation_result.final_score == Decimal("8.53")
+    assert score.final == 8.69
+    assert db.response.evaluation_result.final_score == Decimal("8.69")
 
 
 @pytest.mark.asyncio
@@ -754,6 +825,7 @@ async def test_stream_task_events_keeps_emitting_deltas_while_another_model_is_s
         _prompt: str,
         response: ModelResponseRead,
         _judge_model: RuntimeModelConfig | None,
+        _judge_enabled: bool,
     ) -> ModelResponseRead:
         if response.model_config_id == 1:
             await asyncio.sleep(0.05)
@@ -943,10 +1015,16 @@ async def test_create_task_applies_judge_score_when_enabled(monkeypatch: pytest.
         assert extra_body == {"thinking": {"type": "disabled"}}
         return make_response(model.id, model.display_name, response_id=700)
 
-    async def fake_judge(prompt: str, answer: str, model: RuntimeModelConfig) -> LLMJudgeResult:
+    async def fake_judge(
+        prompt: str,
+        answer: str,
+        model: RuntimeModelConfig,
+        prompt_code: str,
+    ) -> LLMJudgeResult:
         assert prompt == "需要评审的问题"
         assert answer == "被评测模型 回答"
         assert model.id == 9
+        assert prompt_code in {"judge_v1_a", "judge_v1_b", "judge_v1_c"}
         return LLMJudgeResult(
             score=9.0,
             comment="优点：覆盖充分；缺点：示例略少；建议：可以补充示例。",
@@ -995,14 +1073,15 @@ async def test_create_task_applies_judge_score_when_enabled(monkeypatch: pytest.
 
     assert task.responses[0].score.rule_final == 8.4
     assert task.responses[0].score.judge_final == 9.0
-    assert task.responses[0].score.base_final == 8.64
-    assert task.responses[0].score.final == 8.64
-    assert task.responses[0].score.judge_comment == "优点：覆盖充分；缺点：示例略少；建议：可以补充示例。"
-    assert persisted_scores[0].final == 8.64
+    assert task.responses[0].score.base_final == 8.82
+    assert task.responses[0].score.final == 8.82
+    assert task.responses[0].score.judge_comment == "LLM 三次评分稳定，采用平均分"
+    assert len(task.responses[0].score.judge_runs) == 3
+    assert persisted_scores[0].final == 8.82
 
 
 @pytest.mark.asyncio
-async def test_create_task_keeps_rule_score_when_judge_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_create_task_excludes_score_when_judge_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     models = [make_runtime_model(3, "被评测模型")]
     judge_model = make_runtime_model(9, "评审模型")
 
@@ -1017,10 +1096,16 @@ async def test_create_task_keeps_rule_score_when_judge_fails(monkeypatch: pytest
         assert extra_body == {"thinking": {"type": "disabled"}}
         return make_response(model.id, model.display_name, response_id=700)
 
-    async def fake_judge(prompt: str, answer: str, model: RuntimeModelConfig) -> LLMJudgeResult:
+    async def fake_judge(
+        prompt: str,
+        answer: str,
+        model: RuntimeModelConfig,
+        prompt_code: str,
+    ) -> LLMJudgeResult:
         assert prompt == "需要评审的问题"
         assert answer == "被评测模型 回答"
         assert model.id == 9
+        assert prompt_code in {"judge_v1_a", "judge_v1_b", "judge_v1_c"}
         return LLMJudgeResult(score=None, comment="LLM 评审失败：返回内容不是合法 JSON", details={})
 
     async def fake_create_task_record(
@@ -1058,7 +1143,10 @@ async def test_create_task_keeps_rule_score_when_judge_fails(monkeypatch: pytest
         TEST_USERNAME,
     )
 
-    assert task.responses[0].score.final == 8.4
+    assert task.responses[0].score.final is None
+    assert task.responses[0].score.base_final is None
     assert task.responses[0].score.rule_final == 8.4
     assert task.responses[0].score.judge_final is None
-    assert task.responses[0].score.judge_comment == "LLM 评审失败：返回内容不是合法 JSON"
+    assert task.responses[0].score.score_status == "judge_failed"
+    assert task.responses[0].score.excluded_from_stats is True
+    assert task.responses[0].score.judge_comment == "LLM 评审失败，本次不计入统计"

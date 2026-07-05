@@ -843,6 +843,26 @@ button:disabled {
   gap: 8px;
 }
 
+.score-status-note {
+  margin: 12px 0 0;
+  border: 1px solid rgba(22, 97, 106, 0.16);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: rgba(22, 97, 106, 0.07);
+  color: #244d48;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.score-status-note.judge_failed,
+.score-status-note.judge_unstable,
+.score-status-note.judge_disabled,
+.score-status-note.model_failed {
+  border-color: rgba(188, 68, 43, 0.2);
+  background: rgba(188, 68, 43, 0.08);
+  color: #8d321f;
+}
+
 .score-bar {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr) 46px;
@@ -965,6 +985,44 @@ button:disabled {
   margin: 10px 0 0;
   padding-left: 18px;
   color: #455446;
+  line-height: 1.6;
+}
+
+.judge-run-list {
+  display: grid;
+  gap: 10px;
+}
+
+.judge-run-list section {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  gap: 6px 12px;
+  border: 1px solid rgba(22, 97, 106, 0.14);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(22, 97, 106, 0.05);
+}
+
+.judge-run-list section.failed {
+  border-color: rgba(188, 68, 43, 0.2);
+  background: rgba(188, 68, 43, 0.06);
+}
+
+.judge-run-list strong,
+.judge-run-list span {
+  color: #162018;
+  font-size: 13px;
+}
+
+.judge-run-list span {
+  font-weight: 900;
+}
+
+.judge-run-list p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #526052;
+  font-size: 13px;
   line-height: 1.6;
 }
 
