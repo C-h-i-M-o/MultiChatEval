@@ -26,6 +26,54 @@ export default defineConfig({
           if (id.includes("/rc-")) {
             return "rc-vendor";
           }
+          if (id.includes("/antd/es/table/") || id.includes("/antd/es/table")) {
+            return "antd-table";
+          }
+          if (
+            id.includes("/antd/es/form/") ||
+            id.includes("/antd/es/modal/") ||
+            id.includes("/antd/es/drawer/") ||
+            id.includes("/antd/es/popconfirm/") ||
+            id.includes("/antd/es/message/")
+          ) {
+            return "antd-feedback";
+          }
+          if (id.includes("/antd/es/select/") || id.includes("/antd/es/select")) {
+            return "antd-select";
+          }
+          if (
+            id.includes("/antd/es/input/") ||
+            id.includes("/antd/es/input") ||
+            id.includes("/antd/es/input-number/") ||
+            id.includes("/antd/es/input-number")
+          ) {
+            return "antd-input";
+          }
+          if (id.includes("/antd/es/button/") || id.includes("/antd/es/button")) {
+            return "antd-button";
+          }
+          if (
+            id.includes("/antd/es/switch/") ||
+            id.includes("/antd/es/switch") ||
+            id.includes("/antd/es/segmented/") ||
+            id.includes("/antd/es/segmented")
+          ) {
+            return "antd-controls";
+          }
+          if (
+            id.includes("/antd/es/card/") ||
+            id.includes("/antd/es/statistic/") ||
+            id.includes("/antd/es/pagination/") ||
+            id.includes("/antd/es/tag/") ||
+            id.includes("/antd/es/tabs/") ||
+            id.includes("/antd/es/space/") ||
+            id.includes("/antd/es/row/") ||
+            id.includes("/antd/es/col/") ||
+            id.includes("/antd/es/config-provider/") ||
+            id.includes("/antd/es/locale/")
+          ) {
+            return "antd-display";
+          }
           if (id.includes("/antd/")) {
             return "antd-core";
           }

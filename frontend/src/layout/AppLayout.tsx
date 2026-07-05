@@ -72,7 +72,7 @@ export function AppLayout() {
         className="mobile-nav-drawer"
         title="MultiChatEval"
         placement="right"
-        width={280}
+        size="default"
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
       >

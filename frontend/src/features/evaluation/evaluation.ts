@@ -9,6 +9,18 @@ import type {
   StreamingModelResponse
 } from "./types";
 
+export interface StreamEventBatcher {
+  enqueue: (event: EvaluationStreamEvent) => void;
+  flush: () => void;
+  clear: () => void;
+  pendingCount: () => number;
+}
+
+interface StreamEventBatcherOptions {
+  scheduleFlush?: (callback: () => void) => number;
+  cancelFlush?: (handle: number) => void;
+}
+
 export function createPendingResponses(
   modelIds: number[],
   availableModels: AvailableModelConfig[]
@@ -93,6 +105,62 @@ export function mergeStreamEvent(
     prompt: event.task.prompt,
     visibility: event.task.visibility,
     responses: event.task.responses
+  };
+}
+
+export function mergeStreamEvents(
+  state: EvaluationTaskState | null,
+  events: EvaluationStreamEvent[]
+): EvaluationTaskState | null {
+  return events.reduce<EvaluationTaskState | null>(
+    (currentState, event) => mergeStreamEvent(currentState, event),
+    state
+  );
+}
+
+export function createStreamEventBatcher(
+  applyEvents: (events: EvaluationStreamEvent[]) => void,
+  options: StreamEventBatcherOptions = {}
+): StreamEventBatcher {
+  const scheduleFlush = options.scheduleFlush ?? defaultScheduleFlush;
+  const cancelFlush = options.cancelFlush ?? defaultCancelFlush;
+  let pendingEvents: EvaluationStreamEvent[] = [];
+  let scheduledHandle: number | null = null;
+
+  function flush(): void {
+    if (scheduledHandle !== null) {
+      cancelFlush(scheduledHandle);
+      scheduledHandle = null;
+    }
+    if (pendingEvents.length === 0) {
+      return;
+    }
+    const eventsToApply = pendingEvents;
+    pendingEvents = [];
+    applyEvents(eventsToApply);
+  }
+
+  function enqueue(event: EvaluationStreamEvent): void {
+    pendingEvents.push(event);
+    if (scheduledHandle !== null) {
+      return;
+    }
+    scheduledHandle = scheduleFlush(flush);
+  }
+
+  function clear(): void {
+    if (scheduledHandle !== null) {
+      cancelFlush(scheduledHandle);
+      scheduledHandle = null;
+    }
+    pendingEvents = [];
+  }
+
+  return {
+    enqueue,
+    flush,
+    clear,
+    pendingCount: () => pendingEvents.length
   };
 }
 
@@ -207,4 +275,19 @@ function markModelScoring(responses: DisplayModelResponse[], modelConfigId: numb
   });
 
   return updated ? nextResponses : responses;
+}
+
+function defaultScheduleFlush(callback: () => void): number {
+  if (typeof window !== "undefined" && window.requestAnimationFrame) {
+    return window.requestAnimationFrame(callback);
+  }
+  return globalThis.setTimeout(callback, 16);
+}
+
+function defaultCancelFlush(handle: number): void {
+  if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+    window.cancelAnimationFrame(handle);
+    return;
+  }
+  globalThis.clearTimeout(handle);
 }
