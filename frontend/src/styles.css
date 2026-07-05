@@ -1671,6 +1671,19 @@ button:disabled {
   min-height: 38px;
 }
 
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.scoring-page .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
 @keyframes pulse {
   70% {
     box-shadow: 0 0 0 14px rgba(229, 184, 93, 0);

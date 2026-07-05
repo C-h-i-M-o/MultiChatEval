@@ -10,6 +10,7 @@ import {
   getPersonalFeedbackStats,
   listEvaluationTasks,
   listAdminUsers,
+  listRuleTerms,
   listModelConfigs,
   listResponseComments,
   loginUser,
@@ -460,6 +461,29 @@ describe("React 阶段四管理员 API 客户端", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/admin/feedback-stats?range=7d&activityType=comment&modelConfigId=5&page=2&pageSize=10",
+      {
+        credentials: "include",
+        headers: { Accept: "application/json" }
+      }
+    );
+  });
+
+  test("评分配置词表列表传递筛选和分页参数", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockJsonResponse({ items: [], total: 0, page: 2, pageSize: 10 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      listRuleTerms({
+        page: 2,
+        pageSize: 10,
+        keyword: "安全",
+        dictionaryType: "dangerous_pattern",
+        enabled: true
+      })
+    ).resolves.toMatchObject({ total: 0 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/scoring/rule-terms?page=2&pageSize=10&keyword=%E5%AE%89%E5%85%A8&dictionaryType=dangerous_pattern&enabled=true",
       {
         credentials: "include",
         headers: { Accept: "application/json" }

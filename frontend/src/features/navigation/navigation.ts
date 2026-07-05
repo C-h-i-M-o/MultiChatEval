@@ -14,12 +14,13 @@ export const navigationItems: NavigationItem[] = [
   { path: "/", label: "评测工作台" },
   { path: "/models", label: "模型配置", adminOnly: true },
   { path: "/users", label: "用户额度", adminOnly: true },
+  { path: "/scoring-rules", label: "评分配置", adminOnly: true },
   { path: "/history", label: "历史任务" },
   { path: "/feedback", label: "反馈统计" }
 ];
 
 const publicRoutes = new Set(["/login", "/register"]);
-const adminRoutes = new Set(["/models", "/users"]);
+const adminRoutes = new Set(["/models", "/users", "/scoring-rules"]);
 
 export function getVisibleNavigationItems(user: UserProfile): NavigationItem[] {
   return navigationItems.filter((item) => !item.adminOnly || user.role === "admin");

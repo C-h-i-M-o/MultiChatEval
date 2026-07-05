@@ -4,7 +4,7 @@ from app.models.evaluation import EvaluationResult, EvaluationTask
 from app.models.feedback import UserFeedback
 from app.models.model_config import ModelConfig, ModelProvider
 from app.models.response import ModelResponse
-from app.models.scoring import RuleDictionary, RuleTerm
+from app.models.scoring import JudgePromptGroup, JudgePromptTemplate, RuleDictionary, RuleTerm
 from app.models.token_usage import DailyUserTokenUsage, TokenUsageLog, UserTokenQuota
 from app.models.user import User
 
@@ -17,6 +17,8 @@ __all__ = [
     "ModelResponse",
     "RuleDictionary",
     "RuleTerm",
+    "JudgePromptGroup",
+    "JudgePromptTemplate",
     "DailyUserTokenUsage",
     "TokenUsageLog",
     "User",
