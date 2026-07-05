@@ -98,7 +98,7 @@ POST /api/evaluation/tasks
 
 `visibility` 支持 `public` 和 `private`，默认 `public`。公开任务可被所有登录用户查看，私有任务只对创建者可见。
 
-`enableJudge` 为 `true` 时必须传入 `judgeModelId`，且该模型必须已启用、配置 API Key，并且不能出现在本次 `modelIds` 中。`judgeModelId` 用于确定评审调用；候选回答仍由 `modelIds` 决定。当前前端只展示未参与本次测评的空闲模型作为评审候选；如果所有可用模型都已被选为被测模型，则禁用 LLM 评审开关并提示用户保留一个空闲模型。
+`enableJudge` 默认为 `true`。传入 `judgeModelId` 时，该模型必须已启用、配置 API Key，并且不能出现在本次 `modelIds` 中；不传时后端会自动选择一个未参与本次测评的空闲模型作为评审模型。若没有可用评审模型，回答会保存为 `judge_failed`，最终分为空，并从反馈统计中排除。
 
 `enableThinking` 为全局思考模式开关，不区分具体模型。关闭时，后端会对所有模型请求统一追加：
 
@@ -578,14 +578,14 @@ POST /api/evaluation/responses/{responseId}/feedback
 反馈提交后会重算并持久化最终分：
 
 ```text
-baseFinal = ruleFinal                           # 未启用或未得到有效 Judge 分
-baseFinal = ruleFinal * 0.60 + judgeFinal * 0.40
+baseFinal = ruleFinal                           # 未启用 Judge 时
+baseFinal = ruleFinal * 0.30 + judgeFinal * 0.70 # 三轮 Judge 稳定且有效时
 feedbackScore = 10 * likeCount / (likeCount + dislikeCount)
 final = baseFinal                               # 暂无反馈
 final = baseFinal * 0.90 + feedbackScore * 0.10 # 已有反馈
 ```
 
-评论不通过该接口提交，也不参与评分。
+`model_failed`、`judge_failed`、`judge_unstable` 和 `manual_required` 状态的回答不会生成可参与统计的最终分。评论不通过该接口提交，也不参与评分。
 
 响应：
 
@@ -619,6 +619,32 @@ final = baseFinal * 0.90 + feedbackScore * 0.10 # 已有反馈
 ```
 
 当 `responseId` 不存在时返回 404；当 `feedbackType` 不是 `like` 或 `dislike` 时返回 422。
+
+### 评分状态字段
+
+评测任务详情、流式最终 `model_response` 事件和反馈重算响应中的 `score` 会返回评分状态：
+
+- `scoreStatus`：`scored`、`model_failed`、`judge_failed`、`judge_unstable`、`manual_required` 或 `judge_disabled`。
+- `final`：最终分；排除统计的状态下为 `null`。
+- `excludedFromStats`：是否从反馈统计中排除。
+- `judgeRuns`：三轮 Judge 原始评分摘要。
+- `judgeScoreRange`：三轮 Judge 分差。
+- `ruleDictionaryVersion`：本次规则评分使用的词库版本。
+
+三轮 Judge 分差不超过 1.0 时才合成为有效 Judge 分。有效 Judge 分按 `0.30 * ruleFinal + 0.70 * judgeFinal` 计入基础分。
+
+## 管理员评分配置接口
+
+以下接口均需要管理员权限，统一前缀为 `/api/admin/scoring`：
+
+- `GET /rule-dictionaries`：查看规则词库。
+- `GET /rule-terms?dictionaryId=1`：查看词条。
+- `POST /rule-terms`：新增词条。
+- `PUT /rule-terms/{termId}`：更新词条。
+- `DELETE /rule-terms/{termId}`：删除词条。
+- `GET /judge-prompt-groups`：查看 Judge Prompt 分组和模板。
+- `PUT /judge-prompt-templates/{templateId}`：更新 Prompt 模板。
+- `POST /judge-prompt-groups/{groupId}/validate`：校验分组下三轮 Prompt 是否齐全且可用。
 
 ## 查询回答评论
 

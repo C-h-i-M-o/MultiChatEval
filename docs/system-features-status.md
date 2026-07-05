@@ -299,7 +299,7 @@ POST /api/evaluation/tasks
 当前限制：
 
 - `conversationId` 已在请求模型中定义，会写入任务记录；会话管理功能尚未完善。
-- `enableJudge` 启用时必须指定未出现在 `modelIds` 中的 `judgeModelId`，服务层会调用评审模型并合成基础分。
+- `enableJudge` 默认开启；后端会选择未参与本次测评的空闲模型执行三轮 Judge。没有可用评审模型、评审失败或三轮分差不稳定时，会写入对应评分状态，最终分为空，并从统计中排除。
 - `POST /api/evaluation/tasks` 仍为同步等待所有模型完成后一次性返回。
 - 思考模式不提供思考程度选择。
 
@@ -587,8 +587,9 @@ final =
 
 状态：已实现
 
-- 未启用或未得到有效 Judge 分时，`baseFinal = ruleFinal`。
-- Judge 有效时，`baseFinal = ruleFinal * 0.60 + judgeFinal * 0.40`。
+- 未启用 Judge 时，`baseFinal = ruleFinal`。
+- 三轮 Judge 稳定且有效时，`baseFinal = ruleFinal * 0.30 + judgeFinal * 0.70`。
+- `model_failed`、`judge_failed`、`judge_unstable` 和 `manual_required` 状态下不生成可参与统计的最终分。
 - 没有点赞/点踩时，`final = baseFinal`。
 - 有反馈时，`feedbackScore = 10 * likeCount / (likeCount + dislikeCount)`。
 - 有反馈时，`final = baseFinal * 0.90 + feedbackScore * 0.10`。
