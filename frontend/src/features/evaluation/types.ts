@@ -18,6 +18,7 @@ export interface EvaluationScore {
   excludedFromStats?: boolean;
   judgeRuns?: JudgeRun[];
   judgeScoreRange?: number | null;
+  ruleDictionaryVersion?: string | null;
 }
 
 export type ScoreStatus = "scored" | "judge_failed" | "judge_unstable" | "judge_disabled" | "model_failed";

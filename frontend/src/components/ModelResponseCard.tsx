@@ -36,11 +36,12 @@ export function scoreStatusText(status: ScoreStatus): string {
   return scoreStatusMessages[status];
 }
 
-type NormalizedScore = Omit<Required<EvaluationScore>, "judgeScoreRange"> & {
+type NormalizedScore = Omit<Required<EvaluationScore>, "judgeScoreRange" | "ruleDictionaryVersion"> & {
   final: number | null;
   ruleFinal: number | null;
   baseFinal: number | null;
   judgeScoreRange: number | null;
+  ruleDictionaryVersion: string | null;
 };
 
 export function ModelResponseCard({
@@ -336,7 +337,8 @@ function normalizedScore(score: EvaluationScore): NormalizedScore {
     scoreStatus: score.scoreStatus ?? "scored",
     excludedFromStats: score.excludedFromStats ?? false,
     judgeRuns: score.judgeRuns || [],
-    judgeScoreRange: score.judgeScoreRange ?? null
+    judgeScoreRange: score.judgeScoreRange ?? null,
+    ruleDictionaryVersion: score.ruleDictionaryVersion ?? null
   };
 }
 

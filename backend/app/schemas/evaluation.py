@@ -50,6 +50,7 @@ class EvaluationScoreRead(BaseModel):
     excluded_from_stats: bool = Field(default=False, alias="excludedFromStats")
     judge_runs: list[JudgeRunRead] = Field(default_factory=list, alias="judgeRuns")
     judge_score_range: float | None = Field(default=None, alias="judgeScoreRange")
+    rule_dictionary_version: str | None = Field(default=None, alias="ruleDictionaryVersion")
 
     @model_validator(mode="after")
     def default_rule_final(self) -> "EvaluationScoreRead":
@@ -61,7 +62,7 @@ class EvaluationScoreRead(BaseModel):
             elif self.judge_final is None:
                 self.base_final = self.rule_final
             else:
-                self.base_final = round(self.rule_final * 0.60 + self.judge_final * 0.40, 2)
+                self.base_final = round(self.rule_final * 0.30 + self.judge_final * 0.70, 2)
         return self
 
 

@@ -848,6 +848,7 @@ class EvaluationService:
                     Decimal(str(score.judge_score_range)) if score.judge_score_range is not None else None
                 ),
                 judge_runs_json=[run.model_dump(by_alias=True) for run in score.judge_runs],
+                rule_dictionary_version=score.rule_dictionary_version,
                 judge_comment=judge_comment,
             )
         )
@@ -1042,6 +1043,7 @@ class EvaluationService:
             excludedFromStats=bool(result.excluded_from_stats),
             judgeRuns=result.judge_runs_json or [],
             judgeScoreRange=float(result.judge_score_range) if result.judge_score_range is not None else None,
+            ruleDictionaryVersion=result.rule_dictionary_version,
         )
 
     def _recalculate_final_score(
