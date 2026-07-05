@@ -299,7 +299,7 @@ POST /api/evaluation/tasks
 当前限制：
 
 - `conversationId` 已在请求模型中定义，会写入任务记录；会话管理功能尚未完善。
-- `enableJudge` 默认开启；后端会选择未参与本次测评的空闲模型执行三轮 Judge。没有可用评审模型、评审失败或三轮分差不稳定时，会写入对应评分状态，最终分为空，并从统计中排除。
+- `enableJudge` 默认开启；后端会选择未参与本次测评的空闲模型执行三轮 Judge。少于 2 次 Judge 成功、没有可用评审模型或成功分差超过 2.0 时，会写入对应评分状态，最终分为空，并从统计中排除。
 - `POST /api/evaluation/tasks` 仍为同步等待所有模型完成后一次性返回。
 - 思考模式不提供思考程度选择。
 
@@ -559,7 +559,7 @@ POST /api/evaluation/responses/{response_id}/feedback
 实现规则：
 
 - 评分输入：规则评分前会移除完整的 `<think>...</think>` 区块；若 `<think>` 未闭合，则忽略该标签及其后续内容。数据库、接口和前端仍保留完整原始回答，仅最终回答内容参与规则评分。
-- 相关性：使用字符 n-gram 相似度、关键词覆盖、意图覆盖、回答聚焦度、显式要求对齐和离题惩罚，不恢复旧的关键词交集主算法。
+- 相关性：使用字符 n-gram 相似度、关键词覆盖、用户问题意图识别、意图覆盖、回答聚焦度、显式要求对齐和离题惩罚，不恢复旧的关键词交集主算法；评分详情会展示识别出的用户意图。
 - 完整性：按问题类型检查必要要素，例如解释题的定义/机制、对比题的对象/维度、代码题的代码片段、排错题的路径。
 - 清晰度：评估分段、列表/代码/表格/标题结构、句子数量、重复段落、长段落和长文本分段情况。
 - 格式：识别表格、代码、JSON、步骤和对比等显式格式要求，严格检查合法 JSON、Markdown 表格和代码块。
@@ -588,8 +588,9 @@ final =
 状态：已实现
 
 - 未启用 Judge 时，`baseFinal = ruleFinal`。
-- 三轮 Judge 稳定且有效时，`baseFinal = ruleFinal * 0.30 + judgeFinal * 0.70`。
+- 至少 2 次 Judge 成功且成功分数分差不超过 2.0 时，`judgeFinal` 取成功评分平均值，`baseFinal = ruleFinal * 0.30 + judgeFinal * 0.70`。
 - `model_failed`、`judge_failed`、`judge_unstable` 和 `manual_required` 状态下不生成可参与统计的最终分。
+- 管理员评分配置页读取词表时会从 `backend/app/services/scoring/default_rule_seed.json` 幂等维护 7 个内置规则词典和 390 条词条，用户第一次部署空库后会自动导入当前完整词表；词表覆盖格式要求、用户问题意图、拒答表达、安全替代建议、高风险领域、专业提醒、危险输出和隐私凭据，代码/格式词表覆盖常见编程语言、脚本、查询语言、前后端框架和测试框架，专业提醒覆盖医疗、法律、金融、安全和心理健康等高风险场景，并会合并历史并发初始化留下的重复默认数据。
 - 没有点赞/点踩时，`final = baseFinal`。
 - 有反馈时，`feedbackScore = 10 * likeCount / (likeCount + dislikeCount)`。
 - 有反馈时，`final = baseFinal * 0.90 + feedbackScore * 0.10`。

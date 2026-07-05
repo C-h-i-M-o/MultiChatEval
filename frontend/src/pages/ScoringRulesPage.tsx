@@ -208,7 +208,7 @@ export function ScoringRulesPage() {
             key: "terms",
             label: "规则词表",
             children: (
-              <>
+              <div className="admin-tab-panel-stack">
                 <AdminFilterBar
                   title="词表筛选"
                   total={total}
@@ -224,23 +224,23 @@ export function ScoringRulesPage() {
                   onRoleChange={(value) => { setDictionaryType(value); resetToFirstPage(); }}
                   onStatusChange={(value) => { setEnabledFilter(value); resetToFirstPage(); }}
                   onRefresh={() => void loadTerms()}
+                  actions={<Button type="primary" onClick={() => openTermModal(null)}>新增词条</Button>}
                 />
-                <div className="admin-toolbar"><Button type="primary" onClick={() => openTermModal(null)}>新增词条</Button></div>
                 <AdminDataTable rowKey="id" columns={termColumns} dataSource={terms} loading={loading} page={page} pageSize={pageSize} total={total} totalLabel="条词条" onPageChange={(nextPage, nextPageSize) => { setPage(nextPage); setPageSize(nextPageSize); }} />
-              </>
+              </div>
             )
           },
           {
             key: "prompts",
             label: "Judge Prompt",
             children: (
-              <>
+              <div className="admin-tab-panel-stack">
                 <div className="admin-toolbar">
                   {groups.map((group) => <Button key={group.id} onClick={() => void validateGroup(group)}>校验 {group.code}</Button>)}
                   <Button onClick={() => void loadPrompts()}>刷新</Button>
                 </div>
                 <AdminDataTable rowKey="id" columns={templateColumns} dataSource={templates} loading={false} page={1} pageSize={templates.length || 10} total={templates.length} totalLabel="个模板" onPageChange={() => undefined} />
-              </>
+              </div>
             )
           }
         ]}

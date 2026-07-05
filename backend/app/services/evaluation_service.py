@@ -56,6 +56,8 @@ BUILTIN_SYSTEM_PROMPT = """你是一个严谨、清晰、负责任的 AI 助手�
 
 FEEDBACK_TYPES = ("like", "dislike")
 JUDGE_PROMPT_CODES = ("judge_v1_a", "judge_v1_b", "judge_v1_c")
+JUDGE_MIN_SUCCESSFUL_RUNS = 2
+JUDGE_STABILITY_THRESHOLD = 2.0
 
 
 class EvaluationTaskNotFoundError(Exception):
@@ -699,7 +701,7 @@ class EvaluationService:
         ]
         successful_scores = [run.score for run in judge_runs if run.score is not None]
         score_range = round(max(successful_scores) - min(successful_scores), 2) if successful_scores else None
-        if len(successful_scores) != 3:
+        if len(successful_scores) < JUDGE_MIN_SUCCESSFUL_RUNS:
             return score.model_copy(
                 update={
                     "final": None,
@@ -714,7 +716,7 @@ class EvaluationService:
                     "judge_score_range": score_range,
                 }
             )
-        if score_range is not None and score_range > 1.0:
+        if score_range is not None and score_range > JUDGE_STABILITY_THRESHOLD:
             return score.model_copy(
                 update={
                     "final": None,
@@ -731,7 +733,7 @@ class EvaluationService:
             )
         if rule_final is None:
             return score
-        judge_final = round(sum(successful_scores) / 3, 2)
+        judge_final = round(sum(successful_scores) / len(successful_scores), 2)
         final = Decimal(str(rule_final)) * Decimal("0.30") + Decimal(str(judge_final)) * Decimal("0.70")
         return score.model_copy(
             update={
@@ -739,7 +741,7 @@ class EvaluationService:
                 "rule_final": round(rule_final, 2),
                 "judge_final": judge_final,
                 "base_final": float(round(final, 2)),
-                "judge_comment": "LLM 三次评分稳定，采用平均分",
+                "judge_comment": f"LLM {len(successful_scores)} 次有效评分稳定，采用平均分",
                 "judge_details": {},
                 "score_status": "scored",
                 "excluded_from_stats": False,

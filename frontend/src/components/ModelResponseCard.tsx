@@ -27,10 +27,13 @@ const dimensionLabels: Array<{ key: keyof EvaluationScore; label: string; weight
 const scoreStatusMessages: Record<ScoreStatus, string> = {
   scored: "已计入统计",
   judge_failed: "LLM 评分失败，本次不计入统计",
-  judge_unstable: "LLM 三次评分分歧较大，本次不计入统计",
+  judge_unstable: "LLM 有效评分分歧较大，本次不计入统计",
   judge_disabled: "本次关闭 LLM 评分，仅展示规则检查，不计入统计",
   model_failed: "模型调用失败，不计入统计"
 };
+
+export const JUDGE_SCORE_WEIGHT_LABEL = "70%";
+export const JUDGE_STABILITY_THRESHOLD_LABEL = "2.0";
 
 export function scoreStatusText(status: ScoreStatus): string {
   return scoreStatusMessages[status];
@@ -206,7 +209,7 @@ export function ModelResponseCard({
                 <span>三次 LLM 评分</span>
                 <Space size={8}>
                   <strong>{score.judgeRuns.length} 次</strong>
-                  <em>稳定阈值 1.0</em>
+                  <em>稳定阈值 {JUDGE_STABILITY_THRESHOLD_LABEL}</em>
                 </Space>
               </header>
               <div className="judge-run-list">
@@ -228,7 +231,7 @@ export function ModelResponseCard({
                 <span>LLM 评审理由</span>
                 <Space size={8}>
                   <strong>{formatScore(score.judgeFinal)} / 10</strong>
-                  <em>权重 40%</em>
+                  <em>权重 {JUDGE_SCORE_WEIGHT_LABEL}</em>
                 </Space>
               </header>
               <p>{score.judgeComment}</p>

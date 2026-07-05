@@ -42,6 +42,17 @@ export function normalizeJudgeModelId(
   return judgeModels[0]?.id ?? null;
 }
 
+export function getInitialJudgeSelection(
+  availableModels: AvailableModelConfig[],
+  selectedModelIds: number[]
+): { enabled: boolean; judgeModelId: number | null } {
+  const judgeModelId = normalizeJudgeModelId(null, availableModels, selectedModelIds);
+  return {
+    enabled: judgeModelId !== null,
+    judgeModelId
+  };
+}
+
 export function mergeStreamEvent(
   state: EvaluationTaskState | null,
   event: EvaluationStreamEvent

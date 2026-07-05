@@ -579,7 +579,7 @@ POST /api/evaluation/responses/{responseId}/feedback
 
 ```text
 baseFinal = ruleFinal                           # 未启用 Judge 时
-baseFinal = ruleFinal * 0.30 + judgeFinal * 0.70 # 三轮 Judge 稳定且有效时
+baseFinal = ruleFinal * 0.30 + judgeFinal * 0.70 # 至少 2 次 Judge 成功且稳定时
 feedbackScore = 10 * likeCount / (likeCount + dislikeCount)
 final = baseFinal                               # 暂无反馈
 final = baseFinal * 0.90 + feedbackScore * 0.10 # 已有反馈
@@ -631,7 +631,7 @@ final = baseFinal * 0.90 + feedbackScore * 0.10 # 已有反馈
 - `judgeScoreRange`：三轮 Judge 分差。
 - `ruleDictionaryVersion`：本次规则评分使用的词库版本。
 
-三轮 Judge 分差不超过 1.0 时才合成为有效 Judge 分。有效 Judge 分按 `0.30 * ruleFinal + 0.70 * judgeFinal` 计入基础分。
+三轮 Judge 中至少 2 次成功且成功分数分差不超过 2.0 时，使用成功评分的平均值作为有效 Judge 分。有效 Judge 分按 `0.30 * ruleFinal + 0.70 * judgeFinal` 计入基础分；少于 2 次成功为 `judge_failed`，成功分差超过 2.0 为 `judge_unstable`。
 
 ## 管理员评分配置接口
 
@@ -645,6 +645,8 @@ final = baseFinal * 0.90 + feedbackScore * 0.10 # 已有反馈
 - `GET /judge-prompt-groups`：查看 Judge Prompt 分组和模板。
 - `PUT /judge-prompt-templates/{templateId}`：更新 Prompt 模板。
 - `POST /judge-prompt-groups/{groupId}/validate`：校验分组下三轮 Prompt 是否齐全且可用。
+
+首次读取规则词库或词条时，后端会从 `backend/app/services/scoring/default_rule_seed.json` 幂等维护内置规则词典和词条，保证用户第一次部署空库后会自动导入当前完整词表，管理员页面不是空白起点。默认词表包含 7 个词典、390 条词条，覆盖格式要求、用户问题意图、拒答表达、安全替代建议、高风险领域、专业提醒、危险输出和隐私凭据；其中代码/格式词表覆盖常见编程语言、脚本、查询语言、前后端框架和测试框架，专业提醒覆盖医疗、法律、金融、安全和心理健康等高风险场景。若历史并发初始化留下重复默认数据，会保留最早记录并合并重复项后再返回列表；已有管理员修改不会被默认种子覆盖。
 
 ## 查询回答评论
 

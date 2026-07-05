@@ -108,6 +108,28 @@ def test_rule_evaluator_penalizes_code_request_answered_with_concept_only() -> N
     assert any("未覆盖代码意图" in item for item in result["details"]["relevance"])
 
 
+def test_rule_evaluator_reports_detected_user_intents() -> None:
+    evaluator = RuleEvaluator()
+
+    result = evaluator.evaluate(
+        prompt="请用表格对比 FastAPI 和 Django 的适用场景",
+        answer="| 框架 | 适用场景 |\n| --- | --- |\n| FastAPI | API 和异步服务 |\n| Django | 全功能 Web 应用 |",
+    )
+
+    assert any("识别用户意图" in item and "对比" in item and "表格" in item for item in result["details"]["relevance"])
+
+
+def test_rule_evaluator_reports_translation_and_rewrite_intents() -> None:
+    evaluator = RuleEvaluator()
+
+    result = evaluator.evaluate(
+        prompt="请把这段英文翻译成中文并润色表达",
+        answer="翻译并润色后：这段内容已经改写为更自然的中文表达。",
+    )
+
+    assert any("识别用户意图" in item and "翻译" in item and "改写" in item for item in result["details"]["relevance"])
+
+
 def test_rule_evaluator_does_not_penalize_short_answer_only_for_length() -> None:
     evaluator = RuleEvaluator()
 

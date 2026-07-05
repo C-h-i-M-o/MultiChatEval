@@ -387,7 +387,7 @@ def test_merge_unstable_judge_runs_excludes_score_but_keeps_runs() -> None:
     runs = [
         LLMJudgeResult(score=7.0, comment="A", details={}),
         LLMJudgeResult(score=8.5, comment="B", details={}),
-        LLMJudgeResult(score=9.1, comment="C", details={}),
+        LLMJudgeResult(score=9.2, comment="C", details={}),
     ]
 
     score = evaluation_service._merge_judge_runs(response.score, runs)
@@ -397,11 +397,11 @@ def test_merge_unstable_judge_runs_excludes_score_but_keeps_runs() -> None:
     assert score.judge_final is None
     assert score.score_status == "judge_unstable"
     assert score.excluded_from_stats is True
-    assert score.judge_score_range == 2.1
+    assert score.judge_score_range == 2.2
     assert len(score.judge_runs) == 3
 
 
-def test_merge_failed_judge_runs_excludes_score_but_keeps_successful_runs() -> None:
+def test_merge_two_successful_judge_runs_uses_success_average_and_scored_status() -> None:
     response = make_response(1, "模型 A")
     runs = [
         LLMJudgeResult(score=8.0, comment="A", details={}),
@@ -411,12 +411,49 @@ def test_merge_failed_judge_runs_excludes_score_but_keeps_successful_runs() -> N
 
     score = evaluation_service._merge_judge_runs(response.score, runs)
 
+    assert score.judge_final == 8.2
+    assert score.base_final == 8.26
+    assert score.final == 8.26
+    assert score.score_status == "scored"
+    assert score.excluded_from_stats is False
+    assert score.judge_score_range == 0.4
+    assert [run.score for run in score.judge_runs] == [8.0, None, 8.4]
+
+
+def test_merge_two_successful_judge_runs_still_checks_stability_threshold() -> None:
+    response = make_response(1, "模型 A")
+    runs = [
+        LLMJudgeResult(score=6.0, comment="A", details={}),
+        LLMJudgeResult(score=None, comment="LLM 评审失败：JSON 解析失败", details={}),
+        LLMJudgeResult(score=8.2, comment="C", details={}),
+    ]
+
+    score = evaluation_service._merge_judge_runs(response.score, runs)
+
+    assert score.final is None
+    assert score.base_final is None
+    assert score.judge_final is None
+    assert score.score_status == "judge_unstable"
+    assert score.excluded_from_stats is True
+    assert score.judge_score_range == 2.2
+
+
+def test_merge_judge_runs_fails_when_fewer_than_two_successful_runs() -> None:
+    response = make_response(1, "模型 A")
+    runs = [
+        LLMJudgeResult(score=8.0, comment="A", details={}),
+        LLMJudgeResult(score=None, comment="LLM 评审失败：JSON 解析失败", details={}),
+        LLMJudgeResult(score=None, comment="LLM 评审失败：超时", details={}),
+    ]
+
+    score = evaluation_service._merge_judge_runs(response.score, runs)
+
     assert score.final is None
     assert score.base_final is None
     assert score.judge_final is None
     assert score.score_status == "judge_failed"
     assert score.excluded_from_stats is True
-    assert [run.score for run in score.judge_runs] == [8.0, None, 8.4]
+    assert [run.score for run in score.judge_runs] == [8.0, None, None]
 
 
 def test_mark_judge_disabled_excludes_score_and_keeps_rule_final() -> None:
@@ -1075,7 +1112,7 @@ async def test_create_task_applies_judge_score_when_enabled(monkeypatch: pytest.
     assert task.responses[0].score.judge_final == 9.0
     assert task.responses[0].score.base_final == 8.82
     assert task.responses[0].score.final == 8.82
-    assert task.responses[0].score.judge_comment == "LLM 三次评分稳定，采用平均分"
+    assert task.responses[0].score.judge_comment == "LLM 3 次有效评分稳定，采用平均分"
     assert len(task.responses[0].score.judge_runs) == 3
     assert persisted_scores[0].final == 8.82
 

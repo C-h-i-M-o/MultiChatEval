@@ -17,6 +17,7 @@ import { useAuth } from "../features/auth/AuthContext";
 import {
   applyFeedbackResult,
   createPendingResponses,
+  getInitialJudgeSelection,
   getIdleJudgeModels,
   isTransientResponse,
   mergeStreamEvent,
@@ -32,7 +33,7 @@ export function EvaluationPage() {
   const [prompt, setPrompt] = useState("");
   const [selectedModelIds, setSelectedModelIds] = useState<number[]>([]);
   const [judgeModelId, setJudgeModelId] = useState<number | null>(null);
-  const [enableJudge, setEnableJudge] = useState(false);
+  const [enableJudge, setEnableJudge] = useState(true);
   const [enableThinking, setEnableThinking] = useState(false);
   const [visibility, setVisibility] = useState<EvaluationVisibility>("public");
   const [availableModels, setAvailableModels] = useState<AvailableModelConfig[]>([]);
@@ -73,6 +74,9 @@ export function EvaluationPage() {
   }, []);
 
   useEffect(() => {
+    if (availableModels.length === 0) {
+      return;
+    }
     const nextJudgeModelId = normalizeJudgeModelId(judgeModelId, availableModels, selectedModelIds);
     if (judgeModelId !== nextJudgeModelId) {
       setJudgeModelId(nextJudgeModelId);
@@ -94,7 +98,13 @@ export function EvaluationPage() {
     try {
       const models = await listAvailableModels();
       setAvailableModels(models);
-      setSelectedModelIds((currentIds) => selectDefaultModelIds(models, currentIds));
+      setSelectedModelIds((currentIds) => {
+        const nextSelectedModelIds = selectDefaultModelIds(models, currentIds);
+        const nextJudgeSelection = getInitialJudgeSelection(models, nextSelectedModelIds);
+        setJudgeModelId(nextJudgeSelection.judgeModelId);
+        setEnableJudge(nextJudgeSelection.enabled);
+        return nextSelectedModelIds;
+      });
     } catch (error) {
       setModelConfigErrorMessage(getErrorMessage(error, "模型配置加载失败"));
     } finally {
