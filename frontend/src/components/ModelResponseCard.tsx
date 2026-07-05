@@ -3,7 +3,7 @@ import { Button, Modal, Space } from "antd";
 
 import { animateModalIn } from "../animations/pageMotion";
 import { isPendingResponse } from "../features/evaluation/evaluation";
-import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult } from "../features/evaluation/types";
+import type { DisplayModelResponse, EvaluationScore, FeedbackToggleResult, ScoreStatus } from "../features/evaluation/types";
 import { CommentPanel } from "./CommentPanel";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { formatScore, ScoreBar } from "./ScoreBar";
@@ -23,6 +23,29 @@ const dimensionLabels: Array<{ key: keyof EvaluationScore; label: string; weight
   { key: "format", label: "格式", weight: "15%" },
   { key: "safety", label: "安全性", weight: "10%" }
 ];
+
+const scoreStatusMessages: Record<ScoreStatus, string> = {
+  scored: "已计入统计",
+  judge_failed: "LLM 评分失败，本次不计入统计",
+  judge_unstable: "LLM 有效评分分歧较大，本次不计入统计",
+  judge_disabled: "本次关闭 LLM 评分，仅展示规则检查，不计入统计",
+  model_failed: "模型调用失败，不计入统计"
+};
+
+export const JUDGE_SCORE_WEIGHT_LABEL = "70%";
+export const JUDGE_STABILITY_THRESHOLD_LABEL = "2.0";
+
+export function scoreStatusText(status: ScoreStatus): string {
+  return scoreStatusMessages[status];
+}
+
+type NormalizedScore = Omit<Required<EvaluationScore>, "judgeScoreRange" | "ruleDictionaryVersion"> & {
+  final: number | null;
+  ruleFinal: number | null;
+  baseFinal: number | null;
+  judgeScoreRange: number | null;
+  ruleDictionaryVersion: string | null;
+};
 
 export function ModelResponseCard({
   response,
@@ -84,6 +107,7 @@ export function ModelResponseCard({
         failed={failed}
       />
       <ScrollableMarkdownAnswer content={response.answer} placeholder="暂无回答内容" />
+      <p className={`score-status-note ${score.scoreStatus}`}>{scoreStatusText(score.scoreStatus)}</p>
       <dl className="metric-row">
         <Metric label="耗时" value={`${response.latencyMs}ms`} />
         <Metric label="输出" value={String(response.outputTokens)} />
@@ -165,13 +189,49 @@ export function ModelResponseCard({
                 : `最终分 = 基础分 ${formatScore(score.baseFinal)} x 90% + 反馈分 ${formatScore(score.feedbackScore)} x 10%。`}
             </p>
           </article>
+          <article className="score-detail-item">
+            <header>
+              <span>评分状态</span>
+              <Space size={8}>
+                <strong>{scoreStatusText(score.scoreStatus)}</strong>
+                <em>{score.excludedFromStats ? "不计入统计" : "计入统计"}</em>
+              </Space>
+            </header>
+            <p>
+              最终分 {formatScore(score.final)}，规则分 {formatScore(score.ruleFinal)}，Judge 平均分{" "}
+              {formatScore(score.judgeFinal)}
+              {score.judgeScoreRange === null ? "。" : `，三次分差 ${formatScore(score.judgeScoreRange)}。`}
+            </p>
+          </article>
+          {score.judgeRuns.length > 0 ? (
+            <article className="score-detail-item">
+              <header>
+                <span>三次 LLM 评分</span>
+                <Space size={8}>
+                  <strong>{score.judgeRuns.length} 次</strong>
+                  <em>稳定阈值 {JUDGE_STABILITY_THRESHOLD_LABEL}</em>
+                </Space>
+              </header>
+              <div className="judge-run-list">
+                {score.judgeRuns.map((run) => (
+                  <section key={`${run.runIndex}-${run.promptCode}`} className={run.error ? "failed" : ""}>
+                    <strong>
+                      #{run.runIndex} {run.promptCode}
+                    </strong>
+                    <span>{run.error ? "失败" : `${formatScore(run.score)} / 10`}</span>
+                    <p>{run.error || run.comment || "评审模型未返回说明"}</p>
+                  </section>
+                ))}
+              </div>
+            </article>
+          ) : null}
           {score.judgeComment ? (
             <article className="score-detail-item">
               <header>
                 <span>LLM 评审理由</span>
                 <Space size={8}>
                   <strong>{formatScore(score.judgeFinal)} / 10</strong>
-                  <em>权重 40%</em>
+                  <em>权重 {JUDGE_SCORE_WEIGHT_LABEL}</em>
                 </Space>
               </header>
               <p>{score.judgeComment}</p>
@@ -262,21 +322,26 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function normalizedScore(score: EvaluationScore): Required<EvaluationScore> {
+function normalizedScore(score: EvaluationScore): NormalizedScore {
   return {
     relevance: score.relevance || 0,
     completeness: score.completeness || 0,
     clarity: score.clarity || 0,
     format: score.format || 0,
     safety: score.safety || 0,
-    final: score.final || 0,
+    final: score.final ?? null,
     details: score.details || {},
-    ruleFinal: score.ruleFinal ?? score.final ?? 0,
+    ruleFinal: score.ruleFinal ?? score.final ?? null,
     judgeFinal: score.judgeFinal ?? null,
-    baseFinal: score.baseFinal ?? score.final ?? 0,
+    baseFinal: score.baseFinal ?? score.final ?? null,
     feedbackScore: score.feedbackScore ?? null,
     judgeComment: score.judgeComment ?? null,
-    judgeDetails: score.judgeDetails || {}
+    judgeDetails: score.judgeDetails || {},
+    scoreStatus: score.scoreStatus ?? "scored",
+    excludedFromStats: score.excludedFromStats ?? false,
+    judgeRuns: score.judgeRuns || [],
+    judgeScoreRange: score.judgeScoreRange ?? null,
+    ruleDictionaryVersion: score.ruleDictionaryVersion ?? null
   };
 }
 

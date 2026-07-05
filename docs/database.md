@@ -109,12 +109,27 @@
 - `format_score`：格式符合度
 - `safety_score`：安全性
 - `rule_score`：规则综合分
-- `judge_score` / `judge_comment`：可选 LLM Judge 分数、理由和结构化明细
-- `final_score`：当前最终分；无用户反馈时等于基础分，有反馈时写入包含 10% 反馈分的结果
+- `judge_score` / `judge_comment`：LLM Judge 至少 2 次成功且稳定后的成功评分平均分、理由和结构化明细；无有效 Judge 时为空
+- `final_score`：当前最终分；排除统计的状态下为空
+- `score_status`：`scored`、`model_failed`、`judge_failed`、`judge_unstable`、`manual_required` 或 `judge_disabled`
+- `excluded_from_stats`：是否从反馈统计中排除
+- `judge_runs_json` / `judge_score_range`：三轮 Judge 原始结果和分差
+- `rule_dictionary_version`：本次使用的规则词库版本
+- `judge_prompt_group_code` / `judge_prompt_group_version`：本次使用的 Judge Prompt 分组
 
-基础分为规则分，或在 Judge 有效时使用 `rule_score * 0.60 + judge_score * 0.40`。存在点赞/点踩时，反馈分按点赞比例映射到 0–10，并以 10% 权重计入 `final_score`；评论不参与评分。
+基础分为规则分，或在三轮 Judge 中至少 2 次成功且成功分数分差不超过 2.0 时使用 `rule_score * 0.30 + judge_score * 0.70`。存在点赞/点踩时，反馈分按点赞比例映射到 0–10，并以 10% 权重计入 `final_score`；评论不参与评分。
 
 写入规则评分前，评分器会排除完整的 `<think>...</think>` 思考区块；若标签未闭合，则忽略 `<think>` 及其后续内容。`model_responses.answer_text` 仍保存完整原始回答，便于前端继续默认展开展示思考过程。
+
+## rule_dictionaries / rule_terms
+
+管理员可维护的规则词库。`rule_dictionaries` 保存词库编码、名称、版本和启用状态；`rule_terms` 保存词条文本、分类、权重、启用状态和备注。规则评分服务通过词库缓存读取启用词条，用于用户意图识别、格式要求、安全高风险、拒答质量、专业提醒和关键词硬检查。
+
+评分配置服务读取管理员规则词库时会从 `backend/app/services/scoring/default_rule_seed.json` 幂等维护一组 `builtin-v1` 默认词典和词条，保证用户第一次部署空库后会自动导入当前完整词表。默认种子包含 7 个词典、390 条词条，覆盖 `format_requirement`、`intent_marker`、`refusal`、`safe_alternative`、`high_risk_domain`、`professional_caution` 和 `dangerous_pattern`。代码/格式词表覆盖常见编程语言、脚本、查询语言、前后端框架和测试框架；专业提醒覆盖医疗、法律、金融、安全和心理健康等高风险场景。若历史初始化过程中产生了相同词典类型或相同词条，服务会保留最早记录，合并重复词典，并删除重复词条；已有管理员修改不会被默认种子覆盖。
+
+## judge_prompt_groups / judge_prompt_templates
+
+管理员可维护的 Judge Prompt。`judge_prompt_groups` 保存分组编码、名称、版本和启用状态；`judge_prompt_templates` 保存同一分组下三轮 Prompt 的模板内容。评测时服务选择启用分组并执行三轮 Judge，至少 2 次成功且成功分差稳定时才写入有效 `judge_score`。
 
 ## user_feedback
 

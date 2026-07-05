@@ -6,7 +6,7 @@ export interface EvaluationScore {
   clarity: number;
   format: number;
   safety: number;
-  final: number;
+  final: number | null;
   details: Record<string, string[]>;
   ruleFinal?: number | null;
   judgeFinal?: number | null;
@@ -14,6 +14,22 @@ export interface EvaluationScore {
   feedbackScore?: number | null;
   judgeComment?: string | null;
   judgeDetails?: Record<string, string[]>;
+  scoreStatus?: ScoreStatus;
+  excludedFromStats?: boolean;
+  judgeRuns?: JudgeRun[];
+  judgeScoreRange?: number | null;
+  ruleDictionaryVersion?: string | null;
+}
+
+export type ScoreStatus = "scored" | "judge_failed" | "judge_unstable" | "judge_disabled" | "model_failed";
+
+export interface JudgeRun {
+  runIndex: number;
+  promptCode: string;
+  score: number | null;
+  confidence: number | null;
+  comment: string | null;
+  error: string | null;
 }
 
 export interface EvaluationFeedback {

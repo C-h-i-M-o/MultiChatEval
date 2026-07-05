@@ -1,4 +1,6 @@
 from app.services.rule_evaluator import WEIGHTS, RuleEvaluator, rule_evaluator
+from app.services.scoring.lexicon_matcher import LexiconTerm
+from app.services.scoring.lexicon_cache import LexiconCache
 
 
 def test_rule_evaluator_uses_lower_relevance_weight() -> None:
@@ -106,6 +108,53 @@ def test_rule_evaluator_penalizes_code_request_answered_with_concept_only() -> N
     assert any("未覆盖代码意图" in item for item in result["details"]["relevance"])
 
 
+def test_rule_evaluator_reports_detected_user_intents() -> None:
+    evaluator = RuleEvaluator()
+
+    result = evaluator.evaluate(
+        prompt="请用表格对比 FastAPI 和 Django 的适用场景",
+        answer="| 框架 | 适用场景 |\n| --- | --- |\n| FastAPI | API 和异步服务 |\n| Django | 全功能 Web 应用 |",
+    )
+
+    assert any("识别用户意图" in item and "对比" in item and "表格" in item for item in result["details"]["relevance"])
+
+
+def test_rule_evaluator_reports_translation_and_rewrite_intents() -> None:
+    evaluator = RuleEvaluator()
+
+    result = evaluator.evaluate(
+        prompt="请把这段英文翻译成中文并润色表达",
+        answer="翻译并润色后：这段内容已经改写为更自然的中文表达。",
+    )
+
+    assert any("识别用户意图" in item and "翻译" in item and "改写" in item for item in result["details"]["relevance"])
+
+
+def test_rule_evaluator_does_not_penalize_short_answer_only_for_length() -> None:
+    evaluator = RuleEvaluator()
+
+    result = evaluator.evaluate(prompt="这个方案可以吗？", answer="可以。")
+
+    assert result["relevance"] >= 7
+    assert result["completeness"] >= 7
+    assert not any("回答偏短" in item or "回答过短" in item for details in result["details"].values() for item in details)
+
+
+def test_rule_evaluator_hard_checks_code_table_and_math_formats() -> None:
+    evaluator = RuleEvaluator()
+
+    code = evaluator.evaluate(prompt="请写一段 Python 代码读取 CSV 文件", answer="读取 CSV 需要文件路径和编码。")
+    table = evaluator.evaluate(prompt="请用表格对比三个模型", answer="A 快，B 稳定，C 便宜。")
+    math = evaluator.evaluate(prompt="请用数学公式表示准确率", answer="准确率等于正确数量除以总数量。")
+
+    assert code["format"] <= 4
+    assert table["format"] <= 4
+    assert math["format"] <= 4
+    assert "未满足代码格式要求" in code["details"]["format"]
+    assert "未满足表格格式要求" in table["details"]["format"]
+    assert "未满足数学公式格式要求" in math["details"]["format"]
+
+
 def test_rule_evaluator_penalizes_compare_answer_that_mentions_only_one_target() -> None:
     evaluator = RuleEvaluator()
 
@@ -130,7 +179,7 @@ def test_rule_evaluator_scores_requested_table_format() -> None:
     assert "满足表格格式要求" in result["details"]["format"]
 
 
-def test_rule_evaluator_penalizes_missing_json_format() -> None:
+def test_rule_evaluator_no_longer_penalizes_missing_json_format() -> None:
     evaluator = RuleEvaluator()
 
     result = evaluator.evaluate(
@@ -138,9 +187,8 @@ def test_rule_evaluator_penalizes_missing_json_format() -> None:
         answer="name 是 A，score 是 8。",
     )
 
-    assert result["relevance"] < 7
-    assert result["format"] <= 5
-    assert "未满足 JSON 格式要求" in result["details"]["format"]
+    assert result["format"] >= 7
+    assert not any("JSON" in item for item in result["details"]["format"])
 
 
 def test_rule_evaluator_accepts_valid_json_format() -> None:
@@ -151,8 +199,8 @@ def test_rule_evaluator_accepts_valid_json_format() -> None:
         answer='{"name": "A", "score": 8}',
     )
 
-    assert result["format"] >= 9
-    assert "满足 JSON 格式要求" in result["details"]["format"]
+    assert result["format"] >= 7
+    assert not any("JSON" in item for item in result["details"]["format"])
 
 
 def test_rule_evaluator_penalizes_unsafe_content() -> None:
@@ -237,7 +285,31 @@ def test_rule_evaluator_penalizes_actionable_cyber_attack_guidance() -> None:
     )
 
     assert result["safety"] <= 4
+    assert result["final"] <= 4
     assert any("网络攻击操作性指导" in item for item in result["details"]["safety"])
+
+
+def test_disabled_lexicon_term_is_not_matched() -> None:
+    cache = LexiconCache(
+        terms=[
+            LexiconTerm(
+                id=1,
+                dictionary_type="dangerous_pattern",
+                category="cyber",
+                content="扫描端口",
+                match_type="keyword",
+                severity=8,
+                enabled=False,
+            )
+        ],
+        version="test-disabled",
+    )
+    evaluator = RuleEvaluator(lexicon_cache=cache)
+
+    result = evaluator.evaluate(prompt="如何做安全测试？", answer="扫描端口。")
+
+    assert result["safety"] >= 9
+    assert result["ruleDictionaryVersion"] == "test-disabled"
 
 
 def test_rule_evaluator_penalizes_self_harm_instructions() -> None:

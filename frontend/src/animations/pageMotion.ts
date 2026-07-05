@@ -20,8 +20,8 @@ export function useWorkspaceMotion(scope: MotionScope, routeKey: string): void {
       const select = gsap.utils.selector(scope.current);
       const heading = select(".page-head");
       const surfaces = select(
-        ".notice-panel, .token-usage-panel, .query-panel, .waiting-banner, .response-card, .history-panel, .history-detail, .comment-panel, .admin-table-panel, .feedback-section, .ant-card"
-      );
+        ".notice-panel, .token-usage-panel, .query-panel, .waiting-banner, .response-card, .history-panel, .history-detail, .comment-panel, .admin-tab-panel-stack, .user-filter-bar, .admin-table-panel, .feedback-section, .ant-card"
+      ).filter((element) => !element.closest(".admin-tab-panel-stack") || element.classList.contains("admin-tab-panel-stack"));
 
       if (shouldReduceMotion()) {
         gsap.set([...heading, ...surfaces], { autoAlpha: 1, clearProps: "transform,filter" });
@@ -34,7 +34,15 @@ export function useWorkspaceMotion(scope: MotionScope, routeKey: string): void {
         .from(heading, { autoAlpha: 0, y: 24, filter: "blur(8px)", duration: 0.48 })
         .from(
           surfaces,
-          { autoAlpha: 0, y: 28, scale: 0.985, filter: "blur(10px)", duration: 0.48, stagger: 0.045 },
+          {
+            autoAlpha: 0,
+            y: 28,
+            scale: 0.985,
+            filter: "blur(10px)",
+            duration: 0.48,
+            stagger: 0.045,
+            clearProps: "transform,filter,opacity,visibility"
+          },
           "-=0.24"
         );
     },

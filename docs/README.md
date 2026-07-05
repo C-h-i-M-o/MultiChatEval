@@ -12,6 +12,7 @@
 - `system-features-status.md`：系统功能状态和后续维护建议。
 - `uml.md`：当前实现对应的图示文档。
 - `open-source-reuse.md`：开源项目参考和复用说明。
+- `demo-v1.3-development-plan.md`：demo-v1.3 六阶段开发计划和验收目标。
 
 ## React 历史重构文档
 
@@ -36,3 +37,4 @@ v2 已冻结，原 v2 开发计划已废除并移除。`legacy-v2/` 仅保留已
 - 接口变化同步 `api.md`。
 - 数据库变化同步 `database.md`。
 - 架构或主流程变化同步 `architecture.md` 和 `system-features-status.md`。
+- 评分规则、Judge Prompt 或评分状态变化需要同步 `api.md`、`database.md`、`architecture.md` 和 `system-features-status.md`。

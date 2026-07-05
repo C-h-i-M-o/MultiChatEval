@@ -8,18 +8,28 @@ class EvaluationTaskCreate(BaseModel):
     conversation_id: int | None = Field(default=None, alias="conversationId")
     prompt: str
     model_ids: list[int] = Field(default_factory=list, alias="modelIds")
-    enable_judge: bool = Field(default=False, alias="enableJudge")
+    enable_judge: bool = Field(default=True, alias="enableJudge")
     judge_model_id: int | None = Field(default=None, alias="judgeModelId")
     enable_thinking: bool = Field(default=False, alias="enableThinking")
     visibility: Literal["public", "private"] = "public"
 
     @model_validator(mode="after")
     def require_judge_model(self) -> "EvaluationTaskCreate":
-        if self.enable_judge and self.judge_model_id is None:
-            raise ValueError("启用 LLM 评审时必须选择评审模型")
         if self.enable_judge and self.judge_model_id in self.model_ids:
             raise ValueError("LLM 评审模型不能同时作为被测模型")
         return self
+
+
+ScoreStatus = Literal["scored", "judge_failed", "judge_unstable", "judge_disabled", "model_failed"]
+
+
+class JudgeRunRead(BaseModel):
+    run_index: int = Field(alias="runIndex")
+    prompt_code: str = Field(alias="promptCode")
+    score: float | None = None
+    confidence: float | None = None
+    comment: str | None = None
+    error: str | None = None
 
 
 class EvaluationScoreRead(BaseModel):
@@ -28,7 +38,7 @@ class EvaluationScoreRead(BaseModel):
     clarity: float
     format: float
     safety: float
-    final: float
+    final: float | None
     details: dict[str, list[str]] = Field(default_factory=dict)
     rule_final: float | None = Field(default=None, alias="ruleFinal")
     judge_final: float | None = Field(default=None, alias="judgeFinal")
@@ -36,16 +46,23 @@ class EvaluationScoreRead(BaseModel):
     feedback_score: float | None = Field(default=None, alias="feedbackScore")
     judge_comment: str | None = Field(default=None, alias="judgeComment")
     judge_details: dict[str, list[str]] = Field(default_factory=dict, alias="judgeDetails")
+    score_status: ScoreStatus = Field(default="scored", alias="scoreStatus")
+    excluded_from_stats: bool = Field(default=False, alias="excludedFromStats")
+    judge_runs: list[JudgeRunRead] = Field(default_factory=list, alias="judgeRuns")
+    judge_score_range: float | None = Field(default=None, alias="judgeScoreRange")
+    rule_dictionary_version: str | None = Field(default=None, alias="ruleDictionaryVersion")
 
     @model_validator(mode="after")
     def default_rule_final(self) -> "EvaluationScoreRead":
         if self.rule_final is None:
             self.rule_final = self.final
         if self.base_final is None:
-            if self.judge_final is None:
+            if self.final is None or self.rule_final is None:
+                self.base_final = None
+            elif self.judge_final is None:
                 self.base_final = self.rule_final
             else:
-                self.base_final = round(self.rule_final * 0.60 + self.judge_final * 0.40, 2)
+                self.base_final = round(self.rule_final * 0.30 + self.judge_final * 0.70, 2)
         return self
 
 

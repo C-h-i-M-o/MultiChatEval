@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Card, Input, InputNumber, Popconfirm, Select, Space, Statistic, Table, Tag, message } from "antd";
-import type { TableColumnsType, TablePaginationConfig } from "antd";
+import { Button, InputNumber, Popconfirm, Space, Tag, message } from "antd";
+import type { TableColumnsType } from "antd";
 
 import { ApiError, listAdminUsers, updateAdminUserStatus, updateUserQuota } from "../api/client";
 import type { AdminUserUsage, UserRole, UserStatus } from "../api/client";
+import { AdminDataTable } from "../components/admin/AdminDataTable";
+import { AdminFilterBar } from "../components/admin/AdminFilterBar";
+import { AdminSummaryGrid } from "../components/admin/AdminSummaryGrid";
 import { useAuth } from "../features/auth/AuthContext";
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -121,15 +124,31 @@ export function AdminUsersPage() {
     [auth.user?.id, draftLimits, savingIds, statusSavingIds]
   );
 
-  const tablePagination = useMemo<TablePaginationConfig>(
-    () => ({
-      current: page,
-      pageSize,
-      total,
-      showSizeChanger: true,
-      showTotal: (count) => `共 ${count} 个用户`
-    }),
-    [page, pageSize, total]
+  const summaryItems = useMemo(
+    () => [
+      {
+        key: "users",
+        icon: "U",
+        title: "当前页普通用户",
+        value: normalUserCount,
+        className: "quota-summary-card-users"
+      },
+      {
+        key: "tokens",
+        icon: "T",
+        title: "当前页今日用量",
+        value: totalUsedTokens,
+        suffix: "Token",
+        className: "quota-summary-card-tokens"
+      },
+      {
+        key: "note",
+        icon: "Q",
+        className: "quota-summary-card-note",
+        content: <p className="m-0 leading-7">额度按北京时间自然日统计。管理员账号不受每日 Token 上限限制。</p>
+      }
+    ],
+    [normalUserCount, totalUsedTokens]
   );
 
   async function saveQuota(user: AdminUserUsage): Promise<void> {
@@ -159,9 +178,9 @@ export function AdminUsersPage() {
     }
   }
 
-  function handleTableChange(pagination: TablePaginationConfig): void {
-    setPage(pagination.current || 1);
-    setPageSize(pagination.pageSize || DEFAULT_PAGE_SIZE);
+  function handlePageChange(nextPage: number, nextPageSize: number): void {
+    setPage(nextPage);
+    setPageSize(nextPageSize || DEFAULT_PAGE_SIZE);
   }
 
   function resetToFirstPage(): void {
@@ -173,76 +192,51 @@ export function AdminUsersPage() {
       <header className="page-head">
         <div><p className="eyebrow">Token Quotas</p><h2>用户额度</h2></div>
       </header>
-      <div className="quota-summary-grid">
-        <Card className="quota-summary-card quota-summary-card-users">
-          <span className="quota-summary-icon">U</span>
-          <Statistic title="当前页普通用户" value={normalUserCount} />
-        </Card>
-        <Card className="quota-summary-card quota-summary-card-tokens">
-          <span className="quota-summary-icon">T</span>
-          <Statistic title="当前页今日用量" value={totalUsedTokens} groupSeparator="," suffix="Token" />
-        </Card>
-        <Card className="quota-summary-card quota-summary-card-note">
-          <span className="quota-summary-icon">Q</span>
-          <p className="m-0 leading-7">额度按北京时间自然日统计。管理员账号不受每日 Token 上限限制。</p>
-        </Card>
-      </div>
-      <section className="user-filter-bar" aria-label="用户筛选">
-        <div className="user-filter-copy">
-          <span>用户筛选</span>
-          <strong>共 {total.toLocaleString("zh-CN")} 个用户</strong>
-        </div>
-        <div className="user-filter-controls">
-          <Input.Search
-            allowClear
-            className="user-filter-search"
-            placeholder="搜索用户名"
-            value={keyword}
-            onChange={(event) => {
-              setKeyword(event.target.value);
-              resetToFirstPage();
-            }}
-            onSearch={() => resetToFirstPage()}
-          />
-          <Select
-            className="user-filter-select"
-            value={roleFilter}
-            options={[
-              { value: "all", label: "全部角色" },
-              { value: "user", label: "普通用户" },
-              { value: "admin", label: "管理员" }
-            ]}
-            onChange={(value: UserRole | "all") => {
-              setRoleFilter(value);
-              resetToFirstPage();
-            }}
-          />
-          <Select
-            className="user-filter-select"
-            value={statusFilter}
-            options={[
-              { value: "all", label: "全部状态" },
-              { value: "active", label: "正常" },
-              { value: "disabled", label: "已禁用" }
-            ]}
-            onChange={(value: UserStatus | "all") => {
-              setStatusFilter(value);
-              resetToFirstPage();
-            }}
-          />
-          <Button loading={loading} onClick={() => void loadUsers()}>刷新</Button>
-        </div>
-      </section>
-      <Card className="admin-table-panel" styles={{ body: { padding: 0 } }}>
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={users}
-          loading={loading}
-          pagination={tablePagination}
-          onChange={handleTableChange}
-        />
-      </Card>
+      <AdminSummaryGrid items={summaryItems} />
+      <AdminFilterBar
+        title="用户筛选"
+        total={total}
+        searchValue={keyword}
+        searchPlaceholder="搜索用户名"
+        roleValue={roleFilter}
+        roleOptions={[
+          { value: "all", label: "全部角色" },
+          { value: "user", label: "普通用户" },
+          { value: "admin", label: "管理员" }
+        ]}
+        statusValue={statusFilter}
+        statusOptions={[
+          { value: "all", label: "全部状态" },
+          { value: "active", label: "正常" },
+          { value: "disabled", label: "已禁用" }
+        ]}
+        loading={loading}
+        onSearchChange={(value) => {
+          setKeyword(value);
+          resetToFirstPage();
+        }}
+        onSearchSubmit={resetToFirstPage}
+        onRoleChange={(value) => {
+          setRoleFilter(value);
+          resetToFirstPage();
+        }}
+        onStatusChange={(value) => {
+          setStatusFilter(value);
+          resetToFirstPage();
+        }}
+        onRefresh={() => void loadUsers()}
+      />
+      <AdminDataTable
+        rowKey="id"
+        columns={columns}
+        dataSource={users}
+        loading={loading}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        totalLabel="个用户"
+        onPageChange={handlePageChange}
+      />
     </section>
   );
 }

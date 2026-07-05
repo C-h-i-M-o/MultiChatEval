@@ -23,6 +23,9 @@ const FeedbackStatsPage = lazy(() =>
 const ModelConfigsPage = lazy(() =>
   import("./pages/ModelConfigsPage").then((module) => ({ default: module.ModelConfigsPage }))
 );
+const ScoringRulesPage = lazy(() =>
+  import("./pages/ScoringRulesPage").then((module) => ({ default: module.ScoringRulesPage }))
+);
 
 function App() {
   return (
@@ -69,6 +72,7 @@ function App() {
               <Route index element={<EvaluationPage />} />
               <Route path="models" element={<ModelConfigsPage />} />
               <Route path="users" element={<AdminUsersPage />} />
+              <Route path="scoring-rules" element={<ScoringRulesPage />} />
               <Route path="history" element={<HistoryPage />} />
               <Route path="feedback" element={<FeedbackStatsPage />} />
             </Route>

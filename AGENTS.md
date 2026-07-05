@@ -299,13 +299,13 @@ BACKEND_CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://127.0.0.
 
 ```text
 BaseFinal = RuleFinal
-BaseFinal = 0.60 × RuleFinal + 0.40 × JudgeFinal  # Judge 有效时
+BaseFinal = 0.30 × RuleFinal + 0.70 × JudgeFinal  # 三轮 Judge 稳定且有效时
 FeedbackScore = 10 × LikeCount / (LikeCount + DislikeCount)
 Final = BaseFinal                                 # 暂无反馈
 Final = 0.90 × BaseFinal + 0.10 × FeedbackScore  # 已有反馈
 ```
 
-评论不参与评分。新评论归属当前登录用户，只有作者可以删除；旧匿名评论继续归属 `user_id = 0`。
+`model_failed`、`judge_failed`、`judge_unstable` 和 `manual_required` 状态的回答 `final_score` 为空，并从反馈统计中排除。评论不参与评分。新评论归属当前登录用户，只有作者可以删除；旧匿名评论继续归属 `user_id = 0`。
 
 ## 开源项目参考
 

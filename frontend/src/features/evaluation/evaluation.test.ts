@@ -4,6 +4,7 @@ import {
   applyFeedbackResult,
   createPendingResponses,
   getIdleJudgeModels,
+  getInitialJudgeSelection,
   mergeStreamEvent,
   normalizeJudgeModelId
 } from "./evaluation";
@@ -99,6 +100,25 @@ describe("React 阶段三评测状态", () => {
     ];
 
     expect(normalizeJudgeModelId(1, models, [1])).toBe(2);
+  });
+
+  test("存在空闲模型时默认开启 LLM Judge 并选择第一个空闲模型", () => {
+    const models = [
+      { id: 1, providerName: "deepseek", displayName: "DeepSeek", modelName: "deepseek-chat" },
+      { id: 2, providerName: "minimax", displayName: "MiniMax", modelName: "abab" },
+      { id: 3, providerName: "qwen", displayName: "Qwen", modelName: "qwen-plus" }
+    ];
+
+    expect(getInitialJudgeSelection(models, [1, 2])).toEqual({ enabled: true, judgeModelId: 3 });
+  });
+
+  test("没有空闲模型时默认关闭 LLM Judge", () => {
+    const models = [
+      { id: 1, providerName: "deepseek", displayName: "DeepSeek", modelName: "deepseek-chat" },
+      { id: 2, providerName: "minimax", displayName: "MiniMax", modelName: "abab" }
+    ];
+
+    expect(getInitialJudgeSelection(models, [1, 2])).toEqual({ enabled: false, judgeModelId: null });
   });
 
   test("模型响应事件替换对应等待卡片并保留其余顺序", () => {

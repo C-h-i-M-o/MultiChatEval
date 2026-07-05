@@ -49,6 +49,8 @@ class ResponseStatRecord:
     rule_score: float | None
     judge_score: float | None
     status: str = "success"
+    score_status: str = "scored"
+    excluded_from_stats: bool = False
 
 
 @dataclass(frozen=True)
@@ -196,12 +198,12 @@ class FeedbackStatsService:
             bucket.call_count += 1
             trend = trend_buckets.setdefault(self._shanghai_date(record.created_at), _TrendBucket())
             trend.call_count += 1
-            if record.status == "success" and record.final_score is not None:
+            if self._is_scored_record(record):
                 bucket.final_scores.append(record.final_score)
                 trend.final_scores.append(record.final_score)
-            if record.status == "success" and record.rule_score is not None:
+            if self._is_scored_record(record) and record.rule_score is not None:
                 bucket.rule_scores.append(record.rule_score)
-            if record.status == "success" and record.judge_score is not None:
+            if self._is_scored_record(record) and record.judge_score is not None:
                 bucket.judge_scores.append(record.judge_score)
 
         for record in [*feedback, *comments]:
@@ -222,7 +224,7 @@ class FeedbackStatsService:
         final_scores = [
             record.final_score
             for record in responses
-            if record.status == "success" and record.final_score is not None
+            if self._is_scored_record(record)
         ]
         like_count = sum(record.activity_type == "like" for record in feedback)
         dislike_count = sum(record.activity_type == "dislike" for record in feedback)
@@ -287,6 +289,8 @@ class FeedbackStatsService:
                 EvaluationResult.final_score,
                 EvaluationResult.rule_score,
                 EvaluationResult.judge_score,
+                EvaluationResult.score_status,
+                EvaluationResult.excluded_from_stats,
             )
             .select_from(ModelResponse)
             .join(EvaluationTask, EvaluationTask.id == ModelResponse.task_id)
@@ -308,6 +312,8 @@ class FeedbackStatsService:
                 rule_score=self._number(rule_score),
                 judge_score=self._number(judge_score),
                 status=status,
+                score_status=score_status or "scored",
+                excluded_from_stats=bool(excluded_from_stats),
             )
             for (
                 task_id,
@@ -320,6 +326,8 @@ class FeedbackStatsService:
                 final_score,
                 rule_score,
                 judge_score,
+                score_status,
+                excluded_from_stats,
             ) in rows.all()
         ]
 
@@ -465,6 +473,14 @@ class FeedbackStatsService:
         if not normalized:
             return None
         return round(sum(normalized) / len(normalized), 2)
+
+    def _is_scored_record(self, record: ResponseStatRecord) -> bool:
+        return (
+            record.status == "success"
+            and record.score_status == "scored"
+            and not record.excluded_from_stats
+            and record.final_score is not None
+        )
 
     def _like_rate(self, like_count: int, dislike_count: int) -> float | None:
         total = like_count + dislike_count

@@ -214,6 +214,73 @@ export interface AdminFeedbackStats {
   activities: FeedbackActivityList;
 }
 
+export interface RuleDictionary {
+  id: number;
+  dictionaryType: string;
+  name: string;
+  version: string;
+  enabled: boolean;
+}
+
+export interface RuleTerm {
+  id: number;
+  dictionaryId: number;
+  dictionaryType: string;
+  category: string;
+  content: string;
+  matchType: "keyword" | "regex";
+  severity: number;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export interface RuleTermList {
+  items: RuleTerm[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface RuleTermPayload {
+  dictionaryId: number;
+  category: string;
+  content: string;
+  matchType: "keyword" | "regex";
+  severity: number;
+  enabled: boolean;
+}
+
+export interface JudgePromptGroup {
+  id: number;
+  code: string;
+  name: string;
+  rubric: string;
+  version: string;
+  enabled: boolean;
+}
+
+export interface JudgePromptTemplate {
+  id: number;
+  groupId: number;
+  groupCode: string;
+  code: string;
+  content: string;
+  outputSchema: Record<string, object>;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export interface JudgePromptTemplatePayload {
+  content: string;
+  outputSchema: Record<string, object>;
+  enabled: boolean;
+}
+
+export interface JudgePromptValidation {
+  valid: boolean;
+  issues: string[];
+}
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -507,6 +574,99 @@ export async function getAdminFeedbackStats(params: {
   searchParams.set("page", String(params.page));
   searchParams.set("pageSize", String(params.pageSize));
   return fetchJson<AdminFeedbackStats>(`/api/admin/feedback-stats?${searchParams.toString()}`);
+}
+
+export async function listRuleDictionaries(): Promise<RuleDictionary[]> {
+  return fetchJson<RuleDictionary[]>("/api/admin/scoring/rule-dictionaries");
+}
+
+export async function listRuleTerms(params: {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  dictionaryType?: string;
+  category?: string;
+  enabled?: boolean | null;
+}): Promise<RuleTermList> {
+  const searchParams = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize)
+  });
+  if (params.keyword?.trim()) {
+    searchParams.set("keyword", params.keyword.trim());
+  }
+  if (params.dictionaryType && params.dictionaryType !== "all") {
+    searchParams.set("dictionaryType", params.dictionaryType);
+  }
+  if (params.category?.trim()) {
+    searchParams.set("category", params.category.trim());
+  }
+  if (params.enabled !== null && params.enabled !== undefined) {
+    searchParams.set("enabled", String(params.enabled));
+  }
+  return fetchJson<RuleTermList>(`/api/admin/scoring/rule-terms?${searchParams.toString()}`);
+}
+
+export async function createRuleTerm(payload: RuleTermPayload): Promise<RuleTerm> {
+  return postJson<RuleTerm>("/api/admin/scoring/rule-terms", payload);
+}
+
+export async function updateRuleTerm(id: number, payload: RuleTermPayload): Promise<RuleTerm> {
+  const response = await fetch(`/api/admin/scoring/rule-terms/${id}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await readErrorMessage(response));
+  }
+  return response.json() as Promise<RuleTerm>;
+}
+
+export async function updateRuleTermStatus(id: number, enabled: boolean): Promise<RuleTerm> {
+  const response = await fetch(`/api/admin/scoring/rule-terms/${id}/status`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await readErrorMessage(response));
+  }
+  return response.json() as Promise<RuleTerm>;
+}
+
+export async function deleteRuleTerm(id: number): Promise<void> {
+  await deleteJson(`/api/admin/scoring/rule-terms/${id}`);
+}
+
+export async function listJudgePromptGroups(): Promise<JudgePromptGroup[]> {
+  return fetchJson<JudgePromptGroup[]>("/api/admin/scoring/judge-prompt-groups");
+}
+
+export async function listJudgePromptTemplates(): Promise<JudgePromptTemplate[]> {
+  return fetchJson<JudgePromptTemplate[]>("/api/admin/scoring/judge-prompt-templates");
+}
+
+export async function updateJudgePromptTemplate(
+  id: number,
+  payload: JudgePromptTemplatePayload
+): Promise<JudgePromptTemplate> {
+  const response = await fetch(`/api/admin/scoring/judge-prompt-templates/${id}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await readErrorMessage(response));
+  }
+  return response.json() as Promise<JudgePromptTemplate>;
+}
+
+export async function validateJudgePromptGroup(id: number): Promise<JudgePromptValidation> {
+  return postJson<JudgePromptValidation>(`/api/admin/scoring/judge-prompt-groups/${id}/validate`);
 }
 
 export async function streamEvaluationTask(

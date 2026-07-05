@@ -24,10 +24,10 @@ describe("React 阶段二导航权限", () => {
     expect(labels).toEqual(["评测工作台", "历史任务", "反馈统计"]);
   });
 
-  test("管理员显示模型配置和用户额度入口", () => {
+  test("管理员显示模型配置、用户额度和评分配置入口", () => {
     const labels = getVisibleNavigationItems(adminUser).map((item) => item.label);
 
-    expect(labels).toEqual(["评测工作台", "模型配置", "用户额度", "历史任务", "反馈统计"]);
+    expect(labels).toEqual(["评测工作台", "模型配置", "用户额度", "评分配置", "历史任务", "反馈统计"]);
   });
 
   test("未登录访问业务页进入登录流程", () => {
@@ -38,6 +38,7 @@ describe("React 阶段二导航权限", () => {
   test("普通用户访问管理员页回到工作台", () => {
     expect(resolveRouteAccess("/models", regularUser)).toEqual({ type: "redirect", to: "/" });
     expect(resolveRouteAccess("/users", regularUser)).toEqual({ type: "redirect", to: "/" });
+    expect(resolveRouteAccess("/scoring-rules", regularUser)).toEqual({ type: "redirect", to: "/" });
   });
 
   test("已登录用户访问登录页回到工作台", () => {
