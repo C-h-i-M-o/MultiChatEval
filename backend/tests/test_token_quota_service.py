@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from app.services.token_quota_service import DEFAULT_DAILY_TOKEN_LIMIT, token_quota_service
 
 
@@ -23,6 +25,7 @@ class FakeDb:
         return FakeResult()
 
 
+@pytest.mark.asyncio
 async def test_explicit_zero_daily_limit_is_not_replaced_by_default() -> None:
     used_tokens, daily_limit = await token_quota_service._usage_and_limit(
         FakeDb(),

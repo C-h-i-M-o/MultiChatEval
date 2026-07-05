@@ -1,14 +1,16 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import {
   applyFeedbackResult,
+  createStreamEventBatcher,
   createPendingResponses,
   getIdleJudgeModels,
   getInitialJudgeSelection,
   mergeStreamEvent,
+  mergeStreamEvents,
   normalizeJudgeModelId
 } from "./evaluation";
-import type { EvaluationTaskState, ModelResponse, StreamingModelResponse } from "./types";
+import type { EvaluationStreamEvent, EvaluationTaskState, ModelResponse, StreamingModelResponse } from "./types";
 
 const successfulResponse: ModelResponse = {
   id: 31,
@@ -166,6 +168,55 @@ describe("React 阶段三评测状态", () => {
         scoring: false
       }
     ]);
+  });
+
+  test("批量合并模型增量事件时保持回答顺序", () => {
+    const state: EvaluationTaskState = {
+      taskId: 12,
+      status: "running",
+      prompt: "问题",
+      responses: [{ id: "pending-2", modelConfigId: 2, modelName: "DeepSeek", pending: true }]
+    };
+    const events: EvaluationStreamEvent[] = [
+      { type: "model_delta", modelConfigId: 2, delta: "第" },
+      { type: "model_delta", modelConfigId: 2, delta: "一" },
+      { type: "model_delta", modelConfigId: 2, delta: "段" }
+    ];
+
+    const nextState = mergeStreamEvents(state, events);
+
+    expect(nextState?.responses[0]).toMatchObject({
+      modelConfigId: 2,
+      answer: "第一段",
+      streaming: true,
+      scoring: false
+    });
+  });
+
+  test("流式事件批处理把高频 token 更新合并成一次状态应用", () => {
+    const scheduledCallbacks: Array<() => void> = [];
+    const appliedBatches: EvaluationStreamEvent[][] = [];
+    const batcher = createStreamEventBatcher((events) => appliedBatches.push(events), {
+      scheduleFlush: (callback) => {
+        scheduledCallbacks.push(callback);
+        return scheduledCallbacks.length;
+      },
+      cancelFlush: vi.fn()
+    });
+
+    for (let index = 0; index < 100; index += 1) {
+      batcher.enqueue({ type: "model_delta", modelConfigId: 2, delta: String(index % 10) });
+    }
+
+    expect(batcher.pendingCount()).toBe(100);
+    expect(scheduledCallbacks).toHaveLength(1);
+    expect(appliedBatches).toHaveLength(0);
+
+    scheduledCallbacks[0]();
+
+    expect(batcher.pendingCount()).toBe(0);
+    expect(appliedBatches).toHaveLength(1);
+    expect(appliedBatches[0]).toHaveLength(100);
   });
 
   test("模型回答完成事件把流式卡片切换为评分中", () => {

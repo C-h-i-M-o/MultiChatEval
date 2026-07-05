@@ -284,6 +284,12 @@ function ScrollableMarkdownAnswer({
   return (
     <div ref={scrollRef} className="answer-scroll" onScroll={handleScroll}>
       <MarkdownRenderer content={displayContent} />
+      {/*
+        Profiler 采样时临时替换为：
+        <Profiler id="MarkdownRenderer" onRender={recordProfilerRender}>
+          <MarkdownRenderer content={displayContent} />
+        </Profiler>
+      */}
     </div>
   );
 }

@@ -16,13 +16,15 @@ import { ModelResponseCard } from "../components/ModelResponseCard";
 import { useAuth } from "../features/auth/AuthContext";
 import {
   applyFeedbackResult,
+  createStreamEventBatcher,
   createPendingResponses,
   getInitialJudgeSelection,
   getIdleJudgeModels,
   isTransientResponse,
-  mergeStreamEvent,
+  mergeStreamEvents,
   normalizeJudgeModelId
 } from "../features/evaluation/evaluation";
+import type { StreamEventBatcher } from "../features/evaluation/evaluation";
 import type { AvailableModelConfig, EvaluationTaskState } from "../features/evaluation/types";
 
 const { TextArea } = Input;
@@ -49,6 +51,7 @@ export function EvaluationPage() {
   const [feedbackSubmittingIds, setFeedbackSubmittingIds] = useState<number[]>([]);
   const timerRef = useRef<number | null>(null);
   const responseGridRef = useRef<HTMLElement | null>(null);
+  const streamBatcherRef = useRef<StreamEventBatcher | null>(null);
 
   const quotaExhausted = Boolean(tokenUsage && !tokenUsage.unlimited && (tokenUsage.remainingTokens ?? 0) <= 0);
   const showModelNotice = !modelConfigLoading && availableModels.length === 0;
@@ -88,6 +91,7 @@ export function EvaluationPage() {
 
   useEffect(() => {
     return () => {
+      streamBatcherRef.current?.clear();
       stopWaitingTimer();
     };
   }, []);
@@ -164,14 +168,23 @@ export function EvaluationPage() {
       responses: createPendingResponses(selectedModelIds, availableModels)
     });
     startWaitingTimer();
+    streamBatcherRef.current?.clear();
+    const streamBatcher = createStreamEventBatcher((events) => {
+      setTaskState((currentState) => mergeStreamEvents(currentState, events));
+    });
+    streamBatcherRef.current = streamBatcher;
 
     try {
       await streamEvaluationTask(payload, (event) => {
-        setTaskState((currentState) => mergeStreamEvent(currentState, event));
+        streamBatcher.enqueue(event);
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "评测任务创建失败"));
     } finally {
+      streamBatcher.flush();
+      if (streamBatcherRef.current === streamBatcher) {
+        streamBatcherRef.current = null;
+      }
       stopWaitingTimer();
       setLoading(false);
       await loadTokenUsage();
@@ -293,6 +306,8 @@ export function EvaluationPage() {
           </Space>
         </div>
         <TextArea
+          id="evaluation-prompt"
+          name="evaluationPrompt"
           value={prompt}
           disabled={loading}
           rows={5}
@@ -369,6 +384,14 @@ export function EvaluationPage() {
           ))}
         </section>
       ) : null}
+      {/*
+        Profiler 采样时临时替换上面的 response-grid：
+        1. import { Profiler, ... } from "react";
+        2. import { recordProfilerRender } from "../utils/profilerMetrics";
+        3. 用 <Profiler id="EvaluationPage.response-grid" onRender={recordProfilerRender}> 包裹 response-grid，
+           并用 <Profiler id="ModelResponseCard" onRender={recordProfilerRender}> 包裹每个 ModelResponseCard。
+        4. 浏览器中读取 window.__MCE_PROFILER_METRICS__。
+      */}
     </section>
   );
 }

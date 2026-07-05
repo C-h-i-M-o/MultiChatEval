@@ -249,6 +249,7 @@ def test_dashboard_only_scores_included_records() -> None:
     assert dashboard.models[0].scored_count == 1
 
 
+@pytest.mark.asyncio
 async def test_personal_stats_separates_owned_tasks_from_own_interactions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
